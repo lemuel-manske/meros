@@ -1,5 +1,8 @@
 .venv
 
-videos
-frames
-obs
+videos/*
+!videos/.gitkeep
+frames/*
+!frames/.gitkeep
+obs/*
+!obs/.gitkeep
