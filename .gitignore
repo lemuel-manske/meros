@@ -10,5 +10,8 @@ tracks/*
 frames/*
 !frames/.gitkeep
 
+vis/*
+!vis/.gitkeep
+
 sam2.1_hiera_large.pt
 sam2_hiera_l.yaml
