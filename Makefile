@@ -3,5 +3,5 @@ init-venv:
 	. .venv/bin/activate && pip install --upgrade pip
 	. .venv/bin/activate && pip install -r requirements.txt
 
-extract-frames:
-	python3 frame_gen.py
+go:
+	python3 -m src.main

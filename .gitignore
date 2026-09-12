@@ -1,8 +1,8 @@
 .venv
+__pycache__
 
 videos/*
 !videos/.gitkeep
-frames/*
-!frames/.gitkeep
-obs/*
-!obs/.gitkeep
+
+tracks/*
+!tracks/.gitkeep
