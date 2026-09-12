@@ -1,61 +1,78 @@
-from . import get_vid_id, get_annotations, path_to_track, path_to_vid, VIDEOS
-from .cvat_processor import parse
-
 import cv2 as cv
 
 
-def crop_subject_from_vid(vid_path: str) -> list[cv.Mat]:
-    """
-    Crop the subject from a video based on annotations from a CVAT XML file.
-    """
-    vid_id = get_vid_id(vid_path)
-    track_path = get_annotations(vid_id)
-    annotations = parse(track_path)
+_VIDEOS_FOLDER = "/home/lkmliz/dev/meros/videos"
+_FRAMES_FOLDER = "/home/lkmliz/dev/meros/frames"
 
+
+VIDEOS = [
+    "260113_S3_SC_Monoboia_0025_1#.mov",
+]
+
+
+def path_to_vid(vid_id):
+    """
+    Get the path to a video given its ID.
+    """
+    return f"{_VIDEOS_FOLDER}/{vid_id}"
+
+
+def get_vid_id(vid_path):
+    """
+    Extract the video ID from the video path.
+    """
+    return vid_path.split("/")[-1].split(".")[0]
+
+
+def extract_frames(vid_path: str) -> list[cv.Mat]:
+    """
+    Extract frames from a video file.
+
+    Args:
+        vid_path (str): Path to the video file.
+    """
     cap = cv.VideoCapture(vid_path)
-
-    cropped_frames = []
-
-    for annotation in annotations:
-        frame_number = annotation['frame_number']
-        xtl = int(annotation['xtl'])
-        ytl = int(annotation['ytl'])
-        xbr = int(annotation['xbr'])
-        ybr = int(annotation['ybr'])
-
-        cap.set(cv.CAP_PROP_POS_FRAMES, frame_number)
-
+    frames = []
+    while True:
         ret, frame = cap.read()
-
         if not ret:
-            print(f"Failed to read frame {frame_number} from video.")
-
-            continue
-
-        cropped_frame = frame[ytl:ybr, xtl:xbr]
-        cropped_frames.append(cropped_frame)
-
-    return cropped_frames
+            break
+        frames.append(frame)
+    cap.release()
+    return frames
 
 
-def persist_frames(frames: list[cv.Mat], output_dir: str):
+def persist_frames(frames: list[cv.Mat], vid_id: str) -> None:
     """
     Persist frames to disk.
+
+    Args:
+        frames (list[cv.Mat]): List of frames to persist.
+        vid_id (str): Video ID to use for naming the frames.
     """
-    for i, frame in enumerate(frames):
-        cv.imwrite(f"{output_dir}/frame_{i}.jpg", frame)
+    for idx, frame in enumerate(frames):
+        persist_frame(frame, vid_id, idx)
 
 
-def process_videos():
+def persist_frame(frame: cv.Mat, _: str, frame_idx: int) -> None:
     """
-    Process all videos in the VIDEOS list.
+    Persist a single frame to disk.
+
+    Args:
+        frame (cv.Mat): Frame to persist.
+        vid_id (str): Video ID to use for naming the frame.
+        frame_idx (int): Index of the frame in the video.
     """
-    for vid_id in VIDEOS:
-        vid_path = path_to_vid(vid_id)
-        cropped_frames = crop_subject_from_vid(vid_path)
-        output_dir = path_to_track(vid_id)
-        persist_frames(cropped_frames, output_dir)
+    cv.imwrite(f"{_FRAMES_FOLDER}/{frame_idx}.jpg", frame)
+
+
+def extract_n_persist_frames_for_all_vids():
+    for vid in VIDEOS:
+        vid_path = path_to_vid(vid)
+        vid_id = get_vid_id(vid_path)
+        frames = extract_frames(vid_path)
+        persist_frames(frames, vid_id)
 
 
 if __name__ == "__main__":
-    process_videos()
+    extract_n_persist_frames_for_all_vids()

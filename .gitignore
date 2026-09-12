@@ -6,3 +6,9 @@ videos/*
 
 tracks/*
 !tracks/.gitkeep
+
+frames/*
+!frames/.gitkeep
+
+sam2.1_hiera_large.pt
+sam2_hiera_l.yaml
