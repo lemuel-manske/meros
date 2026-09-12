@@ -36,7 +36,7 @@ def extract_n_persist_tracks(vid_id: str) -> None:
 
         cropped_frame = track_frame[y1:y2, x1:x2]
 
-        track_frames.append(cropped_frame)
+        track_frames.append((int(frame_num), cropped_frame))
 
     persist_tracks(vid_id, track_frames)
 

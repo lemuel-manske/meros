@@ -63,7 +63,7 @@ def path_to_vis(vid_id: str,frame_idx: int) -> str:
     return f"{dir_path}/{frame_idx}.jpg"
 
 
-def path_to_metadata(vid_id: str) -> str:
+def path_to_vis_metadata(vid_id: str) -> str:
     """
     Get the path to the metadata file for a given video ID.
     """
@@ -75,6 +75,20 @@ def path_to_metadata(vid_id: str) -> str:
         os.makedirs(dir_path)
 
     return f"{dir_path}/metadata.json"
+
+
+def path_to_track_metadata(vid_id: str) -> str:
+    """
+    Get the path to the track metadata file for a given video ID.
+    """
+    import os
+
+    dir_path = f"{TRACKS_FOLDER}/{vid_id}"
+
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
+
+    return f"{dir_path}/metadata.csv"
 
 
 def path_to_track(vid_id: str, frame_idx: int) -> str:

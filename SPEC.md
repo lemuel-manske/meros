@@ -360,3 +360,7 @@ For each sufficiently reliable observation, the system should eventually produce
 **individual identity + location + date/time + identification confidence**
 
 Repeated observations could then be used to reconstruct movement histories and investigate migration, site fidelity, and breeding aggregation behavior of *Epinephelus itajara* along the Brazilian coast.
+
+## Where we are now
+
+Currently, we are working on understand the dataset and the challenges of the problem.
