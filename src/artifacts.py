@@ -10,24 +10,12 @@ from src.fn import glob_jpgs
 
 
 VIDEOS = [
-    "260113_S3_SC_Monoboia_0025_1#.mov",
-    # "260113_S3_SC_Monoboia_0025_1#.mov",
-    # "260113_S3_SC_Monoboia_0025_2#_3#.mov",
-    "260113_S3_SC_Monoboia_0026_4#.mov",
-    # "260113_S3_SC_Monoboia_0039_Diversos#.mov",
-    # "260113_S3_SC_Monoboia_0065_5#.mov",
-    # "260113_S3_SC_Monoboia_0065_6#.mov",
-    # "260113_S3_SC_Monoboia_0065_7#.mov",
-    "260113_S3_SC_Monoboia_0065_8#.mov",
-    # "260113_S3_SC_Monoboia_0066_10#.mov",
-    # "260113_S3_SC_Monoboia_0066_9#.mov",
-    # "260113_S3_SC_Monoboia_0101_11#.mov",
-    # "260113_S3_SC_Monoboia_0101_12#.mov",
-    "260113_S3_SC_Monoboia_0102_13#.mov",
-    # "260113_S3_SC_Monoboia_0102_14#.mov",
-    # "260113_S3_SC_Monoboia_0102_15#.mov",
-    # "260113_S3_SC_Monoboia_0147_16#.mov",
-    # "260113_S3_SC_Monoboia_0149_Diversos#.mov",
+    "102_13.mov",
+    "25_1.mov",
+    "26_4.mov",
+    "65_5.mov",
+    "65_6.mov",
+    "65_8.mov",
 ]
 
 
@@ -50,13 +38,6 @@ def path_to_frames(vid_id: str) -> str:
     Get the path to the frames folder for a given video ID.
     """
     return f"{FRAMES_FOLDER}/{vid_id}"
-
-
-def get_frame_ids(vid_id: str) -> list[int]:
-    """
-    Count the number of frames for a given video ID.
-    """
-    return sorted(int(path.stem) for path in glob_jpgs(path_to_frames(vid_id)))
 
 
 def path_to_visualization(vid_id: str,frame_idx: int) -> str:
@@ -129,6 +110,13 @@ def path_to_vid(vid_id):
     return f"{VIDEOS_FOLDER}/{vid_id}"
 
 
+def get_frame_ids(vid_id: str) -> list[int]:
+    """
+    Count the number of frames for a given video ID.
+    """
+    return sorted(int(path.stem) for path in glob_jpgs(path_to_frames(vid_id)))
+
+
 def get_vid_id(vid_raw_path):
     """
     Extract the video ID from the video path.
@@ -147,4 +135,4 @@ def get_vids() -> list[str]:
     """
     Get the list of video IDs.
     """
-    return [get_vid_id(vid_path) for vid_path in VIDEOS]
+    return [get_vid_id(vid) for vid in VIDEOS]

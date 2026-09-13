@@ -277,6 +277,8 @@ def persist_review(rows: list[ReviewRow]) -> None:
 if __name__ == "__main__":
     """
     Builds review samples for all videos and saves them to disk.
+
+    Reviews are meant to be human audited for track correctness, viewpoint correctness, and other attributes.
     """
 
     rows = build_review()
