@@ -1,7 +1,7 @@
 import csv
 import json
 
-from typing import NotRequired, TypedDict
+from typing import TypedDict
 
 from src.artifacts import path_to_track_annotations, path_to_track_metadata
 
@@ -12,15 +12,13 @@ class TrackObservation(TypedDict):
 
 
 class Track(TypedDict):
-    initial_frame: NotRequired[int]
-    initial_bbox: NotRequired[list[int]]
+    initial_frame: int
+    initial_bbox: list[int]
     frames: dict[str, TrackObservation]
 
 
 class TrackMetadata(TypedDict):
     video_id: str
-    initial_frame: NotRequired[int]
-    initial_bbox: NotRequired[list[int]]
     tracks: dict[str, Track]
 
 
@@ -30,6 +28,15 @@ class TrackAnnotation(TypedDict):
     end_frame: int
     viewpoint: str
     quality: int
+
+
+# structure:
+
+# TrackMetadata
+#   Track
+#     TrackObservation
+
+# TrackAnnotation
 
 
 def persist_track_metadata(vid_id: str, metadata: TrackMetadata) -> None:

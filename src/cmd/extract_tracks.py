@@ -16,6 +16,7 @@ from src.consts import (
     SAM2_MODEL_CONFIG,
 )
 from src.metadata import (
+    Track,
     TrackMetadata,
     persist_track_metadata,
 )
@@ -24,81 +25,86 @@ from src.metadata import (
 _QUIT_KEY = "q"
 _ADD_TRACK_KEY = "a"
 
+_OFFLOAD_VIDEO_TO_CPU = True
+_OFFLOAD_STATE_TO_CPU = False
+
 
 def build_predictor():
     return build_sam2_video_predictor(
         SAM2_MODEL_CONFIG,
         SAM2_CHECKPOINT,
-        device="cuda",
+        device="cuda",  # use GPU for faster inference
         dtype=torch.bfloat16,  # pyright: ignore
     )
 
 
-def get_selected_frame(window: str, frame_ids: list[int]) -> int:
-    position = cv.getTrackbarPos("Frame", window)
-    position = min(position, len(frame_ids) - 1)
+def select_subjects(vid_id: str) -> dict[str, Track]:
 
-    return frame_ids[position]
+    def draw_initial_tracks(frame, frame_idx: int, tracks: dict[str, Track]) -> np.ndarray:
+        preview = frame.copy()
 
+        for track_id, track in tracks.items():
+            if track["initial_frame"] != frame_idx:
+                continue
 
-def bbox_from_mask(mask) -> list[int] | None:
-    ys, xs = np.where(mask)
+            x1, y1, x2, y2 = track["initial_bbox"]
 
-    if len(xs) == 0:
-        return None
+            cv.rectangle(preview, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv.putText(
+                preview,
+                track_id,
+                (x1, max(20, y1)),
+                cv.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (0, 255, 0),
+                2,
+            )
 
-    return [
-        int(xs.min()),
-        int(ys.min()),
-        int(xs.max()),
-        int(ys.max()),
-    ]
-
-
-def draw_mask(
-    frame,
-    mask,
-    obj_id: int,
-    bbox: list[int],
-) -> None:
-    x1, y1, _, _ = bbox
-
-    color = np.array(
-        [
-            (obj_id * 67) % 256,
-            (obj_id * 131) % 256,
-            255,
-        ],
-        dtype=np.uint8,
-    )
-
-    frame[mask] = (
-        frame[mask].astype(np.float32) * 0.5
-        + color.astype(np.float32) * 0.5
-    ).astype(np.uint8)
-
-    cv.putText(
-        frame,
-        str(obj_id),
-        (x1, max(20, y1)),
-        cv.FONT_HERSHEY_SIMPLEX,
-        0.7,
-        (255, 255, 255),
-        2,
-    )
+        return preview
 
 
-def add_track_prompts(state, tracks: dict, predictor) -> None:
-    for track_id, track in tracks.items():
-        predictor.add_new_points_or_box(
-            inference_state=state,
-            frame_idx=track["initial_frame"],
-            obj_id=int(track_id),
-            box=np.asarray(track["initial_bbox"], dtype=np.float32),
+    def get_selected_frame(
+        window: str,
+        frame_ids: list[int],
+    ) -> int:
+        position = cv.getTrackbarPos("Frame", window)
+        position = min(position, len(frame_ids) - 1)
+
+        return frame_ids[position]
+
+
+    def add_track(
+        frame: np.ndarray,
+        frame_idx: int,
+        tracks: dict[str, Track]
+    ) -> None:
+        roi_win_name = "Select a new fish"
+
+        x, y, w, h = cv.selectROI(
+            roi_win_name,
+            frame,
+            showCrosshair=True,
+            fromCenter=False,
         )
 
+        cv.destroyWindow(roi_win_name)
 
-def select_subjects(vid_id: str) -> dict:
+        if w <= 0 or h <= 0:
+            return
+
+        track_id = str(len(tracks) + 1)
+
+        tracks[track_id] = {
+            "initial_frame": frame_idx,
+            "initial_bbox": [
+                int(x),
+                int(y),
+                int(x + w),
+                int(y + h),
+            ],
+            "frames": {},
+        }
+
     frame_ids = get_frame_ids(vid_id)
 
     if not frame_ids:
@@ -106,7 +112,7 @@ def select_subjects(vid_id: str) -> dict:
 
     tracks = {}
 
-    win_name = "Meros: a = add fish, q = finish"
+    win_name = "Meros: a = add, q = finish"
 
     cv.namedWindow(win_name, cv.WINDOW_NORMAL)
     cv.createTrackbar("Frame", win_name, 0, max(1, len(frame_ids) - 1), lambda _: None)
@@ -138,59 +144,26 @@ def select_subjects(vid_id: str) -> dict:
     return tracks
 
 
-def draw_initial_tracks(frame, frame_idx: int, tracks: dict):
-    preview = frame.copy()
+def propagate_tracks(
+    vid_id: str,
+    tracks: dict[str, Track],
+    predictor,
+) -> TrackMetadata:
 
-    for track_id, track in tracks.items():
-        if track["initial_frame"] != frame_idx:
-            continue
-
-        x1, y1, x2, y2 = track["initial_bbox"]
-
-        cv.rectangle(preview, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        cv.putText(
-            preview,
-            track_id,
-            (x1, max(20, y1)),
-            cv.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (0, 255, 0),
-            2,
-        )
-
-    return preview
+    def add_track_prompts(
+        state: dict[str, torch.Tensor],
+        tracks: dict[str, Track],
+        predictor,
+    ) -> None:
+        for track_id, track in tracks.items():
+            predictor.add_new_points_or_box(
+                inference_state=state,
+                frame_idx=track["initial_frame"],
+                obj_id=int(track_id),
+                box=np.asarray(track["initial_bbox"], dtype=np.float32),
+            )
 
 
-def add_track(frame, frame_idx: int, tracks: dict) -> None:
-    roi_win_name = "Select a new fish"
-
-    x, y, w, h = cv.selectROI(
-        roi_win_name,
-        frame,
-        showCrosshair=True,
-        fromCenter=False,
-    )
-
-    cv.destroyWindow(roi_win_name)
-
-    if w <= 0 or h <= 0:
-        return
-
-    track_id = str(len(tracks) + 1)
-
-    tracks[track_id] = {
-        "initial_frame": frame_idx,
-        "initial_bbox": [
-            int(x),
-            int(y),
-            int(x + w),
-            int(y + h),
-        ],
-        "frames": {},
-    }
-
-
-def propagate_tracks(vid_id: str, tracks: dict, predictor) -> TrackMetadata:
     metadata: TrackMetadata = {
         "video_id": vid_id,
         "tracks": tracks,
@@ -198,8 +171,8 @@ def propagate_tracks(vid_id: str, tracks: dict, predictor) -> TrackMetadata:
 
     state = predictor.init_state(
         video_path=path_to_frames(vid_id),
-        offload_video_to_cpu=True,
-        offload_state_to_cpu=False,
+        offload_video_to_cpu=_OFFLOAD_VIDEO_TO_CPU,
+        offload_state_to_cpu=_OFFLOAD_STATE_TO_CPU,
     )
 
     add_track_prompts(state, tracks, predictor)
@@ -219,10 +192,58 @@ def propagate_tracks(vid_id: str, tracks: dict, predictor) -> TrackMetadata:
 def process_frame(
     vid_id: str,
     frame_idx: int,
-    obj_ids,
-    mask_logits,
+    obj_ids: torch.Tensor,
+    mask_logits: torch.Tensor,
     metadata: TrackMetadata,
 ) -> None:
+
+    def draw_mask(
+        frame: np.ndarray,
+        mask: np.ndarray,
+        obj_id: int,
+        bbox: list[int],
+    ) -> None:
+        x1, y1, _, _ = bbox
+
+        color = np.array(
+            [
+                (obj_id * 67) % 256,
+                (obj_id * 131) % 256,
+                255,
+            ],
+            dtype=np.uint8,
+        )
+
+        frame[mask] = (
+            frame[mask].astype(np.float32) * 0.5
+            + color.astype(np.float32) * 0.5
+        ).astype(np.uint8)
+
+        cv.putText(
+            frame,
+            str(obj_id),
+            (x1, max(20, y1)),
+            cv.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (255, 255, 255),
+            2,
+        )
+
+
+    def bbox_from_mask(mask: np.ndarray) -> list[int] | None:
+        ys, xs = np.where(mask)
+
+        if len(xs) == 0:
+            return None
+
+        return [
+            int(xs.min()),
+            int(ys.min()),
+            int(xs.max()),
+            int(ys.max()),
+        ]
+
+
     frame = cv.imread(path_to_frame(vid_id, frame_idx))
 
     if frame is None:
@@ -236,7 +257,7 @@ def process_frame(
         track_id = str(int(obj_id))
         track = metadata["tracks"][track_id]
 
-        if frame_idx < track["initial_frame"]:  # pyright: ignore
+        if frame_idx < track["initial_frame"]:
             continue
 
         mask = np.squeeze((logits > 0).cpu().numpy())
@@ -271,16 +292,20 @@ def process_frame(
     )
 
 
-def track_vid(vid_id: str, predictor) -> None:
-    tracks = select_subjects(vid_id)
-    metadata = propagate_tracks(vid_id, tracks, predictor)
-
-    persist_track_metadata(vid_id, metadata)
-
-    print(f"Saved {len(tracks)} tracks for {vid_id}.")
-
-
 def track_all_vids() -> None:
+
+    def track_vid(
+        vid_id: str,
+        predictor,
+    ) -> None:
+        tracks = select_subjects(vid_id)
+        metadata = propagate_tracks(vid_id, tracks, predictor)
+
+        persist_track_metadata(vid_id, metadata)
+
+        print(f"Saved {len(tracks)} tracks for {vid_id}.")
+
+
     predictor = build_predictor()
 
     for vid_id in get_vids():

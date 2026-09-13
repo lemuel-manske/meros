@@ -8,3 +8,9 @@ extract-frames:
 
 extract-tracks:
 	python -m src.cmd.extract_tracks
+
+extract-crops:
+	python -m src.cmd.extract_crops
+
+build-review:
+	python -m src.cmd.build_review
