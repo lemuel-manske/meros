@@ -105,6 +105,13 @@ def path_to_track(vid_id: str, frame_idx: int) -> str:
     return f"{dir_path}/{frame_idx}.jpg"
 
 
+def path_to_review_manifest() -> str:
+    """
+    Get the path to the review manifest.
+    """
+    return "review_manifest.csv"
+
+
 def path_to_vid(vid_id):
     """
     Get the path to a video given its ID.
