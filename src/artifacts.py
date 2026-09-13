@@ -96,6 +96,13 @@ def path_to_crop(vid_id: str, frame_idx: int, track_id: str = "1") -> str:
     return f"{dir_path}/{frame_idx}.jpg"
 
 
+def path_to_reviews() -> str:
+    """
+    Get the folder containing dated human reviews.
+    """
+    return "reviews"
+
+
 def path_to_review() -> str:
     """
     Get the path to the review.

@@ -1,7 +1,5 @@
 import csv
 
-from typing import TypedDict
-
 from src.artifacts import (
     get_vids,
     path_to_crop,
@@ -12,21 +10,8 @@ from src.metadata import (
     get_track_metadata,
 )
 
-
-class ReviewRow(TypedDict):
-    video_id: str
-    track_id: str
-    frame_idx: int
-    crop_path: str
-    viewpoint: str
-    quality: int
-    track_correct: str
-    viewpoint_correct: str
-    head_pattern_visible: str
-    body_pattern_visible: str
-    usable_for_identity: str
-    individual_id: str
-
+from src.review import ReviewRow
+l
 
 _FIELDS = list(ReviewRow.__annotations__)
 
