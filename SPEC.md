@@ -171,7 +171,7 @@ Associate detections belonging to the same fish across consecutive frames.
 Tracking provides two important benefits:
 
 - it prevents every frame from being treated as an independent observation;
-- it produces a **tracklet** containing multiple views of the same candidate individual.
+- it produces a **track** containing multiple views of the same candidate individual.
 
 ### 3. Anatomical region localization
 
@@ -214,7 +214,7 @@ For example, one frame might provide a clear view of the head while another prov
 
 This suggests a formulation such as:
 
-**frames → fish detections → tracklet → quality/view assessment → identity representation → individual match**
+**frames → fish detections → track → quality/view assessment → identity representation → individual match**
 
 rather than:
 
@@ -262,7 +262,7 @@ A useful high-level representation of the pipeline is:
 
 → **multi-object tracking**
 
-→ **fish tracklets**
+→ **fish tracks**
 
 → **frame/view quality assessment**
 

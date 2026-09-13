@@ -3,7 +3,9 @@ SAM2_MODEL_CONFIG = "configs/sam2.1/sam2.1_hiera_l.yaml"
 
 DATA_FOLDER = "data"
 
+ANNOTATIONS_FOLDER = f"{DATA_FOLDER}/annotations"
+CROPS_FOLDER = f"{DATA_FOLDER}/crops"
 FRAMES_FOLDER = f"{DATA_FOLDER}/frames"
 TRACKS_FOLDER = f"{DATA_FOLDER}/tracks"
 VIDEOS_FOLDER = f"{DATA_FOLDER}/videos"
-VIS_FOLDER = f"{DATA_FOLDER}/vis"
+VISUALIZATIONS_FOLDER = f"{DATA_FOLDER}/visualizations"

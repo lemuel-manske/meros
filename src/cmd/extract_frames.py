@@ -1,8 +1,8 @@
 import cv2 as cv
 
 from src.artifacts import (
-    get_vids_paths,
     get_vid_id,
+    get_vids_paths,
     path_to_frame,
 )
 from src.frame import get_frames

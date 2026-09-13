@@ -1,8 +1,0 @@
-start_frame,end_frame,viewpoint,quality
-0,90,right,2
-91,200,right,1
-201,220,right,2
-221,270,right,1
-271,370,frontal,2
-371,405,right,1
-406,428,right,3

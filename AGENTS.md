@@ -1,68 +1,70 @@
-# Meros — Code Style and Agent Guidance
+# Meros — Agent Guidance and Pipeline
 
-## Purpose
+## Scope
 
-Code contributed to Meros should read like the surrounding project code and reflect the author's editing preferences.
+Follow the author's style: explicit structure, blank lines between logical steps, and concise explanations. These rules come from the author's edits to `build_review.py` and `fn.py`.
 
-This document is based on the comparison between the staged version of `src/cmd/build_review_manifest.py` and the author's working-tree edits, including the new `src/fn.py`. The edited code provides the clearest evidence of the preferred style. Existing code provides additional context.
+Preserve local edits and behavior during style changes, including validation, defaults, sampling, output fields, and errors. Avoid unrelated formatting changes. These rules apply to project code, not external SAM2 code.
 
-The central preference is **explicit structure, visual separation between logical steps, and limited explanatory overhead**.
+## Terminology
 
-## Scope of changes
+Use one meaning per term in code, paths, schemas, and documentation. Use **review**, not manifest.
 
-Preserve the behavior of existing code when making style changes. A formatting preference does not justify changing sampling logic, validation, output fields, defaults, or error handling.
+| Term | Meaning | Identifier or artifact |
+|---|---|---|
+| Video | Source recording. | `video_id`, `data/videos/` |
+| Frame | Full image at one video position. | `frame_idx`, `data/frames/` |
+| Observation | *One* fish's localization in a frame: bounding box and mask area. | Entry in a track's `frames` mapping |
+| Track | Associated observations of one candidate fish within a video. | `(video_id, track_id)`, `data/tracks/` |
+| Crop | Image region extracted around an observation. | `crop_path`, `data/crops/` |
+| Individual | Biological fish across videos and tracks. | `individual_id` |
+| Annotation | Human label. | `data/annotations/`, review label columns |
+| Visualization | Full frame with masks and track labels. | `data/visualizations/` |
+| Review | Selected crop references and fields for human annotation. | `review.csv` |
+| Dataset | Curated observations and accepted annotations. | `dataset.csv` |
 
-When working in a file with local edits, preserve the author's changes and follow their style. Do not automatically reformat unrelated code or replace local conventions with a formatter's defaults.
+A track contains observations and crops; several tracks can belong to one individual. Track IDs are local to a video; individual IDs span the dataset. A crop is not a visualization.
 
-These guidelines describe project-owned Python code. They do not require restyling the external SAM2 dependency.
+SAM2's external API uses `obj_id`; project code uses `track_id` and the JSON key `tracks`. Use `individual_id`, formerly `who_id`, for biological identity.
 
-## Imports and module organization
+## Code organization
 
-### Import groups
+Order modules as imports, types, constants, functions, then the entry-point guard.
 
-Separate direct standard-library imports, standard-library `from` imports, and project imports with blank lines.
+Keep command-specific logic in its command, including review building, sampling, and writing. Extract helpers only for established reuse or a concrete shared responsibility:
 
-For example:
+- `artifacts.py`: paths;
+- `metadata.py`: metadata and annotation access;
+- `fn.py`: general helpers, such as `positive_int`.
+
+Possible future reuse alone does not justify abstraction. Use artifact helpers such as `path_to_crop(video_id, frame_idx, track_id)` instead of composing storage paths from constants. Add missing path helpers there.
+
+Commands run with defaults and configured videos, without arguments unless requested. Keep useful settings as function defaults. Put orchestration under `if __name__ == "__main__":`; add a `main()` wrapper only when an integration needs it.
+
+Print useful results or necessary diagnostics, not routine per-frame or per-video progress. A review count and output path suffice. Shared processing functions should usually stay quiet.
+
+## Python style
+
+### Imports and signatures
+
+Separate direct standard-library imports, standard-library `from` imports, and project imports:
 
 ```python
-import argparse
 import csv
 
 from pathlib import Path
 from typing import TypedDict
 
 from src.artifacts import get_vids
-from src.consts import TRACKS_FOLDER
-from src.fn import positive_int
 from src.metadata import (
+    get_track_annotations,
     get_track_metadata,
-    get_vis_metadata,
 )
 ```
 
-Use parenthesized imports with one name per line and a trailing comma when importing several names from the same project module. Keep single-name imports on one line.
+For multiple imports from one project module, use parentheses, one name per line, and trailing commas. Single-name imports stay on one line.
 
-### Module layout
-
-Keep imports at the beginning of command modules. Follow them with relevant data structures, constants, processing functions, and the script entry point.
-
-The edited command removes its opening module docstring, including usage instructions and implementation notes. Do not add a long documentation preamble to every command. Put extended usage explanations in project documentation when needed.
-
-### Shared helpers
-
-Place small general-purpose helpers in an appropriate shared module. The author moved `positive_int` from the command into `src/fn.py` and imported it through `from src.fn import positive_int`.
-
-Keep command-specific processing in the command module. Functions such as `build_review_rows`, its sampling logic, and review-manifest writing belong in `src/cmd/build_review_manifest.py` because they serve that command. A command can contain data structures and substantial processing functions; it does not need to be a thin wrapper.
-
-Extract a helper into a regular module under `src/` only when there is a concrete shared responsibility or established reuse. Artifact paths belong in `artifacts.py`, metadata access belongs in `metadata.py`, and general-purpose helpers can belong in `fn.py`. Possible future reuse alone does not justify a new abstraction or module.
-
-Keep useful configuration in function parameters with defaults rather than exposing command-line options before they are needed.
-
-## Function definitions and type annotations
-
-### Function signatures
-
-For multiline function definitions, place each parameter on its own line and include a trailing comma after the final parameter. Keep the return annotation on the closing-parenthesis line.
+Multiline definitions use one parameter per line, a final trailing comma, and the return annotation on the closing line:
 
 ```python
 def select_frames(
@@ -72,52 +74,30 @@ def select_frames(
 ) -> list[ReviewRow]:
 ```
 
-Short definitions can remain on one line, as in `def positive_int(value: str) -> int:`.
+Short definitions and calls can stay compact. Do not expand every call.
 
-This preference is specific to definitions and suitable multiline constructs. The edited code retains compact calls with several arguments on a line, including `parser.add_argument(...)` and the call to `build_review_rows(...)`. Do not expand every call mechanically.
+### Types and expressions
 
-### Type information
+Annotate parameters and returns. Use `TypedDict` for records and built-in generics such as `list[ReviewRow]`. Prefer plain local dictionaries (`groups = {}`, `row = {...}`); keep useful local annotations such as `spaced: list[ReviewRow] = []`.
 
-Keep parameter and return annotations and use `TypedDict` for named record structures. Use built-in generic notation such as `list[ReviewRow]`.
+Use four-space indentation, double quotes, f-strings, `snake_case` functions/variables, `PascalCase` types, and uppercase constants. Keep trailing commas in multiline imports, parameters, and dictionaries.
 
-Local annotations should be selective. The author changed:
+Comprehensions, generators, short sorting lambdas, early returns, `continue`, `Path`, and adjacent f-strings are welcome. No fixed line-length limit or formatter is prescribed; keep expressions readable.
 
-```python
-groups: dict[str, list[ReviewRow]] = {}
-row: ReviewRow = {
-```
+### Blank lines
 
-to plain assignments:
+Separate logical steps, including inside blocks:
 
-```python
-groups = {}
-row = {
-```
+- initialization from processing;
+- separate setup steps;
+- consecutive guards and the final return;
+- multiline assignments from their use;
+- path creation from checks;
+- validation from state updates;
+- successful processing from `except`;
+- command setup, processing, and final output.
 
-The author retained `spaced: list[ReviewRow] = []`. Therefore, do not interpret these edits as a prohibition on local annotations. Prefer plain assignments for straightforward local dictionaries; retain annotations where they help explain a collection or satisfy a meaningful typing requirement.
-
-## Whitespace and visual structure
-
-Blank lines are used to separate **individual logical steps**, including steps inside functions and control-flow blocks.
-
-### Setup and processing
-
-Separate initialization from the loop or operation that follows it:
-
-```python
-spaced: list[ReviewRow] = []
-
-for row in sorted(rows, key=lambda row: row["frame_idx"]):
-    ...
-```
-
-Separate distinct setup steps as well. In the edited code, loading and sorting intervals, initializing `previous_end`, and entering the loop are three visually separate steps.
-
-### Validation and early exits
-
-Separate consecutive guard clauses with a blank line. Separate the final guard from the function's concluding return.
-
-When an early exit follows a state update, put a blank line before the exit:
+Separate a state update from its early exit:
 
 ```python
 if annotation is None:
@@ -126,82 +106,19 @@ if annotation is None:
     continue
 ```
 
-The same structure appears in the helper:
+Keep a guard next to its immediate `raise` or `return`. Keep related counter initializations together, as well as writer creation, `writeheader()`, and `writerows()`.
 
-```python
-number = int(value)
+If argument parsing is requested, separate parser setup, argument groups, and parsing; adjacent short argument definitions can stay grouped.
 
-if number < 1:
-    raise argparse.ArgumentTypeError("must be a positive integer")
+Use two blank lines between top-level functions and before the entry point. Preserve nearby spacing; the author's single blank before a type after imports is not a universal rule.
 
-return number
-```
+### Comments and docstrings
 
-Keep a guard and its immediate `raise` or `return` together when there is no preceding operation inside the branch.
+Comments explain reasons or constraints, not obvious operations. Use lowercase prose, including acronyms such as `id` and `csv`, with periods. Keep normal capitalization in identifiers, messages, and help text.
 
-### Intermediate results
+Standalone comment blocks may have blank lines around them. A short comment can directly precede the operation it explains.
 
-Use a blank line after a multiline assignment before inspecting or consuming its result. This applies to the annotation lookup, the row dictionary, and the selected-frame comprehension.
-
-Likewise, separate path construction from an existence check, and separate validation from updates to loop state.
-
-### Related operations
-
-Keep tightly related statements together. The author retained adjacent counter initializations:
-
-```python
-missing_crops = 0
-unannotated = 0
-```
-
-The writer setup and write operations also remain together:
-
-```python
-writer = csv.DictWriter(output, fieldnames=FIELDS)
-writer.writeheader()
-writer.writerows(rows)
-```
-
-Use blank lines according to meaning rather than inserting one after every statement.
-
-### Script blocks
-
-Separate parser creation, argument definitions, argument parsing, processing, and the final status message.
-
-The multiline `--video-id` argument definition is separated from the following group of short argument definitions. The short definitions remain adjacent.
-
-The edited code also includes a blank line before `except`, separating the successful write block from error handling.
-
-Retain the usual two blank lines between top-level functions and before the script entry point. The edited import block has one blank line before `ReviewRow`; preserve nearby spacing without treating that single occurrence as a universal top-level spacing rule.
-
-## Comments and documentation
-
-### Comments
-
-Use lowercase prose in ordinary code comments. The author changed sentence-initial capitals and the acronyms `ID` and `CSV` to lowercase in comments, while keeping periods.
-
-```python
-# the current crop extractor saves only object 1 in a per-video folder.
-# refuse multi-object metadata because interval labels have no track id.
-```
-
-Keep comments that explain a constraint or a reason for a decision. Avoid narrating operations that are already clear from the code.
-
-A standalone explanatory comment block can have a blank line before and after it. A short comment about the immediately following operation can stay attached to that operation:
-
-```python
-# exclusive creation protects any human review work in an existing csv.
-with args.output.open("x", newline="", encoding="utf-8") as output:
-    ...
-```
-
-The lowercase preference applies to comments. Preserve normal capitalization in names, error messages, help text, and printed output.
-
-### Docstrings
-
-Do not add a docstring to every function by default. The author removed both processing-function docstrings, including the longer explanation of the sampling algorithm.
-
-Short useful helper docstrings are welcome. The extracted `positive_int` helper gained a concise description with opening and closing triple quotes on separate lines:
+Use docstrings selectively. Avoid long command preambles or algorithm narration. Short helper docstrings use separate quote lines, a capitalized sentence, and a period, with no blank before the first statement:
 
 ```python
 def positive_int(value: str) -> int:
@@ -211,60 +128,47 @@ def positive_int(value: str) -> int:
     number = int(value)
 ```
 
-Use this multiline form when adding a docstring, even for a single sentence. Begin the sentence with a capital letter and finish it with a period. There is no extra blank line between this docstring and the first statement.
+Check dependencies on `__doc__` before removing documentation. Keep extended usage instructions here.
 
-Removing documentation can affect behavior when code uses `__doc__`, as the argument parser currently does. Consider that dependency before changing documentation; do not infer that removing CLI help content is a general style requirement.
+## Pipeline
 
-## Command entry points
+Configure filenames in `src/artifacts.py`. Run from the repository root with the virtual environment:
 
-Commands should run with a single invocation such as `python -m src.cmd.build_review_manifest`. Use defaults and the configured videos; do not add argument parsers or command-line options unless requested.
-
-For simple command scripts, put orchestration directly under:
-
-```python
-if __name__ == "__main__":
-    ...
+```sh
+.venv/bin/python -m src.cmd.extract_frames
+.venv/bin/python -m src.cmd.extract_tracks
+.venv/bin/python -m src.cmd.extract_crops
+.venv/bin/python -m src.cmd.build_review
 ```
 
-The author removed the `main()` wrapper and moved its body into this guard. Follow that structure for similar commands. Keep command-specific functions above the guard in the same file, and import only helpers with a concrete reason to live in shared modules.
+### Fish selection
 
-Do not introduce an entry-point wrapper solely as boilerplate. A callable entry point can still be appropriate when an actual integration requires one.
+In `extract_tracks`, use the frame slider, press `a`, draw a box, and confirm with Enter or Space. Repeat for each distinct fish; press `q` to propagate. Canceling a box adds nothing.
 
-### Artifact paths
+Select each fish once on its earliest usable frame, including later entrants. Tracks begin at that frame; earlier observations are excluded. IDs follow selection order. Selecting a fish again creates another track. When reprocessing annotated videos, preserve selection order or update the annotations.
 
-Use helpers from `src.artifacts` to locate files. For example, use `path_to_track(video_id, frame_idx)` instead of constructing a path from `TRACKS_FOLDER`. Add a suitable path helper when an artifact has no existing helper. Commands should not need to know the storage layout.
+### Storage and labels
 
-### Console output
+- Crops: `data/crops/<video_id>/<track_id>/<frame_idx>.jpg`, retaining source frame indices.
+- Track metadata: `data/tracks/<video_id>/metadata.json`, containing each track's initial frame, box, and propagated observations.
+- Optional viewpoint/quality annotations: `data/annotations/<video_id>/metadata.csv`.
 
-Print only information useful to the person running the command. A final message with the result count and output path is sufficient for the review manifest. Avoid routine per-frame or per-video progress messages, and keep reusable processing functions quiet unless a diagnostic is necessary.
+```csv
+track_id,start_frame,end_frame,viewpoint,quality
+1,0,100,left,3
+2,50,150,right,2
+```
 
-## Expressions and conventions retained in the edit
+Intervals are inclusive. Overlap is allowed across tracks, not within one track. Legacy files without `track_id` belong to track `1`.
 
-The author's changes preserve several existing conventions:
+### Human review
 
-- four spaces for indentation;
-- double-quoted strings and f-strings;
-- `snake_case` functions and variables;
-- `PascalCase` record types and uppercase module constants;
-- trailing commas in multiline imports, parameter lists, and dictionaries;
-- comprehensions, generator expressions, and short sorting lambdas;
-- early returns and `continue` statements;
-- `Path` objects for path composition;
-- adjacent f-strings for multiline status messages.
+`build_review` creates `review.csv`: up to three samples per track and viewpoint, at least 15 source frames apart within each group. Unannotated frames form a separate group with blank viewpoint and quality.
 
-These retained choices provide context, but they do not establish an exact line-length limit or a requirement to use a particular formatter. Preserve readable expressions, including the longer conditions and error messages retained in the edited command.
+Review decisions and `individual_id` start blank. Use `Y` (yes), `N` (no), or `U` (uncertain) for decisions. Assign individual identity from biological evidence, not track IDs.
 
-## Review before completing a change
+Existing `review.csv` is protected from overwriting. Commands do not replace the curated `dataset.csv`.
 
-Before presenting code, check that:
+## Before finishing
 
-1. Function definitions, import groups, and script entry points follow the local structure.
-2. Blank lines separate setup, validation, state changes, and final results.
-3. Closely related operations remain grouped.
-4. Comments explain reasons in lowercase prose.
-5. Docstrings are short, selective, and formatted like the shared helper.
-6. Type annotations describe interfaces without unnecessarily repeating local dictionary structure.
-7. Shared helpers live in an appropriate existing module.
-8. Style edits preserve behavior and the author's existing work.
-
-The objective is code that follows the author's demonstrated choices at both the structural and line-by-line level. Apply these conventions with the same selectivity shown in the edits.
+Check local style, terminology, logical spacing, selective typing/documentation, and justified helper placement. Preserve existing work and behavior unless the task explicitly changes it.

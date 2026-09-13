@@ -1,5 +1,15 @@
 import argparse
 
+from pathlib import Path
+
+
+def glob_jpgs(path: str) -> list[Path]:
+    """
+    Glob all .jpg files in the given path.
+    """
+    return list(Path(path).glob("*.jpg"))
+
+
 
 def positive_int(value: str) -> int:
     """

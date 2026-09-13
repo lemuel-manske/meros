@@ -1,9 +1,12 @@
 from src.consts import (
+    ANNOTATIONS_FOLDER,
+    CROPS_FOLDER,
     FRAMES_FOLDER,
     TRACKS_FOLDER,
     VIDEOS_FOLDER,
-    VIS_FOLDER,
+    VISUALIZATIONS_FOLDER,
 )
+from src.fn import glob_jpgs
 
 
 VIDEOS = [
@@ -49,13 +52,20 @@ def path_to_frames(vid_id: str) -> str:
     return f"{FRAMES_FOLDER}/{vid_id}"
 
 
-def path_to_vis(vid_id: str,frame_idx: int) -> str:
+def get_frame_ids(vid_id: str) -> list[int]:
+    """
+    Count the number of frames for a given video ID.
+    """
+    return sorted(int(path.stem) for path in glob_jpgs(path_to_frames(vid_id)))
+
+
+def path_to_visualization(vid_id: str,frame_idx: int) -> str:
     """
     Get the path to a visualization given its index.
     """
     import os
 
-    dir_path = f"{VIS_FOLDER}/{vid_id}"
+    dir_path = f"{VISUALIZATIONS_FOLDER}/{vid_id}"
 
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
@@ -63,13 +73,13 @@ def path_to_vis(vid_id: str,frame_idx: int) -> str:
     return f"{dir_path}/{frame_idx}.jpg"
 
 
-def path_to_vis_metadata(vid_id: str) -> str:
+def path_to_track_metadata(vid_id: str) -> str:
     """
     Get the path to the metadata file for a given video ID.
     """
     import os
 
-    dir_path = f"{VIS_FOLDER}/{vid_id}"
+    dir_path = f"{TRACKS_FOLDER}/{vid_id}"
 
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
@@ -77,13 +87,13 @@ def path_to_vis_metadata(vid_id: str) -> str:
     return f"{dir_path}/metadata.json"
 
 
-def path_to_track_metadata(vid_id: str) -> str:
+def path_to_track_annotations(vid_id: str) -> str:
     """
-    Get the path to the track metadata file for a given video ID.
+    Get the path to the track annotations file for a given video ID.
     """
     import os
 
-    dir_path = f"{TRACKS_FOLDER}/{vid_id}"
+    dir_path = f"{ANNOTATIONS_FOLDER}/{vid_id}"
 
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
@@ -91,13 +101,13 @@ def path_to_track_metadata(vid_id: str) -> str:
     return f"{dir_path}/metadata.csv"
 
 
-def path_to_track(vid_id: str, frame_idx: int) -> str:
+def path_to_crop(vid_id: str, frame_idx: int, track_id: str = "1") -> str:
     """
-    Get the path to a track given its index.
+    Get the path to a crop for a track and source frame.
     """
     import os
 
-    dir_path = f"{TRACKS_FOLDER}/{vid_id}"
+    dir_path = f"{CROPS_FOLDER}/{vid_id}/{track_id}"
 
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
@@ -105,11 +115,11 @@ def path_to_track(vid_id: str, frame_idx: int) -> str:
     return f"{dir_path}/{frame_idx}.jpg"
 
 
-def path_to_review_manifest() -> str:
+def path_to_review() -> str:
     """
-    Get the path to the review manifest.
+    Get the path to the review.
     """
-    return "review_manifest.csv"
+    return "review.csv"
 
 
 def path_to_vid(vid_id):
