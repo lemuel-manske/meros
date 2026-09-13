@@ -3,6 +3,3 @@ __pycache__
 
 **/**/*.mov
 **/**/*.jpg
-
-sam2.1_hiera_large.pt
-sam2_hiera_l.yaml
