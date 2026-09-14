@@ -1,0 +1,6 @@
+outs:
+- md5: a511f2122b38bcdf89d3efc6cb168578.dir
+  size: 1725745244
+  nfiles: 5556
+  hash: md5
+  path: media
