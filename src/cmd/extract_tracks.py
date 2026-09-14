@@ -14,18 +14,20 @@ from src.metadata import (
     TrackMetadata,
     persist_track_metadata,
 )
+from src.sam2 import SAM2Predictor
 
 
 _QUIT_KEY = "q"
 _ADD_TRACK_KEY = "a"
 
-_OFFLOAD_VIDEO_TO_CPU = True
-_OFFLOAD_STATE_TO_CPU = False
-
 
 def select_subjects(vid_id: str) -> dict[str, Track]:
 
-    def draw_initial_tracks(frame, frame_idx: int, tracks: dict[str, Track]) -> np.ndarray:
+    def draw_initial_tracks(
+        frame: np.ndarray,
+        frame_idx: int,
+        tracks: dict[str, Track],
+    ) -> np.ndarray:
         preview = frame.copy()
 
         for track_id, track in tracks.items():
@@ -104,6 +106,7 @@ def select_subjects(vid_id: str) -> dict[str, Track]:
 
     try:
         while cv.getWindowProperty(win_name, cv.WND_PROP_VISIBLE) >= 1:
+
             frame_idx = get_selected_frame(win_name, frame_ids)
             frame = cv.imread(path_to_frame(vid_id, frame_idx))
 
@@ -132,7 +135,7 @@ def select_subjects(vid_id: str) -> dict[str, Track]:
 def propagate_tracks(
     vid_id: str,
     tracks: dict[str, Track],
-    predictor,
+    predictor: SAM2Predictor,
 ) -> TrackMetadata:
 
     def add_track_prompts(
@@ -156,8 +159,6 @@ def propagate_tracks(
 
     state = predictor.init_state(
         video_path=path_to_frames(vid_id),
-        offload_video_to_cpu=_OFFLOAD_VIDEO_TO_CPU,
-        offload_state_to_cpu=_OFFLOAD_STATE_TO_CPU,
     )
 
     add_track_prompts(state, tracks, predictor)
@@ -279,7 +280,7 @@ def process_frame(
 
 def track_vid(
     vid_id: str,
-    predictor,
+    predictor: SAM2Predictor,
 ) -> None:
     tracks = select_subjects(vid_id)
     metadata = propagate_tracks(vid_id, tracks, predictor)

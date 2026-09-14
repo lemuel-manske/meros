@@ -9,10 +9,7 @@ from src.artifacts import (
     path_to_masked_crop,
 )
 from src.metadata import get_track_metadata
-
-
-_OFFLOAD_VIDEO_TO_CPU = True
-_OFFLOAD_STATE_TO_CPU = False
+from src.sam2 import SAM2Predictor
 
 
 def build_masked_crop(
@@ -45,7 +42,7 @@ def build_masked_crop(
 
 def extract_masked_crops(
     vid_id: str,
-    predictor,
+    predictor: SAM2Predictor,
 ) -> int:
     metadata = get_track_metadata(vid_id)
     tracks = metadata["tracks"]
@@ -55,8 +52,6 @@ def extract_masked_crops(
 
     state = predictor.init_state(
         video_path=path_to_frames(vid_id),
-        offload_video_to_cpu=_OFFLOAD_VIDEO_TO_CPU,
-        offload_state_to_cpu=_OFFLOAD_STATE_TO_CPU
     )
 
     for track_id, track in tracks.items():
