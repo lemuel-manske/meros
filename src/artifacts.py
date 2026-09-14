@@ -1,4 +1,6 @@
 from src.consts import (
+    ALIGNMENT_MEDIA_FOLDER,
+    ALIGNMENT_METADATA_FOLDER,
     ANNOTATIONS_FOLDER,
     CROPS_FOLDER,
     FRAMES_FOLDER,
@@ -8,7 +10,10 @@ from src.consts import (
     VIDEOS_FOLDER,
     VISUALIZATIONS_FOLDER,
 )
-from src.fn import glob_csvs, glob_jpgs
+from src.fn import (
+    glob_csvs,
+    glob_jpgs,
+)
 
 
 # collection for all vids intended to be processed
@@ -23,6 +28,34 @@ VIDEOS = [
 
 
 _REVIEW_FILE_PATTERN = "%d_%m_%Y"
+
+
+def path_to_alignment_media(vid_id: str, track_id: str) -> str:
+    """
+    Get the path to the alignment media for a given video ID and track ID.
+    """
+    import os
+
+    dir_path = f"{ALIGNMENT_MEDIA_FOLDER}/{vid_id}/{track_id}"
+
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
+
+    return dir_path
+
+
+def path_to_alignment_metadata(vid_id: str, track_id: str) -> str:
+    """
+    Get the path to the alignment metadata for a given video ID and track ID.
+    """
+    import os
+
+    dir_path = f"{ALIGNMENT_METADATA_FOLDER}/{vid_id}"
+
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
+
+    return f"{dir_path}/{track_id}.json"
 
 
 def path_to_frame(vid_id: str, frame_idx: int) -> str:
