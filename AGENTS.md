@@ -12,14 +12,14 @@ Use one meaning per term in code, paths, schemas, and documentation. Use **revie
 
 | Term | Meaning | Identifier or artifact |
 |---|---|---|
-| Video | Source recording. | `video_id`, `data/videos/` |
-| Frame | Full image at one video position. | `frame_idx`, `data/frames/` |
+| Video | Source recording. | `video_id`, `data/media/videos/` |
+| Frame | Full image at one video position. | `frame_idx`, `data/media/frames/` |
 | Observation | *One* fish's localization in a frame: bounding box and mask area. | Entry in a track's `frames` mapping |
-| Track | Associated observations of one candidate fish within a video. | `(video_id, track_id)`, `data/tracks/` |
-| Crop | Image region extracted around an observation. | `crop_path`, `data/crops/` |
+| Track | Associated observations of one candidate fish within a video. | `(video_id, track_id)`, `data/metadata/tracks/` |
+| Crop | Image region extracted around an observation. | `crop_path`, `data/media/crops/` |
 | Individual | Biological fish across videos and tracks. | `individual_id` |
-| Annotation | Human label. | `data/annotations/`, review label columns |
-| Visualization | Full frame with masks and track labels. | `data/visualizations/` |
+| Annotation | Human label. | `data/metadata/annotations/`, review label columns |
+| Visualization | Full frame with masks and track labels. | `data/media/visualizations/` |
 | Review | Selected crop references and fields for human annotation. | `review.csv` |
 | Dataset | Curated observations and accepted annotations. | `dataset.csv` |
 
@@ -149,9 +149,11 @@ Select each fish once on its earliest usable frame, including later entrants. Tr
 
 ### Storage and labels
 
-- Crops: `data/crops/<video_id>/<track_id>/<frame_idx>.jpg`, retaining source frame indices.
-- Track metadata: `data/tracks/<video_id>/metadata.json`, containing each track's initial frame, box, and propagated observations.
-- Optional viewpoint/quality annotations: `data/annotations/<video_id>/metadata.csv`.
+Store images and videos under `data/media/`, ignored by Git and reserved for DVC. Store track metadata and annotations under `data/metadata/`, tracked by Git. Keep dated human reviews in `reviews/`. Do not add `.gitkeep` files; output commands create directories as needed. DVC is not configured yet.
+
+- Crops: `data/media/crops/<video_id>/<track_id>/<frame_idx>.jpg`, retaining source frame indices.
+- Track metadata: `data/metadata/tracks/<video_id>/metadata.json`, containing each track's initial frame, box, and propagated observations.
+- Optional viewpoint/quality annotations: `data/metadata/annotations/<video_id>/metadata.csv`.
 
 ```csv
 track_id,start_frame,end_frame,viewpoint,quality
@@ -171,7 +173,7 @@ Existing `review.csv` is protected from overwriting. Commands do not replace the
 
 ### Masked crops
 
-Run `.venv/bin/python -m src.cmd.extract_masked_crops` after extracting tracks. It replays saved SAM2 prompts without interactive selection because track metadata does not store masks. Results go to `data/masked_crops/<video_id>/<track_id>/<frame_idx>.png`: tightly bounded BGRA crops with transparent background and original foreground colors and resolution.
+Run `.venv/bin/python -m src.cmd.extract_masked_crops` after extracting tracks. It replays saved SAM2 prompts without interactive selection because track metadata does not store masks. Results go to `data/media/masked_crops/<video_id>/<track_id>/<frame_idx>.png`: tightly bounded BGRA crops with transparent background and original foreground colors and resolution.
 
 Only saved observations are exported; empty masks are skipped. Masks are regenerated and may differ from the original run. Existing crops, reviews, and track metadata stay unchanged. Matching output PNGs are overwritten on reruns. This isolates the fish; it does not extract its skin pattern or identify it. Downstream consumers must handle the alpha channel explicitly.
 

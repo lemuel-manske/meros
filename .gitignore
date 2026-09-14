@@ -4,3 +4,10 @@ __pycache__
 **/**/*.mov
 **/**/*.jpg
 **/**/*.png
+
+# media belongs to dvc; git tracks metadata and dvc pointer files.
+/data/*
+!/data/metadata/
+!/data/*.dvc
+!/data/.gitignore
+.gitkeep
