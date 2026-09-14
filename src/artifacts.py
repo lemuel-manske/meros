@@ -1,15 +1,17 @@
 from src.consts import (
     ANNOTATIONS_FOLDER,
     CROPS_FOLDER,
-    MASKED_CROPS_FOLDER,
     FRAMES_FOLDER,
+    MASKED_CROPS_FOLDER,
+    REVIEWS_FOLDER,
     TRACKS_FOLDER,
     VIDEOS_FOLDER,
     VISUALIZATIONS_FOLDER,
 )
-from src.fn import glob_jpgs
+from src.fn import glob_csvs, glob_jpgs
 
 
+# collection for all vids intended to be processed
 VIDEOS = [
     "102_13.mov",
     "25_1.mov",
@@ -18,6 +20,9 @@ VIDEOS = [
     "65_6.mov",
     "65_8.mov",
 ]
+
+
+_REVIEW_FILE_PATTERN = "%d_%m_%Y"
 
 
 def path_to_frame(vid_id: str, frame_idx: int) -> str:
@@ -115,18 +120,16 @@ def path_to_masked_crop(
     return f"{dir_path}/{frame_idx}.png"
 
 
-def path_to_reviews() -> str:
-    """
-    Get the folder containing dated human reviews.
-    """
-    return "reviews"
-
-
 def path_to_review() -> str:
     """
     Get the path to the review.
     """
-    return "review.csv"
+    from datetime import datetime
+
+    # today in format DD_MM_YYYY
+    fname = datetime.now().strftime(_REVIEW_FILE_PATTERN)
+
+    return f"{REVIEWS_FOLDER}/{fname}.csv"
 
 
 def path_to_vid(vid_id):
@@ -134,6 +137,18 @@ def path_to_vid(vid_id):
     Get the path to a video given its ID.
     """
     return f"{VIDEOS_FOLDER}/{vid_id}"
+
+
+def get_review_paths() -> list[str]:
+    """
+    Get the paths to all review files, sorted by date.
+    """
+    from datetime import datetime
+
+    return [str(p) for p in sorted(
+        glob_csvs(REVIEWS_FOLDER),
+        key=lambda path: datetime.strptime(path.stem, _REVIEW_FILE_PATTERN),
+    )]
 
 
 def get_frame_ids(vid_id: str) -> list[int]:

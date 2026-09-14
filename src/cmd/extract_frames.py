@@ -20,16 +20,12 @@ def extract_n_persist_frames(vid_raw_path: str) -> None:
         print(f"Frame {i} saved to {frame_path}")
 
 
-def extract_n_persist_frames_for_all_vids(vid_paths: list[str]) -> None:
-    for vid_path in vid_paths:
-        extract_n_persist_frames(vid_path)
-
-
 if __name__ == "__main__":
     """
     Extracts frames from all videos in the specified paths and saves them to disk.
     """
 
-    extract_n_persist_frames_for_all_vids(get_vids_paths())
+    for vid_path in get_vids_paths():
+        extract_n_persist_frames(vid_path)
 
     print("Frames extracted and saved successfully.")

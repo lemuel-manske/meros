@@ -10,6 +10,12 @@ def glob_jpgs(path: str) -> list[Path]:
     return list(Path(path).glob("*.jpg"))
 
 
+def glob_csvs(path: str) -> list[Path]:
+    """
+    Glob all .csv files in the given path.
+    """
+    return list(Path(path).glob("*.csv"))
+
 
 def positive_int(value: str) -> int:
     """

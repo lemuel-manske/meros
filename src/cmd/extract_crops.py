@@ -42,16 +42,12 @@ def extract_n_persist_crops(vid_id: str) -> None:
         persist_crops(vid_id, crops, track_id)
 
 
-def extract_n_persist_crops_for_all_vids() -> None:
-    for vid_id in get_vids():
-        extract_n_persist_crops(vid_id)
-
-
 if __name__ == "__main__":
     """
     Extracts crops from all videos in the specified paths and saves them to disk.
     """
 
-    extract_n_persist_crops_for_all_vids()
+    for vid_id in get_vids():
+        extract_n_persist_crops(vid_id)
 
     print("Crops extracted and saved successfully.")

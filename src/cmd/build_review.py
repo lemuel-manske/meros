@@ -1,19 +1,15 @@
-import csv
-
 from src.artifacts import (
     get_vids,
     path_to_crop,
-    path_to_review,
 )
 from src.metadata import (
     get_track_annotations,
     get_track_metadata,
 )
-
-from src.review import ReviewRow
-l
-
-_FIELDS = list(ReviewRow.__annotations__)
+from src.review import (
+    ReviewRow,
+    persist_review,
+)
 
 
 def space_frames(
@@ -224,7 +220,7 @@ def build_review_row(
     track_id: str,
     frame_idx: int,
     intervals: list,
-) -> ReviewRow | None:
+) -> ReviewRow:
     crop_path = path_to_crop(video_id, frame_idx, track_id)
 
     annotation = get_frame_annotation(frame_idx, intervals)
@@ -245,20 +241,6 @@ def build_review_row(
     }
 
 
-def persist_review(rows: list[ReviewRow]) -> None:
-    review_path = path_to_review()
-
-    # exclusive creation protects existing human review work.
-    with open(review_path, "x", newline="", encoding="utf-8") as output:
-        writer = csv.DictWriter(
-            output,
-            fieldnames=_FIELDS,
-        )
-
-        writer.writeheader()
-        writer.writerows(rows)
-
-
 if __name__ == "__main__":
     """
     Builds review samples for all videos and saves them to disk.
@@ -268,6 +250,6 @@ if __name__ == "__main__":
 
     rows = build_review()
 
-    persist_review(rows)
+    path = persist_review(rows)
 
-    print(f"Saved {len(rows)} review samples to {path_to_review()}.")
+    print(f"Saved {len(rows)} review samples to {path}.")
