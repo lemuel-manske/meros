@@ -10,6 +10,8 @@ from typing import (
 )
 
 from src.artifacts import (
+    path_to_aligned_crop,
+    path_to_composite,
     path_to_alignment_media,
     path_to_alignment_metadata,
 )
@@ -111,3 +113,27 @@ def persist_alignment_metadata(
         )
 
         f.write("\n")
+
+
+def read_alignment_metadata(vid_id: str, track_id: str) -> dict:
+    path = path_to_alignment_metadata(vid_id, track_id)
+
+    with open(path) as f:
+        return json.load(f)
+
+
+def read_aligned_crop(vid_id: str, track_id: str, frame_idx: int) -> np.ndarray:
+    path = path_to_aligned_crop(vid_id, track_id, frame_idx)
+    crop = cv.imread(path, cv.IMREAD_UNCHANGED)
+
+    if crop is None or crop.ndim != 3 or crop.shape[2] != 4:
+        raise ValueError(f"Expected a BGRA aligned crop: {path}.")
+
+    return crop
+
+
+def persist_composite(vid_id: str, track_id: str, composite: np.ndarray) -> None:
+    path = path_to_composite(vid_id, track_id)
+
+    if not cv.imwrite(path, composite):
+        raise RuntimeError(f"Could not save {path}.")

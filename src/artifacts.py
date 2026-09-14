@@ -210,3 +210,19 @@ def get_vids() -> list[str]:
     Get the list of video IDs.
     """
     return [get_vid_id(vid) for vid in VIDEOS]
+
+
+def path_to_aligned_crop(vid_id: str, track_id: str, frame_idx: int) -> str:
+    return f"{path_to_alignment_media(vid_id, track_id)}/{frame_idx}.png"
+
+
+def path_to_composite(vid_id: str, track_id: str) -> str:
+    return f"{path_to_alignment_media(vid_id, track_id)}/median.png"
+
+
+def path_to_enhanced_composite(vid_id: str, track_id: str) -> str:
+    return f"{path_to_alignment_media(vid_id, track_id)}/median_contrast.png"
+
+
+def path_to_composite_comparison(vid_id: str, track_id: str) -> str:
+    return f"{path_to_alignment_media(vid_id, track_id)}/median_comparison.png"

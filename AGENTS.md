@@ -196,6 +196,18 @@ Results: `data/media/alignment/<video_id>/<track_id>/`, with aligned PNGs and ov
 
 Transforms and diagnostics: `data/metadata/alignment/<video_id>/<track_id>.json`. Pixel errors measure fitted inliers, not whole-body accuracy. Candidates require human inspection before fusion. Reruns overwrite matching outputs. This command does not combine frames or compare identities.
 
+### Median composites
+
+Run `.venv/bin/python -m src.cmd.build_composites` after inspecting alignment. It combines each configured track independently, using the original reference and candidate aligned crops listed in metadata. Changed selections require rerunning alignment.
+
+Output: `data/media/alignment/<video_id>/<track_id>/median.png`. Each color channel uses the median of fully opaque pixels; partially transparent warp edges are excluded. Uncovered pixels stay transparent. Coverage is the union of valid pixels, so some regions may have only one contributing frame. No color normalization or sharpening is applied. Reruns overwrite composites; source crops remain unchanged.
+
+### Composite contrast
+
+Run `.venv/bin/python -m src.cmd.enhance_composites` after building composites. It applies CLAHE to LAB lightness (clip limit 1.5, 8×8 tiles), blended at 50% strength. Alpha is preserved; nearest foreground lightness fills the background during processing to reduce mask-edge effects.
+
+Outputs alongside `median.png`: `median_contrast.png` and `median_comparison.png` (original left, enhanced right). Originals remain unchanged. Reruns overwrite these variants. This enhances contrast, not spatial resolution.
+
 ## Before finishing
 
 Check local style, terminology, logical spacing, selective typing/documentation, and justified helper placement. Preserve existing work and behavior unless the task explicitly changes it.
