@@ -12,5 +12,8 @@ extract-tracks:
 extract-crops:
 	python -m src.cmd.extract_crops
 
+extract-masked-crops:
+	python -m src.cmd.extract_masked_crops
+
 build-review:
 	python -m src.cmd.build_review

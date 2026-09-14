@@ -169,6 +169,12 @@ Review decisions and `individual_id` start blank. Use `Y` (yes), `N` (no), or `U
 
 Existing `review.csv` is protected from overwriting. Commands do not replace the curated `dataset.csv`.
 
+### Masked crops
+
+Run `.venv/bin/python -m src.cmd.extract_masked_crops` after extracting tracks. It replays saved SAM2 prompts without interactive selection because track metadata does not store masks. Results go to `data/masked_crops/<video_id>/<track_id>/<frame_idx>.png`: tightly bounded BGRA crops with transparent background and original foreground colors and resolution.
+
+Only saved observations are exported; empty masks are skipped. Masks are regenerated and may differ from the original run. Existing crops, reviews, and track metadata stay unchanged. Matching output PNGs are overwritten on reruns. This isolates the fish; it does not extract its skin pattern or identify it. Downstream consumers must handle the alpha channel explicitly.
+
 ## Before finishing
 
 Check local style, terminology, logical spacing, selective typing/documentation, and justified helper placement. Preserve existing work and behavior unless the task explicitly changes it.

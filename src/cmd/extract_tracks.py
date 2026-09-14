@@ -2,18 +2,12 @@ import cv2 as cv
 import numpy as np
 import torch
 
-from sam2.build_sam import build_sam2_video_predictor
-
 from src.artifacts import (
     get_frame_ids,
     get_vids,
     path_to_frame,
     path_to_frames,
     path_to_visualization,
-)
-from src.consts import (
-    SAM2_CHECKPOINT,
-    SAM2_MODEL_CONFIG,
 )
 from src.metadata import (
     Track,
@@ -27,15 +21,6 @@ _ADD_TRACK_KEY = "a"
 
 _OFFLOAD_VIDEO_TO_CPU = True
 _OFFLOAD_STATE_TO_CPU = False
-
-
-def build_predictor():
-    return build_sam2_video_predictor(
-        SAM2_MODEL_CONFIG,
-        SAM2_CHECKPOINT,
-        device="cuda",  # use GPU for faster inference
-        dtype=torch.bfloat16,  # pyright: ignore
-    )
 
 
 def select_subjects(vid_id: str) -> dict[str, Track]:
@@ -292,24 +277,16 @@ def process_frame(
     )
 
 
-def track_all_vids() -> None:
+def track_vid(
+    vid_id: str,
+    predictor,
+) -> None:
+    tracks = select_subjects(vid_id)
+    metadata = propagate_tracks(vid_id, tracks, predictor)
 
-    def track_vid(
-        vid_id: str,
-        predictor,
-    ) -> None:
-        tracks = select_subjects(vid_id)
-        metadata = propagate_tracks(vid_id, tracks, predictor)
+    persist_track_metadata(vid_id, metadata)
 
-        persist_track_metadata(vid_id, metadata)
-
-        print(f"Saved {len(tracks)} tracks for {vid_id}.")
-
-
-    predictor = build_predictor()
-
-    for vid_id in get_vids():
-        track_vid(vid_id, predictor)
+    print(f"Saved {len(tracks)} tracks for {vid_id}.")
 
 
 if __name__ == "__main__":
@@ -317,5 +294,9 @@ if __name__ == "__main__":
     Selects fish in extracted video frames and uses SAM2 to track them
     through each video.
     """
+    from src.sam2 import build_sam2_predictor
 
-    track_all_vids()
+    predictor = build_sam2_predictor()
+
+    for vid_id in get_vids():
+        track_vid(vid_id, predictor)

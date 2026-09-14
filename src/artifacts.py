@@ -1,6 +1,7 @@
 from src.consts import (
     ANNOTATIONS_FOLDER,
     CROPS_FOLDER,
+    MASKED_CROPS_FOLDER,
     FRAMES_FOLDER,
     TRACKS_FOLDER,
     VIDEOS_FOLDER,
@@ -94,6 +95,24 @@ def path_to_crop(vid_id: str, frame_idx: int, track_id: str = "1") -> str:
         os.makedirs(dir_path)
 
     return f"{dir_path}/{frame_idx}.jpg"
+
+
+def path_to_masked_crop(
+    vid_id: str,
+    frame_idx: int,
+    track_id: str,
+) -> str:
+    """
+    Get the PNG path for a crop with a transparent background.
+    """
+    import os
+
+    dir_path = f"{MASKED_CROPS_FOLDER}/{vid_id}/{track_id}"
+
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
+
+    return f"{dir_path}/{frame_idx}.png"
 
 
 def path_to_reviews() -> str:
