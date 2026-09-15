@@ -1,0 +1,23 @@
+{
+  "individuals": [
+    {
+      "individual_id": "4",
+      "tracks": [
+        {
+          "video_id": "65_5",
+          "track_id": "1",
+          "start_frame": 55,
+          "end_frame": 63,
+          "reference_frame": 59
+        },
+        {
+          "video_id": "65_6",
+          "track_id": "1",
+          "start_frame": 82,
+          "end_frame": 98,
+          "reference_frame": 90
+        }
+      ]
+    }
+  ]
+}

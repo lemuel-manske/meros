@@ -12,10 +12,11 @@ from src.artifacts import (
     path_to_alignment_media,
 )
 from src.fn import gray_it
-from src.individuals import INDIVIDUALS
 from src.masked_crop import (
     read_masked_crop,
 )
+
+from src.meros.dataset import individuals
 
 
 def estimate_alignment(
@@ -172,17 +173,17 @@ def align_sequence(
 
 
 if __name__ == "__main__":
-    for individual in INDIVIDUALS:
-        for track in individual["tracks"]:
-            vid_id = track["video_id"]
-            track_id = track["track_id"]
+    for individual in individuals:
+        for track in individual.tracks:
+            vid_id = track.video_id
+            track_id = track.track_id
 
             accepted, total = align_sequence(
                 vid_id,
                 track_id,
-                track["start_frame"],
-                track["end_frame"],
-                track["reference_frame"],
+                track.start_frame,
+                track.end_frame,
+                track.reference_frame,
             )
 
             print(

@@ -8,21 +8,12 @@ from src.consts import (
     MATCHES_FOLDER,
     REVIEWS_FOLDER,
     TRACKS_FOLDER,
-    VIDEOS_FOLDER,
+    VIDEOS_MEDIA_FOLDER,
     VISUALIZATIONS_FOLDER,
 )
 from src.fn import glob_csvs
 
-
-# collection for all vids intended to be processed
-_VIDEOS = [
-    "102_13.mov",
-    "25_1.mov",
-    "26_4.mov",
-    "65_5.mov",
-    "65_6.mov",
-    "65_8.mov",
-]
+from src.meros.dataset import videos
 
 
 _REVIEW_FILE_PATTERN = "%d_%m_%Y"  # DD_MM_YYYY
@@ -166,14 +157,14 @@ def path_to_vid(vid):
     """
     Get the path to a video given its ID.
     """
-    return f"{VIDEOS_FOLDER}/{vid}"
+    return f"{VIDEOS_MEDIA_FOLDER}/{vid}"
 
 
 def paths_to_vids() -> list[str]:
     """
     Get the paths to all videos in the VIDEOS list.
     """
-    return [path_to_vid(vid) for vid in _VIDEOS]
+    return [path_to_vid(vid) for vid in videos]
 
 
 def paths_to_reviews() -> list[str]:
@@ -253,7 +244,4 @@ def get_vid_id(vid_raw_path):
 
 
 def get_vid_ids() -> list[str]:
-    """
-    Get the list of video IDs.
-    """
-    return [get_vid_id(vid) for vid in _VIDEOS]
+    return [vid.video_id for vid in videos]

@@ -9,7 +9,8 @@ from src.artifacts import (
     path_to_composite_matches,
     path_to_enhanced_composite,
 )
-from src.individuals import INDIVIDUALS
+
+from src.meros.dataset import individuals
 
 
 def match_composites(
@@ -87,9 +88,9 @@ def match_composites(
 
 
 if __name__ == "__main__":
-    for individual in INDIVIDUALS:
-        for source, target in combinations(individual["tracks"], 2):
-            if source["video_id"] == target["video_id"]:
+    for individual in individuals:
+        for source, target in combinations(individual.tracks, 2):
+            if source.video_id == target.video_id:
                 continue
 
             for enhanced in (False, True):
@@ -97,7 +98,7 @@ if __name__ == "__main__":
                 crops = []
 
                 for track in (source, target):
-                    path = path_to_input(track["video_id"], track["track_id"])
+                    path = path_to_input(track.video_id, track.track_id)
                     crop = cv.imread(path, cv.IMREAD_UNCHANGED)
 
                     if crop is None:
@@ -107,8 +108,8 @@ if __name__ == "__main__":
 
                 canvas, matches, inliers = match_composites(*crops)
                 output = Path(path_to_composite_matches(
-                    source["video_id"], source["track_id"],
-                    target["video_id"], target["track_id"], enhanced,
+                    source.video_id, source.track_id,
+                    target.video_id, target.track_id, enhanced,
                 ))
                 output.parent.mkdir(parents=True, exist_ok=True)
 

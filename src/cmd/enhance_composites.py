@@ -8,7 +8,8 @@ from src.artifacts import (
     path_to_composite_comparison,
     path_to_enhanced_composite,
 )
-from src.individuals import INDIVIDUALS
+
+from src.meros.dataset import individuals
 
 
 def enhance_contrast(
@@ -67,8 +68,8 @@ def enhance_composite(vid_id: str, track_id: str) -> str:
 
 
 if __name__ == "__main__":
-    for individual in INDIVIDUALS:
-        for track in individual["tracks"]:
-            path = enhance_composite(track["video_id"], track["track_id"])
+    for individual in individuals:
+        for track in individual.tracks:
+            path = enhance_composite(track.video_id, track.track_id)
 
             print(f"Original left, enhanced right: {path}.")
