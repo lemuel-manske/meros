@@ -14,7 +14,8 @@ from src.metadata import (
     TrackMetadata,
     persist_track_metadata,
 )
-from src.sam2 import SAM2Predictor
+
+from src.meros.external import build_sam2_predictor, SAM2Predictor
 
 
 _QUIT_KEY = "q"
@@ -299,8 +300,6 @@ if __name__ == "__main__":
     Selects fish in extracted video frames and uses SAM2 to track them
     through each video.
     """
-    from src.sam2 import build_sam2_predictor
-
     predictor = build_sam2_predictor()
 
     for vid_id in get_vid_ids():

@@ -9,7 +9,9 @@ from src.artifacts import (
     path_to_masked_crop,
 )
 from src.metadata import get_track_metadata
-from src.sam2 import SAM2Predictor
+
+from src.meros.external import build_sam2_predictor, SAM2Predictor
+
 
 
 def build_masked_crop(
@@ -103,8 +105,6 @@ if __name__ == "__main__":
     """
     Extract masked crops for all videos in the dataset.
     """
-    from src.sam2 import build_sam2_predictor
-
     predictor = build_sam2_predictor()
 
     with torch.inference_mode():
