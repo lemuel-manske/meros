@@ -233,15 +233,3 @@ def path_to_composite_matches(
     variant = "enhanced" if enhanced else "original"
 
     return f"{MATCHES_FOLDER}/{video_id}_{track_id}--{other_video_id}_{other_track_id}/{variant}.png"
-
-
-
-def get_vid_id(vid_raw_path):
-    """
-    Extract the video ID from the video path.
-    """
-    return vid_raw_path.split("/")[-1].split(".")[0]
-
-
-def get_vid_ids() -> list[str]:
-    return [vid.video_id for vid in videos]

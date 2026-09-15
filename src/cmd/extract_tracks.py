@@ -3,7 +3,6 @@ import numpy as np
 import torch
 
 from src.artifacts import (
-    get_vid_ids,
     path_to_frame,
     path_to_frames,
     path_to_visualization,
@@ -15,6 +14,7 @@ from src.metadata import (
     persist_track_metadata,
 )
 
+from src.meros.dataset import videos
 from src.meros.external import build_sam2_predictor, SAM2Predictor
 
 
@@ -302,5 +302,5 @@ if __name__ == "__main__":
     """
     predictor = build_sam2_predictor()
 
-    for vid_id in get_vid_ids():
-        track_vid(vid_id, predictor)
+    for vid in videos:
+        track_vid(vid.video_id, predictor)

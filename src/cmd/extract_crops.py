@@ -1,7 +1,8 @@
-from src.artifacts import get_vid_ids
 from src.crop import persist_crops
 from src.frame import get_frame
 from src.metadata import get_track_metadata
+
+from src.meros.dataset import videos
 
 
 _CROP_MARGIN = 15
@@ -47,7 +48,7 @@ if __name__ == "__main__":
     Extracts crops from all videos in the specified paths and saves them to disk.
     """
 
-    for vid_id in get_vid_ids():
-        extract_n_persist_crops(vid_id)
+    for vid in videos:
+        extract_n_persist_crops(vid.video_id)
 
     print("Crops extracted and saved successfully.")

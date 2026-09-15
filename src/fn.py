@@ -1,20 +1,7 @@
-import argparse
 import cv2 as cv
 import numpy as np
 
 from pathlib import Path
-
-
-def positive_int(value: str) -> int:
-    """
-    Convert a string to a positive integer.
-    """
-    number = int(value)
-
-    if number < 1:
-        raise argparse.ArgumentTypeError("must be a positive integer")
-
-    return number
 
 
 def glob_jpgs(path: str) -> list[Path]:

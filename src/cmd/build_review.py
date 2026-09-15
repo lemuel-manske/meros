@@ -1,7 +1,4 @@
-from src.artifacts import (
-    get_vid_ids,
-    path_to_crop,
-)
+from src.artifacts import path_to_crop
 from src.metadata import (
     get_track_annotations,
     get_track_metadata,
@@ -10,6 +7,8 @@ from src.review import (
     ReviewRow,
     persist_review,
 )
+
+from src.meros.dataset import videos
 
 
 def space_frames(
@@ -77,9 +76,9 @@ def build_review(
 ) -> list[ReviewRow]:
     return [
         row
-        for video_id in get_vid_ids()
+        for vid in videos
         for row in build_review_rows(
-            video_id,
+            vid.video_id,
             samples,
             min_frame_gap,
         )
