@@ -1,4 +1,7 @@
 [core]
-    remote = storage
+    remote = b2
 ['remote "storage"']
     url = /home/lkmliz/dev/dvc-storage/meros
+['remote "b2"']
+    url = s3://meros-do-brasil/dvc
+    endpointurl = https://s3.us-east-005.backblazeb2.com
