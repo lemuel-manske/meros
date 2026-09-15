@@ -5,6 +5,7 @@ from src.consts import (
     CROPS_FOLDER,
     FRAMES_FOLDER,
     MASKED_CROPS_FOLDER,
+    MATCHES_FOLDER,
     REVIEWS_FOLDER,
     TRACKS_FOLDER,
     VIDEOS_FOLDER,
@@ -250,3 +251,18 @@ def path_to_composite_comparison(
     Get the path to the composite comparison image for a given video ID and track ID.
     """
     return f"{path_to_alignment_media(vid_id, track_id)}/median_comparison.png"
+
+
+def path_to_composite_matches(
+    video_id: str,
+    track_id: str,
+    other_video_id: str,
+    other_track_id: str,
+    enhanced: bool,
+) -> str:
+    """
+    Get the comparison image path for a pair of tracks and composite variant.
+    """
+    variant = "enhanced" if enhanced else "original"
+
+    return f"{MATCHES_FOLDER}/{video_id}_{track_id}--{other_video_id}_{other_track_id}/{variant}.png"

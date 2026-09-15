@@ -125,7 +125,7 @@ Comments explain reasons or constraints, not obvious operations. Use lowercase p
 
 Standalone comment blocks may have blank lines around them. A short comment can directly precede the operation it explains.
 
-Use docstrings selectively. Avoid long command preambles or algorithm narration. Short helper docstrings use separate quote lines, a capitalized sentence, and a period, with no blank before the first statement:
+Document every function in `src/*.py` with a concise docstring. In commands, use docstrings selectively. Avoid long command preambles or algorithm narration. Short helper docstrings use separate quote lines, a capitalized sentence, and a period, with no blank before the first statement:
 
 ```python
 def positive_int(value: str) -> int:
@@ -207,6 +207,12 @@ Output: `data/media/alignment/<video_id>/<track_id>/median.png`. Each color chan
 Run `.venv/bin/python -m src.cmd.enhance_composites` after building composites. It applies CLAHE to LAB lightness (clip limit 1.5, 8×8 tiles), blended at 50% strength. Alpha is preserved; nearest foreground lightness fills the background during processing to reduce mask-edge effects.
 
 Outputs alongside `median.png`: `median_contrast.png` and `median_comparison.png` (original left, enhanced right). Originals remain unchanged. Reruns overwrite these variants. This enhances contrast, not spatial resolution.
+
+### Cross-recording composite matching
+
+Run `.venv/bin/python -m src.cmd.match_composites`. It compares cross-video track pairs within each configured individual, separately for median and enhanced composites. Both variants use grayscale SIFT with identical settings, without extra contrast enhancement. Matches must pass a mutual nearest-neighbor ratio test (0.75).
+
+Outputs: `data/media/matches/<video_id>_<track_id>--<other_video_id>_<other_track_id>/{original,enhanced}.png`. Gray lines are tentative matches; green lines are affine RANSAC inliers (3-pixel threshold). Fitting requires at least eight tentative matches; fewer means geometry was not evaluated. Inliers and increased match counts do not establish identity or enhancement quality. Inspect the linked markings.
 
 ## Before finishing
 
