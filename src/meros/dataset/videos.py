@@ -1,8 +1,11 @@
 import json
 
+from dataclasses import dataclass
+
 from src.consts import VIDEOS_METADATA_FOLDER
 
 
+@dataclass
 class Video:
     video_id: str
     fname: str
@@ -15,11 +18,16 @@ def _read() -> list[dict]:
 
 
 def _cast(video_metadata: dict) -> Video:
-    video = Video()
-    video.video_id = video_metadata["video_id"]
-    video.fname = video_metadata["fname"]
+    video_id = video_metadata["video_id"]
+    fname = video_metadata["fname"]
 
-    video.path = f"{VIDEOS_METADATA_FOLDER}/{video.fname}"
+    path = f"{VIDEOS_METADATA_FOLDER}/{fname}"
+
+    video = Video(
+        video_id=video_id,
+        fname=fname,
+        path=path,
+    )
 
     return video
 

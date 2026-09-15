@@ -1,8 +1,11 @@
 import json
 
+from dataclasses import dataclass
+
 from src.consts import INDIVIDUALS_METADATA_FOLDER
 
 
+@dataclass
 class IndividualTrack:
     video_id: str
     track_id: str
@@ -11,6 +14,7 @@ class IndividualTrack:
     reference_frame: int
 
 
+@dataclass
 class Individual:
     individual_id: str
     tracks: list[IndividualTrack]
@@ -22,22 +26,35 @@ def _read() -> list[dict]:
 
 
 def _cast_track(track_metadata: dict) -> IndividualTrack:
-    track = IndividualTrack()
-    track.video_id = track_metadata["video_id"]
-    track.track_id = track_metadata["track_id"]
-    track.start_frame = track_metadata["start_frame"]
-    track.end_frame = track_metadata["end_frame"]
-    track.reference_frame = track_metadata["reference_frame"]
+    video_id = track_metadata["video_id"]
+    track_id = track_metadata["track_id"]
+    start_frame = track_metadata["start_frame"]
+    end_frame = track_metadata["end_frame"]
+    reference_frame = track_metadata["reference_frame"]
+
+    track = IndividualTrack(
+        video_id=video_id,
+        track_id=track_id,
+        start_frame=start_frame,
+        end_frame=end_frame,
+        reference_frame=reference_frame
+    )
+
     return track
 
 
 def _cast(individual_metadata: dict) -> Individual:
-    individual = Individual()
-    individual.individual_id = individual_metadata["individual_id"]
-    individual.tracks = [
+    individual_id = individual_metadata["individual_id"]
+    tracks = [
         _cast_track(track_metadata)
         for track_metadata in individual_metadata["tracks"]
     ]
+
+    individual = Individual(
+        individual_id=individual_id,
+        tracks=tracks
+    )
+
     return individual
 
 
