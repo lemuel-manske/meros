@@ -1,11 +1,12 @@
+.env
+.gitkeep
 .venv
 __pycache__
 
 # media belongs to dvc; git tracks metadata and dvc pointer files.
 /data/*
 
-!/data/metadata/
+# ignore * except for metadata and dvc pointer files
 !/data/*.dvc
 !/data/.gitignore
-
-.gitkeep
+!/data/metadata/

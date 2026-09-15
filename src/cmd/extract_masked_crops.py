@@ -3,7 +3,7 @@ import numpy as np
 import torch
 
 from src.artifacts import (
-    get_vids,
+    get_vid_ids,
     path_to_frame,
     path_to_frames,
     path_to_masked_crop,
@@ -108,6 +108,6 @@ if __name__ == "__main__":
     predictor = build_sam2_predictor()
 
     with torch.inference_mode():
-        count = sum(extract_masked_crops(vid_id, predictor) for vid_id in get_vids())
+        count = sum(extract_masked_crops(vid_id, predictor) for vid_id in get_vid_ids())
 
     print(f"Saved {count} masked crops.")

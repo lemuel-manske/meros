@@ -11,14 +11,11 @@ from src.consts import (
     VIDEOS_FOLDER,
     VISUALIZATIONS_FOLDER,
 )
-from src.fn import (
-    glob_csvs,
-    glob_jpgs,
-)
+from src.fn import glob_csvs
 
 
 # collection for all vids intended to be processed
-VIDEOS = [
+_VIDEOS = [
     "102_13.mov",
     "25_1.mov",
     "26_4.mov",
@@ -165,14 +162,21 @@ def path_to_review() -> str:
     return f"{REVIEWS_FOLDER}/{fname}.csv"
 
 
-def path_to_vid(vid_id):
+def path_to_vid(vid):
     """
     Get the path to a video given its ID.
     """
-    return f"{VIDEOS_FOLDER}/{vid_id}"
+    return f"{VIDEOS_FOLDER}/{vid}"
 
 
-def get_review_paths() -> list[str]:
+def paths_to_vids() -> list[str]:
+    """
+    Get the paths to all videos in the VIDEOS list.
+    """
+    return [path_to_vid(vid) for vid in _VIDEOS]
+
+
+def paths_to_reviews() -> list[str]:
     """
     Get the paths to all review files, sorted by date.
     """
@@ -182,34 +186,6 @@ def get_review_paths() -> list[str]:
         glob_csvs(REVIEWS_FOLDER),
         key=lambda path: datetime.strptime(path.stem, _REVIEW_FILE_PATTERN),
     )]
-
-
-def get_frame_ids(vid_id: str) -> list[int]:
-    """
-    Count the number of frames for a given video ID.
-    """
-    return sorted(int(path.stem) for path in glob_jpgs(path_to_frames(vid_id)))
-
-
-def get_vid_id(vid_raw_path):
-    """
-    Extract the video ID from the video path.
-    """
-    return vid_raw_path.split("/")[-1].split(".")[0]
-
-
-def get_vids_paths() -> list[str]:
-    """
-    Get the paths to all videos in the VIDEOS list.
-    """
-    return [f"{VIDEOS_FOLDER}/{vid}" for vid in VIDEOS]
-
-
-def get_vids() -> list[str]:
-    """
-    Get the list of video IDs.
-    """
-    return [get_vid_id(vid) for vid in VIDEOS]
 
 
 def path_to_aligned_crop(
@@ -266,3 +242,18 @@ def path_to_composite_matches(
     variant = "enhanced" if enhanced else "original"
 
     return f"{MATCHES_FOLDER}/{video_id}_{track_id}--{other_video_id}_{other_track_id}/{variant}.png"
+
+
+
+def get_vid_id(vid_raw_path):
+    """
+    Extract the video ID from the video path.
+    """
+    return vid_raw_path.split("/")[-1].split(".")[0]
+
+
+def get_vid_ids() -> list[str]:
+    """
+    Get the list of video IDs.
+    """
+    return [get_vid_id(vid) for vid in _VIDEOS]

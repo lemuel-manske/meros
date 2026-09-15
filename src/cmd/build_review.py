@@ -1,5 +1,5 @@
 from src.artifacts import (
-    get_vids,
+    get_vid_ids,
     path_to_crop,
 )
 from src.metadata import (
@@ -77,7 +77,7 @@ def build_review(
 ) -> list[ReviewRow]:
     return [
         row
-        for video_id in get_vids()
+        for video_id in get_vid_ids()
         for row in build_review_rows(
             video_id,
             samples,

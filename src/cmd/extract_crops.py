@@ -1,4 +1,4 @@
-from src.artifacts import get_vids
+from src.artifacts import get_vid_ids
 from src.crop import persist_crops
 from src.frame import get_frame
 from src.metadata import get_track_metadata
@@ -47,7 +47,7 @@ if __name__ == "__main__":
     Extracts crops from all videos in the specified paths and saves them to disk.
     """
 
-    for vid_id in get_vids():
+    for vid_id in get_vid_ids():
         extract_n_persist_crops(vid_id)
 
     print("Crops extracted and saved successfully.")

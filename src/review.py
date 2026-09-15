@@ -2,7 +2,7 @@ import csv
 
 from typing import TypedDict
 
-from src.artifacts import get_review_paths, path_to_review
+from src.artifacts import paths_to_reviews, path_to_review
 
 
 class ReviewRow(TypedDict):
@@ -67,7 +67,7 @@ def get_review_dataset() -> list[ReviewRow]:
 
     Prioritize the most recent review for each (video_id, track_id, frame_idx) combination.
     """
-    paths = get_review_paths()
+    paths = paths_to_reviews()
 
     observations = {}
 

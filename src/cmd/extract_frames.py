@@ -2,7 +2,7 @@ import cv2 as cv
 
 from src.artifacts import (
     get_vid_id,
-    get_vids_paths,
+    paths_to_vids,
     path_to_frame,
 )
 from src.frame import get_frames
@@ -25,7 +25,7 @@ if __name__ == "__main__":
     Extracts frames from all videos in the specified paths and saves them to disk.
     """
 
-    for vid_path in get_vids_paths():
+    for vid_path in paths_to_vids():
         extract_n_persist_frames(vid_path)
 
     print("Frames extracted and saved successfully.")

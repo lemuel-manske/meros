@@ -20,7 +20,6 @@ def get_frame(vid_id: str, frame_id: int) -> cvt.MatLike | None:
     return cv.imread(frame_path)
 
 
-
 def get_frames(vid_id: str) -> list[cvt.MatLike]:
     """
     Extract frames from a video given its ID.

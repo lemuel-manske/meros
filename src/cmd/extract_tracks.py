@@ -3,12 +3,12 @@ import numpy as np
 import torch
 
 from src.artifacts import (
-    get_frame_ids,
-    get_vids,
+    get_vid_ids,
     path_to_frame,
     path_to_frames,
     path_to_visualization,
 )
+from src.fn import glob_jpgs
 from src.metadata import (
     Track,
     TrackMetadata,
@@ -19,6 +19,10 @@ from src.sam2 import SAM2Predictor
 
 _QUIT_KEY = "q"
 _ADD_TRACK_KEY = "a"
+
+
+def get_frame_ids(vid_id: str) -> list[int]:
+    return sorted(int(path.stem) for path in glob_jpgs(path_to_frames(vid_id)))
 
 
 def select_subjects(vid_id: str) -> dict[str, Track]:
@@ -299,5 +303,5 @@ if __name__ == "__main__":
 
     predictor = build_sam2_predictor()
 
-    for vid_id in get_vids():
+    for vid_id in get_vid_ids():
         track_vid(vid_id, predictor)
