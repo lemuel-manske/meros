@@ -13,6 +13,7 @@ class IndividualSelection(TypedDict):
     individual_id: str
     tracks: list[TrackSelection]
 
+
 # keep track of known individuals and their associated tracks,
 # along with the start and end frames for each track
 INDIVIDUALS: list[IndividualSelection] = [

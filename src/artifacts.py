@@ -27,7 +27,7 @@ VIDEOS = [
 ]
 
 
-_REVIEW_FILE_PATTERN = "%d_%m_%Y"
+_REVIEW_FILE_PATTERN = "%d_%m_%Y"  # DD_MM_YYYY
 
 
 def path_to_alignment_media(vid_id: str, track_id: str) -> str:
@@ -159,7 +159,6 @@ def path_to_review() -> str:
     """
     from datetime import datetime
 
-    # today in format DD_MM_YYYY
     fname = datetime.now().strftime(_REVIEW_FILE_PATTERN)
 
     return f"{REVIEWS_FOLDER}/{fname}.csv"
@@ -212,17 +211,42 @@ def get_vids() -> list[str]:
     return [get_vid_id(vid) for vid in VIDEOS]
 
 
-def path_to_aligned_crop(vid_id: str, track_id: str, frame_idx: int) -> str:
+def path_to_aligned_crop(
+    vid_id: str,
+    track_id: str,
+    frame_idx: int,
+) -> str:
+    """
+    Get the path to an aligned crop for a given video ID, track ID, and frame index.
+    """
     return f"{path_to_alignment_media(vid_id, track_id)}/{frame_idx}.png"
 
 
-def path_to_composite(vid_id: str, track_id: str) -> str:
+def path_to_composite(
+    vid_id: str,
+    track_id: str,
+) -> str:
+    """
+    Get the path to the composite image for a given video ID and track ID.
+    """
     return f"{path_to_alignment_media(vid_id, track_id)}/median.png"
 
 
-def path_to_enhanced_composite(vid_id: str, track_id: str) -> str:
+def path_to_enhanced_composite(
+    vid_id: str,
+    track_id: str,
+) -> str:
+    """
+    Get the path to the enhanced composite image for a given video ID and track ID.
+    """
     return f"{path_to_alignment_media(vid_id, track_id)}/median_contrast.png"
 
 
-def path_to_composite_comparison(vid_id: str, track_id: str) -> str:
+def path_to_composite_comparison(
+    vid_id: str,
+    track_id: str,
+) -> str:
+    """
+    Get the path to the composite comparison image for a given video ID and track ID.
+    """
     return f"{path_to_alignment_media(vid_id, track_id)}/median_comparison.png"
