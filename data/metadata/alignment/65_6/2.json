@@ -1,0 +1,178 @@
+{
+  "video_id": "65_6",
+  "track_id": "2",
+  "start_frame": 0,
+  "end_frame": 8,
+  "reference_frame": 2,
+  "method": "SIFT mutual ratio matches, affine RANSAC",
+  "frames": [
+    {
+      "status": "candidate",
+      "matches": 31,
+      "inliers": 14,
+      "frame_idx": 0,
+      "inlier_ratio": 0.45161290322580644,
+      "median_error_px": 1.5819694995880127,
+      "inlier_hull_fraction": 0.43427290766688886,
+      "source_to_reference": [
+        [
+          1.0001448605016037,
+          -0.019045377453765163,
+          3.6329831346953756
+        ],
+        [
+          0.009426556245705556,
+          0.9981942201550473,
+          -1.0171503211885786
+        ]
+      ]
+    },
+    {
+      "status": "candidate",
+      "matches": 36,
+      "inliers": 22,
+      "frame_idx": 1,
+      "inlier_ratio": 0.6111111111111112,
+      "median_error_px": 0.751264214515686,
+      "inlier_hull_fraction": 0.518825490320555,
+      "source_to_reference": [
+        [
+          1.0004818635441308,
+          -0.004773584566099661,
+          3.2949711727165836
+        ],
+        [
+          0.003987577803416779,
+          1.0022523748822207,
+          0.26820576704267746
+        ]
+      ]
+    },
+    {
+      "status": "candidate",
+      "matches": 33,
+      "inliers": 16,
+      "frame_idx": 3,
+      "inlier_ratio": 0.48484848484848486,
+      "median_error_px": 1.000143051147461,
+      "inlier_hull_fraction": 0.5486149824933929,
+      "source_to_reference": [
+        [
+          1.0012661812420358,
+          0.01083066913681495,
+          -1.8862193964515472
+        ],
+        [
+          -0.0026807073148524554,
+          1.0026004293300488,
+          0.9063729788952817
+        ]
+      ]
+    },
+    {
+      "status": "candidate",
+      "matches": 29,
+      "inliers": 13,
+      "frame_idx": 4,
+      "inlier_ratio": 0.4482758620689655,
+      "median_error_px": 1.550122618675232,
+      "inlier_hull_fraction": 0.41548392669350626,
+      "source_to_reference": [
+        [
+          0.999814170302088,
+          -0.004135038722866153,
+          0.14686420252899723
+        ],
+        [
+          -0.0013492792742445996,
+          0.9834399847715748,
+          1.7480927877388845
+        ]
+      ]
+    },
+    {
+      "status": "rejected_geometry",
+      "matches": 34,
+      "inliers": 13,
+      "frame_idx": 5,
+      "inlier_ratio": 0.38235294117647056,
+      "median_error_px": 0.9973949790000916,
+      "inlier_hull_fraction": 0.22570048537456067,
+      "source_to_reference": [
+        [
+          0.9944305663035014,
+          0.02447591243293227,
+          -2.6630481905787526
+        ],
+        [
+          -0.014254625408182531,
+          1.0290125940573054,
+          6.771304986464695
+        ]
+      ]
+    },
+    {
+      "status": "rejected_geometry",
+      "matches": 23,
+      "inliers": 11,
+      "frame_idx": 6,
+      "inlier_ratio": 0.4782608695652174,
+      "median_error_px": 0.8340350985527039,
+      "inlier_hull_fraction": 0.33812852379653446,
+      "source_to_reference": [
+        [
+          0.996785250199698,
+          -0.0205021900623039,
+          4.9911942484338105
+        ],
+        [
+          -0.007662601155914986,
+          1.0290447179155788,
+          -4.884628384163898
+        ]
+      ]
+    },
+    {
+      "status": "rejected_geometry",
+      "matches": 25,
+      "inliers": 10,
+      "frame_idx": 7,
+      "inlier_ratio": 0.4,
+      "median_error_px": 1.1595512628555298,
+      "inlier_hull_fraction": 0.2879672536580693,
+      "source_to_reference": [
+        [
+          0.9981429156929356,
+          -0.005348496235887889,
+          0.044886863407400314
+        ],
+        [
+          -0.009093152592012677,
+          0.9930690131966992,
+          2.886827326629373
+        ]
+      ]
+    },
+    {
+      "status": "rejected_geometry",
+      "matches": 25,
+      "inliers": 8,
+      "frame_idx": 8,
+      "inlier_ratio": 0.32,
+      "median_error_px": 1.3861019611358643,
+      "inlier_hull_fraction": 0.23319586316606716,
+      "source_to_reference": [
+        [
+          1.04175243790731,
+          -0.021533126164657336,
+          -31.673261918835422
+        ],
+        [
+          -0.01305816621737042,
+          0.9855410276562748,
+          7.205266038394037
+        ]
+      ]
+    }
+  ]
+}

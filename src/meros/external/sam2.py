@@ -3,16 +3,16 @@ import torch
 
 from sam2.build_sam import build_sam2_video_predictor
 
-from src.consts import (
-    SAM2_CHECKPOINT,
-    SAM2_MODEL_CONFIG,
-)
-
 
 _DEVICE = "cuda"  # use GPU for faster inference
 
+
 _OFFLOAD_STATE_TO_CPU = False  # keep state on GPU for faster inference
 _OFFLOAD_VIDEO_TO_CPU = True  # use CPU memory for video frames to reduce GPU memory usage
+
+
+_SAM2_CHECKPOINT = "external/sam2/checkpoints/sam2.1_hiera_large.pt"
+_SAM2_MODEL_CONFIG = "configs/sam2.1/sam2.1_hiera_l.yaml"
 
 
 class SAM2Predictor():
@@ -62,8 +62,8 @@ def build_sam2_predictor() -> SAM2Predictor:
     Build a SAM2 predictor for video propagation.
     """
     sam2_predictor = build_sam2_video_predictor(
-        SAM2_MODEL_CONFIG,
-        SAM2_CHECKPOINT,
+        _SAM2_MODEL_CONFIG,
+        _SAM2_CHECKPOINT,
         device=_DEVICE,
         dtype=torch.bfloat16,  # pyright: ignore
     )

@@ -1,6 +1,0 @@
-track_id,start_frame,end_frame,viewpoint,quality
-1,0,60,left,2
-1,61,225,left,1
-1,226,290,frontal,1
-1,291,389,left,2
-1,390,415,left,1
