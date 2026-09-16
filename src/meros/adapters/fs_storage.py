@@ -586,6 +586,18 @@ class LocalFsMetadataStore(MetadataStore):
     def __init__(self) -> None:
         self.paths = MetadataPaths()
 
+    def read_video(
+        self,
+        video_id: str,
+    ) -> Video:
+        videos = self.read_videos()
+
+        for video in videos:
+            if video.video_id == video_id:
+                return video
+
+        raise ValueError(f"Video not found: {video_id}")
+
     def read_videos(
         self,
     ) -> list[Video]:

@@ -85,7 +85,7 @@ def build_pairs() -> list[Pair]:
     return pairs
 
 
-class VerificationExperiment:
+class Exp:
 
     def run(self) -> list[PairResult]:
         pipeline.run("composites")
@@ -147,6 +147,6 @@ def summarize(
 
 
 if __name__ == "__main__":
-    experiment = VerificationExperiment()
+    experiment = Exp()
     results = experiment.run()
     summarize(results)

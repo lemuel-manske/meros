@@ -293,6 +293,11 @@ class Individual:
 
 
 class MetadataStore(Protocol):
+    def read_video(
+        self,
+        video_id: str,
+    ) -> Video: ...
+
     def read_videos(
         self,
     ) -> list[Video]: ...

@@ -1,6 +1,7 @@
 import cv2 as cv
 import numpy as np
 
+from dataclasses import dataclass
 from itertools import combinations
 
 from src.meros import media, metadata
@@ -14,6 +15,16 @@ RANSAC_MIN_MATCHES = 8
 RANSAC_ERROR = 3.0
 RANSAC_MAX_ITERS = 5000
 RANSAC_CONFIDENCE = 0.999
+
+
+@dataclass(frozen=True)
+class MatchStats:
+    source_keypoints: int
+    target_keypoints: int
+    forward_good: int
+    backward_good: int
+    mutual_matches: int
+    inliers: int
 
 
 def run() -> None:
@@ -64,8 +75,7 @@ def run() -> None:
 
                 (
                     canvas,
-                    matches,
-                    inliers,
+                    stats,
                 ) = match_composites(
                     source_crop,
                     target_crop,
@@ -91,8 +101,8 @@ def run() -> None:
                     f"vs "
                     f"{target.video_id}/{target.track_id} "
                     f"({variant}): "
-                    f"{matches} tentative matches, "
-                    f"{inliers} affine inliers."
+                    f"{stats.mutual_matches} tentative matches, "
+                    f"{stats.inliers} affine inliers."
                 )
 
 
@@ -101,7 +111,7 @@ def match_composites(
     target: np.ndarray,
     ratio: float = DEFAULT_RATIO,
     erode: int = DEFAULT_ERODE,
-) -> tuple[np.ndarray, int, int]:
+) -> tuple[np.ndarray, MatchStats]:
     sift = cv.SIFT.create(
         nfeatures=SIFT_FEATURES,
     )
@@ -157,6 +167,8 @@ def match_composites(
     ) = features
 
     matches = []
+    forward_good = []
+    backward_good = []
 
     if (
         source_descriptors is not None
@@ -331,8 +343,13 @@ def match_composites(
             1,
         )
 
-    return (
-        canvas,
-        len(matches),
-        int(keep.sum()),
+    stats = MatchStats(
+        source_keypoints=len(source_keys),
+        target_keypoints=len(target_keys),
+        forward_good=len(forward_good),
+        backward_good=len(backward_good),
+        mutual_matches=len(matches),
+        inliers=int(keep.sum()),
     )
+
+    return canvas, stats
