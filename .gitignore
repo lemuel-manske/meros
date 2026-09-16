@@ -1,6 +1,7 @@
 .env
 .gitkeep
 .venv
+.pipeline
 __pycache__
 
 # media belongs to dvc; git tracks metadata and dvc pointer files.
