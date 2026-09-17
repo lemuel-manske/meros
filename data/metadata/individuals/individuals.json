@@ -18,7 +18,7 @@
       }
     ]
   },
-    {
+  {
     "individual_id": "5",
     "tracks": [
       {
@@ -36,6 +36,24 @@
         "reference_frame": 2
       }
     ]
+  },
+  {
+    "individual_id": "6",
+    "tracks": [
+      {
+        "video_id": "65_7",
+        "track_id": "1",
+        "start_frame": 200,
+        "end_frame": 220,
+        "reference_frame": 210
+      },
+      {
+        "video_id": "65_7",
+        "track_id": "1",
+        "start_frame": 158,
+        "end_frame": 180,
+        "reference_frame": 170
+      }
+    ]
   }
-
 ]

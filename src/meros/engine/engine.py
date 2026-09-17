@@ -362,10 +362,7 @@ def alignments_complete() -> bool:
     for individual in metadata.read_individuals():
         for track in individual.tracks:
             try:
-                alignment = metadata.read_alignment(
-                    track.video_id,
-                    track.track_id,
-                )
+                alignment = metadata.read_alignment(track.id)
             except FileNotFoundError:
                 return False
 
@@ -399,6 +396,7 @@ def composites_complete() -> bool:
         media.composite_exists(
             track.video_id,
             track.track_id,
+            track.reference_frame,
         )
         for individual
         in metadata.read_individuals()
@@ -412,10 +410,12 @@ def enhanced_composites_complete() -> bool:
             media.composite_enhanced_exists(
                 track.video_id,
                 track.track_id,
+                track.reference_frame,
             )
             and media.composite_comparison_exists(
                 track.video_id,
                 track.track_id,
+                track.reference_frame,
             )
         )
         for individual

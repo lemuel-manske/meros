@@ -59,7 +59,7 @@ def extract_masked_crops(
         raise ValueError(f"{vid_id}: no saved tracks available.")
 
     state = predictor.init_state(
-        video_path=str(media.frames_path(vid_id)),
+        video_path=str(media.frames_path(vid_id)),  # Assume fs implementation
     )
 
     for track_id, track in tracks.items():

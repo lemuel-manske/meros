@@ -48,6 +48,7 @@ def run() -> None:
                         media.read_composite_enhanced(
                             source.video_id,
                             source.track_id,
+                            source.reference_frame,
                         )
                     )
 
@@ -55,6 +56,7 @@ def run() -> None:
                         media.read_composite_enhanced(
                             target.video_id,
                             target.track_id,
+                            target.reference_frame,
                         )
                     )
 
@@ -63,6 +65,7 @@ def run() -> None:
                         media.read_composite(
                             source.video_id,
                             source.track_id,
+                            source.reference_frame,
                         )
                     )
 
@@ -70,6 +73,7 @@ def run() -> None:
                         media.read_composite(
                             target.video_id,
                             target.track_id,
+                            target.reference_frame,
                         )
                     )
 

@@ -37,18 +37,21 @@ class MediaStore(Protocol):
         self,
         video_id: str,
         track_id: str,
+        ref_frame_idx: int,
     ) -> bool: ...
 
     def composite_enhanced_exists(
         self,
         video_id: str,
         track_id: str,
+        ref_frame_idx: int,
     ) -> bool: ...
 
     def composite_comparison_exists(
         self,
         video_id: str,
         track_id: str,
+        ref_frame_idx: int,
     ) -> bool: ...
 
     def composite_matches_exists(
@@ -142,12 +145,14 @@ class MediaStore(Protocol):
         self,
         video_id: str,
         track_id: str,
+        ref_frame_idx: int,
     ) -> np.ndarray: ...
 
     def write_composite(
         self,
         video_id: str,
         track_id: str,
+        ref_frame_idx: int,
         composite: np.ndarray,
     ) -> None: ...
 
@@ -155,12 +160,14 @@ class MediaStore(Protocol):
         self,
         video_id: str,
         track_id: str,
+        ref_frame_idx: int,
     ) -> np.ndarray: ...
 
     def write_composite_enhanced(
         self,
         video_id: str,
         track_id: str,
+        ref_frame_idx: int,
         composite_enhanced: np.ndarray,
     ) -> None: ...
 
@@ -168,12 +175,14 @@ class MediaStore(Protocol):
         self,
         video_id: str,
         track_id: str,
+        ref_frame_idx: int,
     ) -> np.ndarray: ...
 
     def write_composite_comparison(
         self,
         video_id: str,
         track_id: str,
+        ref_frame_idx: int,
         composite_comparison: np.ndarray,
     ) -> None: ...
 
@@ -277,6 +286,8 @@ class Video:
     path: str
 
 
+type IndividualId = tuple[str, str, int, int]  # (video_id, track_id, start_frame, end_frame)
+
 @dataclass(frozen=True)
 class IndividualTrack:
     video_id: str
@@ -284,6 +295,10 @@ class IndividualTrack:
     start_frame: int
     end_frame: int
     reference_frame: int
+
+    @property
+    def id(self) -> IndividualId:
+        return (self.video_id, self.track_id, self.start_frame, self.end_frame)
 
 
 @dataclass(frozen=True)
@@ -317,24 +332,14 @@ class MetadataStore(Protocol):
         metadata: TrackMetadata,
     ) -> None: ...
 
-    def read_annotations(
-        self,
-        video_id: str,
-        track_id: str,
-    ) -> list[TrackAnnotation]: ...
-
     def write_alignment(
         self,
-        video_id: str,
-        track_id: str,
-        start_frame: int,
-        end_frame: int,
+        _id: IndividualId,
         reference_frame: int,
         rows: list[AlignmentMetadata],
     ) -> None: ...
 
     def read_alignment(
         self,
-        video_id: str,
-        track_id: str,
+        _id: IndividualId,
     ) -> AlignmentRunMetadata: ...

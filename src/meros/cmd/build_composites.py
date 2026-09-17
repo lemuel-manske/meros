@@ -68,10 +68,7 @@ def median_composite(
 def build_composite(
     track: IndividualTrack,
 ) -> int:
-    alignment = metadata.read_alignment(
-        track.video_id,
-        track.track_id,
-    )
+    alignment = metadata.read_alignment(track.id)
 
     if (
         alignment.start_frame != track.start_frame
@@ -133,6 +130,7 @@ def build_composite(
     media.write_composite(
         track.video_id,
         track.track_id,
+        track.reference_frame,
         composite,
     )
 

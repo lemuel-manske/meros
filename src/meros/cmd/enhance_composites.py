@@ -12,6 +12,7 @@ def run() -> None:
             enhance_composite(
                 track.video_id,
                 track.track_id,
+                track.reference_frame
             )
 
             print(
@@ -97,10 +98,12 @@ def enhance_contrast(
 def enhance_composite(
     vid_id: str,
     track_id: str,
+    ref_frame_idx: int,
 ) -> None:
     composite = media.read_composite(
         vid_id,
         track_id,
+        ref_frame_idx,
     )
 
     enhanced = enhance_contrast(composite)
@@ -108,6 +111,7 @@ def enhance_composite(
     media.write_composite_enhanced(
         vid_id,
         track_id,
+        ref_frame_idx,
         enhanced,
     )
 
@@ -122,5 +126,6 @@ def enhance_composite(
     media.write_composite_comparison(
         vid_id,
         track_id,
+        ref_frame_idx,
         comparison,
     )

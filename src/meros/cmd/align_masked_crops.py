@@ -4,7 +4,7 @@ import numpy as np
 from dataclasses import dataclass, replace
 
 from src.meros import media, metadata
-from src.meros.domain import AlignmentMetadata
+from src.meros.domain import AlignmentMetadata, IndividualId
 
 
 SIFT_FEATURES = 4000
@@ -32,10 +32,7 @@ def run() -> None:
     for individual in metadata.read_individuals():
         for track in individual.tracks:
             accepted, total = align_sequence(
-                track.video_id,
-                track.track_id,
-                track.start_frame,
-                track.end_frame,
+                track.id,
                 track.reference_frame,
             )
 
@@ -269,12 +266,11 @@ def estimate_alignment(
 
 
 def align_sequence(
-    vid_id: str,
-    track_id: str,
-    start_frame: int,
-    end_frame: int,
+    _id: IndividualId,
     reference_frame: int,
 ) -> tuple[int, int]:
+    vid_id, track_id, start_frame, end_frame = _id
+
     if not (
         start_frame
         <= reference_frame
@@ -404,10 +400,7 @@ def align_sequence(
         accepted += 1
 
     metadata.write_alignment(
-        vid_id,
-        track_id,
-        start_frame,
-        end_frame,
+        _id,
         reference_frame,
         rows,
     )

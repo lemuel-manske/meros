@@ -27,147 +27,86 @@ def compare_representation(
     )
 
 
-def compare_same_individuals(individual: Individual) -> None:
-    print(f"Same individual: {individual.individual_id}")
+def compare_tracks(a, b) -> None:
+    print(
+        f"Comparing "
+        f"{a.video_id}/{a.track_id}@{a.reference_frame} with "
+        f"{b.video_id}/{b.track_id}@{b.reference_frame}"
+    )
 
-    for source, target in combinations(
+    source_reference = media.read_masked_crop(
+        a.video_id,
+        a.track_id,
+        a.reference_frame,
+    )
+
+    target_reference = media.read_masked_crop(
+        b.video_id,
+        b.track_id,
+        b.reference_frame,
+    )
+
+    source_composite = media.read_composite(
+        a.video_id,
+        a.track_id,
+        a.reference_frame,
+    )
+
+    target_composite = media.read_composite(
+        b.video_id,
+        b.track_id,
+        b.reference_frame,
+    )
+
+    source_enhanced = media.read_composite_enhanced(
+        a.video_id,
+        a.track_id,
+        a.reference_frame,
+    )
+
+    target_enhanced = media.read_composite_enhanced(
+        b.video_id,
+        b.track_id,
+        b.reference_frame,
+    )
+
+    compare_representation(
+        "reference",
+        source_reference,
+        target_reference,
+    )
+
+    compare_representation(
+        "composite",
+        source_composite,
+        target_composite,
+    )
+
+    compare_representation(
+        "enhanced",
+        source_enhanced,
+        target_enhanced,
+    )
+
+
+def compare_same_individuals(individual: Individual) -> None:
+    for a, b in combinations(
         individual.tracks,
         2,
     ):
-        if (
-            source.video_id
-            == target.video_id
-        ):
-            continue
-
-        print(
-            f"Comparing {source.video_id}/{source.track_id} "
-            f"with {target.video_id}/{target.track_id}"
-        )
-
-        source_reference = media.read_masked_crop(
-            source.video_id,
-            source.track_id,
-            source.reference_frame,
-        )
-
-        target_reference = media.read_masked_crop(
-            target.video_id,
-            target.track_id,
-            target.reference_frame,
-        )
-
-        source_composite = media.read_composite(
-            source.video_id,
-            source.track_id,
-        )
-
-        target_composite = media.read_composite(
-            target.video_id,
-            target.track_id,
-        )
-
-        source_enhanced = media.read_composite_enhanced(
-            source.video_id,
-            source.track_id,
-        )
-
-        target_enhanced = media.read_composite_enhanced(
-            target.video_id,
-            target.track_id,
-        )
-
-        compare_representation(
-            "reference",
-            source_reference,
-            target_reference,
-        )
-
-        compare_representation(
-            "composite",
-            source_composite,
-            target_composite,
-        )
-
-        compare_representation(
-            "enhanced",
-            source_enhanced,
-            target_enhanced,
-        )
+        compare_tracks(a, b)
 
 
-def compare_different_individuals(individual: Individual) -> None:
-    print(f"Different individuals: {individual.individual_id}")
-
-    for source in individual.tracks:
-        for target in metadata.read_individuals():
-            if (
-                target.individual_id
-                == individual.individual_id
-            ):
-                continue
-
-            for target_track in target.tracks:
-                if (
-                    source.video_id
-                    == target_track.video_id
-                ):
-                    continue
-
-                print(
-                    f"Comparing {source.video_id}/{source.track_id} "
-                    f"with {target_track.video_id}/{target_track.track_id}"
-                )
-
-                source_reference = media.read_masked_crop(
-                    source.video_id,
-                    source.track_id,
-                    source.reference_frame,
-                )
-
-                target_reference = media.read_masked_crop(
-                    target_track.video_id,
-                    target_track.track_id,
-                    target_track.reference_frame,
-                )
-
-                source_composite = media.read_composite(
-                    source.video_id,
-                    source.track_id,
-                )
-
-                target_composite = media.read_composite(
-                    target_track.video_id,
-                    target_track.track_id,
-                )
-
-                source_enhanced = media.read_composite_enhanced(
-                    source.video_id,
-                    source.track_id,
-                )
-
-                target_enhanced = media.read_composite_enhanced(
-                    target_track.video_id,
-                    target_track.track_id,
-                )
-
-                compare_representation(
-                    "reference",
-                    source_reference,
-                    target_reference,
-                )
-
-                compare_representation(
-                    "composite",
-                    source_composite,
-                    target_composite,
-                )
-
-                compare_representation(
-                    "enhanced",
-                    source_enhanced,
-                    target_enhanced,
-                )
+def compare_different_individuals(
+    a: Individual,
+    b: Individual,
+) -> None:
+    for source_track in a.tracks:
+        for target_track in b.tracks:
+            compare_tracks(
+                source_track,
+                target_track,
+            )
 
 
 class Exp:
@@ -175,9 +114,19 @@ class Exp:
     def run(self) -> None:
         pipeline.run("enhanced_composites")
 
-        for individual in metadata.read_individuals():
+        individuals = metadata.read_individuals()
+
+        for individual in individuals:
             compare_same_individuals(individual)
-            compare_different_individuals(individual)
+
+        for a, b in combinations(
+            individuals,
+            2,
+        ):
+            compare_different_individuals(
+                a,
+                b,
+            )
 
 
 if __name__ == "__main__":

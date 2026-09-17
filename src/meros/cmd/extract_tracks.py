@@ -227,7 +227,7 @@ def propagate_tracks(
     )
 
     state = predictor.init_state(
-        video_path=str(media.frames_path(vid_id)),
+        video_path=str(media.frames_path(vid_id)),  # Assume fs implementation
     )
 
     add_track_prompts(

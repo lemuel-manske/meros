@@ -1,4 +1,3 @@
-import csv
 import cv2 as cv
 import json
 import numpy as np
@@ -11,11 +10,11 @@ from src.meros.domain import (
     AlignmentRunMetadata,
     FrameMedia,
     Individual,
+    IndividualId,
     IndividualTrack,
     MediaStore,
     MetadataStore,
     Track,
-    TrackAnnotation,
     TrackMetadata,
     TrackObservation,
     Video,
@@ -105,40 +104,43 @@ class MediaPaths:
             / f"{frame_idx}.png"
         )
 
-    def composite_enhanced(
-        self,
-        video_id: str,
-        track_id: str,
-    ) -> Path:
-        return (
-            _ALIGNMENT_MEDIA_FOLDER
-            / video_id
-            / track_id
-            / "median_enhanced.png"
-        )
-
     def composite(
         self,
         video_id: str,
         track_id: str,
+        ref_frame_idx: int,
     ) -> Path:
         return (
             _ALIGNMENT_MEDIA_FOLDER
             / video_id
             / track_id
-            / "median.png"
+            / f"{ref_frame_idx}_median.png"
+        )
+
+    def composite_enhanced(
+        self,
+        video_id: str,
+        track_id: str,
+        ref_frame_idx: int,
+    ) -> Path:
+        return (
+            _ALIGNMENT_MEDIA_FOLDER
+            / video_id
+            / track_id
+            / f"{ref_frame_idx}_median_enhanced.png"
         )
 
     def composite_comparison(
         self,
         video_id: str,
         track_id: str,
+        ref_frame_idx: int,
     ) -> Path:
         return (
             _ALIGNMENT_MEDIA_FOLDER
             / video_id
             / track_id
-            / "median_comparison.png"
+            / f"{ref_frame_idx}_median_comparison.png"
         )
 
     def composite_matches(
@@ -229,30 +231,36 @@ class LocalFsMediaStore(MediaStore):
         self,
         video_id: str,
         track_id: str,
+        ref_frame_idx: int
     ) -> bool:
         return self.paths.composite(
             video_id,
             track_id,
+            ref_frame_idx,
         ).is_file()
 
     def composite_enhanced_exists(
         self,
         video_id: str,
         track_id: str,
+        ref_frame_idx: int,
     ) -> bool:
         return self.paths.composite_enhanced(
             video_id,
             track_id,
+            ref_frame_idx,
         ).is_file()
 
     def composite_comparison_exists(
         self,
         video_id: str,
         track_id: str,
+        ref_frame_idx: int,
     ) -> bool:
         return self.paths.composite_comparison(
             video_id,
             track_id,
+            ref_frame_idx,
         ).is_file()
 
     def composite_matches_exists(
@@ -422,9 +430,10 @@ class LocalFsMediaStore(MediaStore):
         self,
         video_id: str,
         track_id: str,
+        ref_frame_idx: int,
     ) -> np.ndarray:
         return self._read_image(
-            self.paths.composite(video_id, track_id),
+            self.paths.composite(video_id, track_id, ref_frame_idx),
             cv.IMREAD_UNCHANGED,
         )
 
@@ -432,10 +441,11 @@ class LocalFsMediaStore(MediaStore):
         self,
         video_id: str,
         track_id: str,
+        ref_frame_idx: int,
         composite: np.ndarray,
     ) -> None:
         self._write_image(
-            self.paths.composite(video_id, track_id),
+            self.paths.composite(video_id, track_id, ref_frame_idx),
             composite,
         )
 
@@ -443,9 +453,10 @@ class LocalFsMediaStore(MediaStore):
         self,
         video_id: str,
         track_id: str,
+        ref_frame_idx: int,
     ) -> np.ndarray:
         return self._read_image(
-            self.paths.composite_enhanced(video_id, track_id),
+            self.paths.composite_enhanced(video_id, track_id, ref_frame_idx),
             cv.IMREAD_UNCHANGED,
         )
 
@@ -453,10 +464,11 @@ class LocalFsMediaStore(MediaStore):
         self,
         video_id: str,
         track_id: str,
+        ref_frame_idx: int,
         composite_enhanced: np.ndarray,
     ) -> None:
         self._write_image(
-            self.paths.composite_enhanced(video_id, track_id),
+            self.paths.composite_enhanced(video_id, track_id, ref_frame_idx),
             composite_enhanced,
         )
 
@@ -464,9 +476,10 @@ class LocalFsMediaStore(MediaStore):
         self,
         video_id: str,
         track_id: str,
+        ref_frame_idx: int,
     ) -> np.ndarray:
         return self._read_image(
-            self.paths.composite_comparison(video_id, track_id),
+            self.paths.composite_comparison(video_id, track_id, ref_frame_idx),
             cv.IMREAD_UNCHANGED,
         )
 
@@ -474,10 +487,11 @@ class LocalFsMediaStore(MediaStore):
         self,
         video_id: str,
         track_id: str,
+        ref_frame_idx: int,
         composite_comparison: np.ndarray,
     ) -> None:
         self._write_image(
-            self.paths.composite_comparison(video_id, track_id),
+            self.paths.composite_comparison(video_id, track_id, ref_frame_idx),
             composite_comparison,
         )
 
@@ -568,11 +582,13 @@ class MetadataPaths:
         self,
         video_id: str,
         track_id: str,
+        start_frame: int,
+        end_frame: int,
     ) -> Path:
         return (
             _ALIGNMENT_METADATA_FOLDER
             / video_id
-            / f"{track_id}.json"
+            / f"{track_id}_{start_frame}_{end_frame}.json"
         )
 
     def videos(self) -> Path:
@@ -671,41 +687,15 @@ class LocalFsMetadataStore(MetadataStore):
             )
             f.write("\n")
 
-    def read_annotations(
-        self,
-        video_id: str,
-        track_id: str,
-    ) -> list[TrackAnnotation]:
-        path = self.paths.annotations(video_id, track_id)
-
-        with path.open(
-            "r",
-            newline="",
-            encoding="utf-8",
-        ) as f:
-            reader = csv.DictReader(f)
-
-            return [
-                TrackAnnotation(
-                    track_id=row["track_id"],
-                    start_frame=int(row["start_frame"]),
-                    end_frame=int(row["end_frame"]),
-                    viewpoint=row["viewpoint"],
-                    quality=int(row["quality"]),
-                )
-                for row in reader
-            ]
-
     def write_alignment(
         self,
-        video_id: str,
-        track_id: str,
-        start_frame: int,
-        end_frame: int,
+        _id: IndividualId,
         reference_frame: int,
         rows: list[AlignmentMetadata],
     ) -> None:
-        path = self.paths.alignment(video_id, track_id)
+        video_id, track_id, start_frame, end_frame = _id
+
+        path = self.paths.alignment(video_id, track_id, start_frame, end_frame)
         path.parent.mkdir(parents=True, exist_ok=True)
 
         payload = {
@@ -727,10 +717,11 @@ class LocalFsMetadataStore(MetadataStore):
 
     def read_alignment(
         self,
-        video_id: str,
-        track_id: str,
+        _id: IndividualId,
     ) -> AlignmentRunMetadata:
-        path = self.paths.alignment(video_id, track_id)
+        video_id, track_id, start_frame, end_frame = _id
+
+        path = self.paths.alignment(video_id, track_id, start_frame, end_frame)
 
         with path.open("r", encoding="utf-8") as f:
             metadata = json.load(f)
