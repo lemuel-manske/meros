@@ -16,6 +16,8 @@ RANSAC_ERROR = 3.0
 RANSAC_MAX_ITERS = 5000
 RANSAC_CONFIDENCE = 0.999
 
+FILTER_SAME_VIDEO = False
+
 
 @dataclass(frozen=True)
 class MatchStats:
@@ -36,6 +38,7 @@ def run() -> None:
             if (
                 source.video_id
                 == target.video_id
+                and FILTER_SAME_VIDEO
             ):
                 continue
 
