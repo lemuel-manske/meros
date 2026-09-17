@@ -1,4 +1,4 @@
-# Laboratory
+# lab
 
 This directory contains small experiments used to validate assumptions in the image-processing and individual-identification pipeline.
 
