@@ -1,33 +1,13 @@
-import numpy as np
-
 from itertools import combinations
 
 from src.meros import media, metadata, Individual
-from src.meros.cmd.match_composites import match_composites
+from src.meros.domain.storage import IndividualTrack
 from src.meros.engine import pipeline
 
-
-def compare_representation(
-    name: str,
-    source: np.ndarray,
-    target: np.ndarray,
-) -> None:
-    _, stats = match_composites(
-        source,
-        target,
-    )
-
-    print(
-        f"{name}: "
-        f"keys={stats.source_keypoints}/{stats.target_keypoints}, "
-        f"forward={stats.forward_good}, "
-        f"backward={stats.backward_good}, "
-        f"mutual={stats.mutual_matches}, "
-        f"inliers={stats.inliers}"
-    )
+from .utils import compare_representation
 
 
-def compare_tracks(a, b) -> None:
+def compare_tracks(a: IndividualTrack, b: IndividualTrack) -> None:
     print(
         f"Comparing "
         f"{a.video_id}/{a.track_id}@{a.reference_frame} with "
@@ -115,6 +95,15 @@ class Exp:
         pipeline.run("enhanced_composites")
 
         individuals = metadata.read_individuals()
+
+        # Summarize individuals
+        for individual in individuals:
+            tracks = individual.tracks
+
+            for track in tracks:
+                print(
+                    f"Individual {individual.individual_id} appears in video {track.video_id}/{track.track_id}"
+                )
 
         for individual in individuals:
             compare_same_individuals(individual)

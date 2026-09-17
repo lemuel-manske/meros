@@ -269,7 +269,7 @@ def align_sequence(
     _id: IndividualId,
     reference_frame: int,
 ) -> tuple[int, int]:
-    vid_id, track_id, start_frame, end_frame = _id
+    video_id, track_id, start_frame, end_frame = _id
 
     if not (
         start_frame
@@ -281,7 +281,7 @@ def align_sequence(
         )
 
     reference = media.read_masked_crop(
-        vid_id,
+        video_id,
         track_id,
         reference_frame,
     )
@@ -309,7 +309,7 @@ def align_sequence(
             continue
 
         source = media.read_masked_crop(
-            vid_id,
+            video_id,
             track_id,
             frame_idx,
         )
@@ -336,7 +336,7 @@ def align_sequence(
 
         if matrix is None:
             media.remove_alignment(
-                vid_id,
+                video_id,
                 track_id,
                 frame_idx,
             )
@@ -384,14 +384,14 @@ def align_sequence(
         overlay[~overlap] = 0
 
         media.write_aligned_crop(
-            vid_id,
+            video_id,
             track_id,
             frame_idx,
             aligned,
         )
 
         media.write_aligned_overlay(
-            vid_id,
+            video_id,
             track_id,
             frame_idx,
             overlay,

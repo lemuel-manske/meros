@@ -1,7 +1,7 @@
 from src.meros import media, metadata
 
 
-_CROP_MARGIN = 15
+CROP_MARGIN = 15
 
 
 def run():
@@ -23,11 +23,11 @@ def run():
 
                 frame_h, frame_w = frame.shape[:2]
 
-                x1 = max(0, x1 - _CROP_MARGIN)
-                y1 = max(0, y1 - _CROP_MARGIN)
+                x1 = max(0, x1 - CROP_MARGIN)
+                y1 = max(0, y1 - CROP_MARGIN)
 
-                x2 = min(frame_w, x2 + _CROP_MARGIN)
-                y2 = min(frame_h, y2 + _CROP_MARGIN)
+                x2 = min(frame_w, x2 + CROP_MARGIN)
+                y2 = min(frame_h, y2 + CROP_MARGIN)
 
                 crop = frame[y1:y2, x1:x2]
 

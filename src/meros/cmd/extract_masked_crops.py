@@ -49,17 +49,17 @@ def build_masked_crop(
 
 
 def extract_masked_crops(
-    vid_id: str,
+    video_id: str,
     predictor: SAM2Predictor,
 ) -> int:
-    track_metadata = metadata.read_track(vid_id)
+    track_metadata = metadata.read_track(video_id)
     tracks = track_metadata.tracks
 
     if not tracks:
-        raise ValueError(f"{vid_id}: no saved tracks available.")
+        raise ValueError(f"{video_id}: no saved tracks available.")
 
     state = predictor.init_state(
-        video_path=str(media.frames_path(vid_id)),  # Assume fs implementation
+        video_path=str(media.frames_path(video_id)),  # pyright: ignore (assume fs implementation)
     )
 
     for track_id, track in tracks.items():
@@ -73,7 +73,7 @@ def extract_masked_crops(
     count = 0
 
     for frame_idx, obj_ids, mask_logits in predictor.propagate_in_video(state):
-        frame = media.read_frame(vid_id, frame_idx)
+        frame = media.read_frame(video_id, frame_idx)
 
         for obj_id, logits in zip(obj_ids, mask_logits):
             track_id = str(int(obj_id))
@@ -97,7 +97,7 @@ def extract_masked_crops(
                 continue
 
             media.write_masked_crop(
-                vid_id,
+                video_id,
                 track_id,
                 frame_idx,
                 crop,

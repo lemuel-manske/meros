@@ -6,6 +6,10 @@ from scipy.ndimage import distance_transform_edt
 from src.meros import media, metadata
 
 
+CLIP_LIMIT = 1.5
+STRENGTH = 0.5
+
+
 def run() -> None:
     for individual in metadata.read_individuals():
         for track in individual.tracks:
@@ -23,8 +27,8 @@ def run() -> None:
 
 def enhance_contrast(
     composite: np.ndarray,
-    clip_limit: float = 1.5,
-    strength: float = 0.5,
+    clip_limit: float = CLIP_LIMIT,
+    strength: float = STRENGTH
 ) -> np.ndarray:
     if (
         composite.dtype != np.uint8
@@ -96,12 +100,12 @@ def enhance_contrast(
 
 
 def enhance_composite(
-    vid_id: str,
+    video_id: str,
     track_id: str,
     ref_frame_idx: int,
 ) -> None:
     composite = media.read_composite(
-        vid_id,
+        video_id,
         track_id,
         ref_frame_idx,
     )
@@ -109,7 +113,7 @@ def enhance_composite(
     enhanced = enhance_contrast(composite)
 
     media.write_composite_enhanced(
-        vid_id,
+        video_id,
         track_id,
         ref_frame_idx,
         enhanced,
@@ -124,7 +128,7 @@ def enhance_composite(
     )
 
     media.write_composite_comparison(
-        vid_id,
+        video_id,
         track_id,
         ref_frame_idx,
         comparison,

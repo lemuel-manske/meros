@@ -14,34 +14,34 @@ def run() -> None:
     predictor = build_sam2_predictor()
 
     for video in metadata.read_videos():
-        vid_id = video.video_id
+        video_id = video.video_id
 
-        tracks = select_subjects(vid_id)
+        tracks = select_subjects(video_id)
         track_metadata = propagate_tracks(
-            vid_id,
+            video_id,
             tracks,
             predictor,
         )
 
         metadata.write_track(
-            vid_id,
+            video_id,
             track_metadata,
         )
 
-        print(f"Saved {len(tracks)} tracks for {vid_id}.")
+        print(f"Saved {len(tracks)} tracks for {video_id}.")
 
 
 def get_frame_ids(
-    vid_id: str,
+    video_id: str,
 ) -> list[int]:
     return [
         frame.frame_idx
-        for frame in media.read_frames(vid_id)
+        for frame in media.read_frames(video_id)
     ]
 
 
 def select_subjects(
-    vid_id: str,
+    video_id: str,
 ) -> dict[str, Track]:
 
     def draw_initial_tracks(
@@ -125,11 +125,11 @@ def select_subjects(
             frames={},
         )
 
-    frame_ids = get_frame_ids(vid_id)
+    frame_ids = get_frame_ids(video_id)
 
     if not frame_ids:
         raise ValueError(
-            f"{vid_id}: no extracted frames available."
+            f"{video_id}: no extracted frames available."
         )
 
     tracks: dict[str, Track] = {}
@@ -163,7 +163,7 @@ def select_subjects(
             )
 
             frame = media.read_frame(
-                vid_id,
+                video_id,
                 frame_idx,
             )
 
@@ -193,14 +193,14 @@ def select_subjects(
 
     if not tracks:
         raise ValueError(
-            f"{vid_id}: no fish selected."
+            f"{video_id}: no fish selected."
         )
 
     return tracks
 
 
 def propagate_tracks(
-    vid_id: str,
+    video_id: str,
     tracks: dict[str, Track],
     predictor: SAM2Predictor,
 ) -> TrackMetadata:
@@ -222,12 +222,12 @@ def propagate_tracks(
             )
 
     track_metadata = TrackMetadata(
-        video_id=vid_id,
+        video_id=video_id,
         tracks=tracks,
     )
 
     state = predictor.init_state(
-        video_path=str(media.frames_path(vid_id)),  # Assume fs implementation
+        video_path=str(media.frames_path(video_id)),  # pyright: ignore (assume fs implementation)
     )
 
     add_track_prompts(
@@ -242,7 +242,7 @@ def propagate_tracks(
         mask_logits,
     ) in predictor.propagate_in_video(state):
         process_frame(
-            vid_id,
+            video_id,
             frame_idx,
             obj_ids,
             mask_logits,
@@ -253,7 +253,7 @@ def propagate_tracks(
 
 
 def process_frame(
-    vid_id: str,
+    video_id: str,
     frame_idx: int,
     obj_ids: torch.Tensor,
     mask_logits: torch.Tensor,
@@ -308,7 +308,7 @@ def process_frame(
         ]
 
     frame = media.read_frame(
-        vid_id,
+        video_id,
         frame_idx,
     )
 
@@ -354,7 +354,7 @@ def process_frame(
         )
 
     media.write_visualization(
-        vid_id,
+        video_id,
         frame_idx,
         visualization,
     )
