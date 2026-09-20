@@ -286,6 +286,9 @@ class Video:
     path: str
 
 
+type BBox  = dict[str, list[int]]
+
+
 type IndividualId = tuple[str, str, int, int]  # (video_id, track_id, start_frame, end_frame)
 
 @dataclass(frozen=True)
@@ -316,6 +319,10 @@ class MetadataStore(Protocol):
     def read_videos(
         self,
     ) -> list[Video]: ...
+
+    def read_bboxes(
+        self,
+    ) -> dict[str, BBox]: ...
 
     def read_individuals(
         self,

@@ -6,6 +6,8 @@ from src.meros import media, metadata, Track, TrackMetadata, TrackObservation
 from src.meros.external import build_sam2_predictor, SAM2Predictor
 
 
+AUTO = True
+
 _QUIT_KEY = "q"
 _ADD_TRACK_KEY = "a"
 
@@ -16,7 +18,7 @@ def run() -> None:
     for video in metadata.read_videos():
         video_id = video.video_id
 
-        tracks = select_subjects(video_id)
+        tracks = manually_select_subjects(video_id) if not AUTO else auto_select_subjects(video_id)
         track_metadata = propagate_tracks(
             video_id,
             tracks,
@@ -40,9 +42,49 @@ def get_frame_ids(
     ]
 
 
-def select_subjects(
+def auto_select_subjects(
     video_id: str,
 ) -> dict[str, Track]:
+    """
+    Automatically selects the subjects to track in the video.
+    Based on a previos initial bbox definition for each video,
+    it will return a dictionary of tracks with the initial frame and bbox for each subject.
+    """
+    bboxes = metadata.read_bboxes()
+
+    if video_id not in bboxes.keys():
+        raise ValueError(
+            f"{video_id}: no known initial bboxes available. ",
+            "Please use `manually_select_subjects` instead."
+        )
+
+    frame_ids = get_frame_ids(video_id)
+
+    if not frame_ids:
+        raise ValueError(
+            f"{video_id}: no extracted frames available."
+        )
+
+    initial_frame = frame_ids[0]
+
+    tracks: dict[str, Track] = {}
+
+    for track_id, bbox in bboxes[video_id].items():
+        tracks[track_id] = Track(
+            initial_frame=initial_frame,
+            initial_bbox=bbox,
+            frames={},
+        )
+
+    return tracks
+
+
+def manually_select_subjects(
+    video_id: str,
+) -> dict[str, Track]:
+    """
+    Prompts for user interaction for select the subjects to track in the video.
+    """
 
     def draw_initial_tracks(
         frame: np.ndarray,

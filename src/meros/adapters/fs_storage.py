@@ -8,6 +8,7 @@ from pathlib import Path
 from src.meros.domain import (
     AlignmentMetadata,
     AlignmentRunMetadata,
+    BBox,
     FrameMedia,
     Individual,
     IndividualId,
@@ -594,6 +595,9 @@ class MetadataPaths:
     def videos(self) -> Path:
         return _VIDEOS_METADATA_FOLDER / "videos.json"
 
+    def bboxes(self) -> Path:
+        return _VIDEOS_METADATA_FOLDER / "bboxes.json"
+
     def individuals(self) -> Path:
         return _INDIVIDUALS_METADATA_FOLDER / "individuals.json"
 
@@ -613,6 +617,12 @@ class LocalFsMetadataStore(MetadataStore):
                 return video
 
         raise ValueError(f"Video not found: {video_id}")
+
+    def read_bboxes(self) -> dict[str, BBox]:
+        with self.paths.bboxes().open("r", encoding="utf-8") as f:
+            metadata = json.load(f)
+
+        return metadata
 
     def read_videos(
         self,
