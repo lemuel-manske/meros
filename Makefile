@@ -5,3 +5,6 @@ init:
 
 serve-media:
 	cd data/media && python -m http.server 8080 --bind 0.0.0.0
+
+run:
+	python -m src.meros.engine.run
