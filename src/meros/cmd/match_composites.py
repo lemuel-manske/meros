@@ -2,7 +2,7 @@ import cv2 as cv
 import numpy as np
 
 from dataclasses import dataclass
-from itertools import combinations
+from itertools import combinations, product
 
 from src.meros import media, metadata
 
@@ -16,7 +16,8 @@ RANSAC_ERROR = 3.0
 RANSAC_MAX_ITERS = 5000
 RANSAC_CONFIDENCE = 0.999
 
-FILTER_SAME_VIDEO = False
+MATCH_DIFFERENT_INDIVIDUALS = True  # whether to include matches between different individuals
+FILTER_SAME_VIDEO = False  # whether to filter out matches between tracks from the same video
 
 
 @dataclass(frozen=True)
@@ -29,88 +30,109 @@ class MatchStats:
     inliers: int
 
 
-def run() -> None:
-    for individual in metadata.read_individuals():
-        for source, target in combinations(
-            individual.tracks,
-            2,
+def matches_complete() -> bool:
+    for source, target in iter_track_pairs():
+        if (
+            source.video_id
+            == target.video_id
+            and FILTER_SAME_VIDEO
         ):
-            if (
-                source.video_id
-                == target.video_id
-                and FILTER_SAME_VIDEO
+            continue
+
+        for enhanced in (
+            False,
+            True,
+        ):
+            if not media.composite_matches_exists(
+                source.video_id,
+                source.track_id,
+                target.video_id,
+                target.track_id,
+                enhanced=enhanced,
             ):
-                continue
+                return False
 
-            for enhanced in (
-                False,
-                True,
-            ):
-                if enhanced:
-                    source_crop = (
-                        media.read_composite_enhanced(
-                            source.video_id,
-                            source.track_id,
-                            source.reference_frame,
-                        )
+    return True
+
+
+def run() -> None:
+    for source, target in iter_track_pairs():
+        if (
+            source.video_id
+            == target.video_id
+            and FILTER_SAME_VIDEO
+        ):
+            continue
+
+        for enhanced in (
+            False,
+            True,
+        ):
+            if enhanced:
+                source_crop = (
+                    media.read_composite_enhanced(
+                        source.video_id,
+                        source.track_id,
+                        source.reference_frame,
                     )
-
-                    target_crop = (
-                        media.read_composite_enhanced(
-                            target.video_id,
-                            target.track_id,
-                            target.reference_frame,
-                        )
-                    )
-
-                else:
-                    source_crop = (
-                        media.read_composite(
-                            source.video_id,
-                            source.track_id,
-                            source.reference_frame,
-                        )
-                    )
-
-                    target_crop = (
-                        media.read_composite(
-                            target.video_id,
-                            target.track_id,
-                            target.reference_frame,
-                        )
-                    )
-
-                (
-                    canvas,
-                    stats,
-                ) = match_composites(
-                    source_crop,
-                    target_crop,
                 )
 
-                media.write_composite_matches(
-                    source.video_id,
-                    source.track_id,
-                    target.video_id,
-                    target.track_id,
-                    canvas,
-                    enhanced=enhanced,
+                target_crop = (
+                    media.read_composite_enhanced(
+                        target.video_id,
+                        target.track_id,
+                        target.reference_frame,
+                    )
                 )
 
-                variant = (
-                    "enhanced"
-                    if enhanced
-                    else "original"
+            else:
+                source_crop = (
+                    media.read_composite(
+                        source.video_id,
+                        source.track_id,
+                        source.reference_frame,
+                    )
                 )
 
-                print(
-                    f"{source.video_id}/{source.track_id} "
-                    f"vs "
-                    f"{target.video_id}/{target.track_id} "
-                    f"({variant}): "
-                    f"{stats.mutual_matches} tentative matches, "
-                    f"{stats.inliers} affine inliers."
+                target_crop = (
+                    media.read_composite(
+                        target.video_id,
+                        target.track_id,
+                        target.reference_frame,
+                    )
                 )
+
+            (
+                canvas,
+                stats,
+            ) = match_composites(
+                source_crop,
+                target_crop,
+            )
+
+            media.write_composite_matches(
+                source.video_id,
+                source.track_id,
+                target.video_id,
+                target.track_id,
+                canvas,
+                enhanced=enhanced,
+            )
+
+            variant = (
+                "enhanced"
+                if enhanced
+                else "original"
+            )
+
+            print(
+                f"{source.video_id}/{source.track_id} "
+                f"vs "
+                f"{target.video_id}/{target.track_id} "
+                f"({variant}): "
+                f"{stats.mutual_matches} tentative matches, "
+                f"{stats.inliers} affine inliers."
+            )
 
 
 def match_composites(
@@ -360,3 +382,20 @@ def match_composites(
     )
 
     return canvas, stats
+
+
+def iter_track_pairs():
+    individuals = metadata.read_individuals()
+
+    for individual in individuals:
+        yield from combinations(
+            individual.tracks,
+            2,
+        )
+
+    if MATCH_DIFFERENT_INDIVIDUALS:
+        for source_ind, target_ind in combinations(individuals, 2):
+            yield from product(
+                source_ind.tracks,
+                target_ind.tracks,
+            )

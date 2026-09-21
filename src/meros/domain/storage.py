@@ -282,6 +282,7 @@ class AlignmentRunMetadata:
 @dataclass(frozen=True)
 class Video:
     video_id: str
+    mirrored: bool
     fname: str
     path: str
 

@@ -21,6 +21,9 @@ def run() -> None:
                 if not ok:
                     break
 
+                if video.mirrored:
+                    frame = cv.flip(frame, 1)
+
                 media.write_frame(
                     video.video_id,
                     frame_idx,

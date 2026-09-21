@@ -18,6 +18,11 @@ from src.meros.cmd import (
     extract_tracks,
     match_composites,
 )
+from src.meros.cmd.match_composites import matches_complete
+
+
+# TODO:
+# - move `_complete` functions to their respective command modules
 
 
 _STATE_FOLDER = Path("data/.pipeline")
@@ -422,44 +427,6 @@ def enhanced_composites_complete() -> bool:
         in metadata.read_individuals()
         for track in individual.tracks
     )
-
-
-def matches_complete() -> bool:
-    for individual in metadata.read_individuals():
-        tracks = individual.tracks
-
-        for source_index in range(
-            len(tracks)
-        ):
-            for target_index in range(
-                source_index + 1,
-                len(tracks),
-            ):
-                source = tracks[source_index]
-                target = tracks[target_index]
-
-                if (
-                    source.video_id
-                    == target.video_id
-                ):
-                    continue
-
-                for enhanced in (
-                    False,
-                    True,
-                ):
-                    if not (
-                        media.composite_matches_exists(
-                            source.video_id,
-                            source.track_id,
-                            target.video_id,
-                            target.track_id,
-                            enhanced=enhanced,
-                        )
-                    ):
-                        return False
-
-    return True
 
 
 def frames_stage_fingerprint() -> str:
