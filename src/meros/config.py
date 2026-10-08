@@ -6,6 +6,3 @@ from dataclasses import dataclass
 @dataclass
 class ExecutionOptions:
     diagnostics: bool = False
-
-
-options = ExecutionOptions()

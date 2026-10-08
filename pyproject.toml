@@ -13,7 +13,7 @@ dependencies = ["numpy>=2,<3", "opencv-python>=4.10,<6", "scipy>=1.14,<2"]
 
 [project.optional-dependencies]
 data = ["dvc[s3]>=3.67,<4"]
-dev = ["pytest>=8,<10", "ruff>=0.14"]
+dev = ["pytest>=8,<10", "ruff>=0.14", "pyright>=1.1.414,<2"]
 
 
 [project.scripts]

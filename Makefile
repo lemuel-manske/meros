@@ -29,7 +29,7 @@ BIND ?= 127.0.0.1
 .PHONY: help init install install-sam2 sam2-submodule
 .PHONY: data-pull data-save data-push results-save
 .PHONY: run evaluate diagnostics
-.PHONY: test lint format format-check cli-check check serve-media
+.PHONY: test typecheck lint format format-check cli-check check serve-media
 
 
 # Setup.
@@ -39,7 +39,7 @@ help:
 		'Setup:       init, install, install-sam2' \
 		'Data:        data-pull, data-save, data-push, results-save RUN_DIR=...' \
 		'Experiment:  run, evaluate, diagnostics (EXPERIMENT=002, optional ARGS="...")' \
-		'Checks:      test, lint, format, format-check, cli-check, check' \
+		'Checks:      test, typecheck, lint, format, format-check, cli-check, check' \
 		'Preview:     serve-media (optional PORT=... BIND=...)'
 
 
@@ -103,6 +103,10 @@ test:
 	$(PYTHON) -m pytest $(ARGS)
 
 
+typecheck:
+	$(PYTHON) -m pyright
+
+
 lint:
 	$(PYTHON) -m ruff check src tests
 
@@ -121,7 +125,7 @@ cli-check:
 	$(PYTHON) -m meros.experiments $(EXPERIMENT) --help
 
 
-check: test lint format-check cli-check
+check: test typecheck lint format-check cli-check
 
 
 # Local media preview.

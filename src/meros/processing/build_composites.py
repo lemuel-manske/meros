@@ -1,34 +1,50 @@
 import numpy as np
 import cv2 as cv
 
-from meros import media, metadata
+from meros.project import Project, default_project
+
 from meros.domain import TrackSelection
 
 
-def composites_complete() -> bool:
-    individuals = metadata.read_individuals()
-
-    if not individuals or not any(ind.tracks for ind in individuals):
+def composites_complete(project: Project = default_project) -> bool:
+    try:
+        individuals = project.metadata.read_individuals()
+    except (OSError, ValueError, KeyError, TypeError):
         return False
 
-    return all(
-        (
-            media.composite_exists(
+    if not individuals or any(not ind.tracks for ind in individuals):
+        return False
+
+    for individual in individuals:
+        for track in individual.tracks:
+            reference_path = project.media.paths.masked_crop(
+                track.video_id, track.track_id, track.reference_frame
+            )
+
+            if not project.media.valid_image(reference_path, 4):
+                return False
+
+            reference = project.media.read_masked_crop(
+                track.video_id, track.track_id, track.reference_frame
+            )
+
+            path = project.media.paths.composite(
                 track.video_id,
                 track.track_id,
                 track.reference_frame,
                 selection_id=track.selection_id,
             )
-            for individual in individuals
-            for track in individual.tracks
-        )
-    )
+
+            if not project.media.valid_image(path, 4, reference.shape[:2]):
+                return False
+
+    return True
 
 
-def run() -> None:
-    for individual in metadata.read_individuals():
+def run(project: Project = default_project) -> None:
+    for individual in project.metadata.read_individuals():
         for track in individual.tracks:
-            count = build_composite(track)
+            count = build_composite(track, project=project)
 
             print(f"{track.video_id}/{track.track_id}: combined {count} crops.")
 
@@ -61,8 +77,8 @@ def median_composite(crops: list[np.ndarray]) -> np.ndarray:
     return composite
 
 
-def build_composite(track: TrackSelection) -> int:
-    alignment = metadata.read_alignment(track.id)
+def build_composite(track: TrackSelection, *, project: Project = default_project) -> int:
+    alignment = project.metadata.read_alignment(track.id)
 
     if (
         alignment.start_frame != track.start_frame
@@ -73,7 +89,7 @@ def build_composite(track: TrackSelection) -> int:
             f"{track.video_id}/{track.track_id}: selection changed; rerun alignment first."
         )
 
-    crops = [media.read_masked_crop(track.video_id, track.track_id, track.reference_frame)]
+    crops = [project.media.read_masked_crop(track.video_id, track.track_id, track.reference_frame)]
 
     seen = {track.reference_frame}
 
@@ -96,7 +112,7 @@ def build_composite(track: TrackSelection) -> int:
         if row.source_to_reference is None:
             raise ValueError("Accepted alignment has no transform")
 
-        source = media.read_masked_crop(track.video_id, track.track_id, frame_idx)
+        source = project.media.read_masked_crop(track.video_id, track.track_id, frame_idx)
 
         crops.append(
             cv.warpAffine(
@@ -106,7 +122,7 @@ def build_composite(track: TrackSelection) -> int:
 
     composite = median_composite(crops)
 
-    media.write_composite(
+    project.media.write_composite(
         track.video_id,
         track.track_id,
         track.reference_frame,

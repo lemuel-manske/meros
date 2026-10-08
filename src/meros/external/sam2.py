@@ -1,75 +1,114 @@
-import numpy as np
-import torch
+"""Translate the untyped SAM2 library into the application's predictor contract."""
 
-from sam2.build_sam import build_sam2_video_predictor
+import importlib
 
+from collections.abc import Iterator, Sequence
+from pathlib import Path
+from typing import Protocol, cast
 
-_DEVICE = "cuda"  # use GPU for faster inference
-
-
-_OFFLOAD_STATE_TO_CPU = False  # keep state on GPU for faster inference
-_OFFLOAD_VIDEO_TO_CPU = True  # use CPU memory for video frames to reduce GPU memory usage
+from meros.domain.prediction import BinaryMask, Prediction, SeedBox
 
 
-_SAM2_CHECKPOINT = "external/sam2/checkpoints/sam2.1_hiera_large.pt"
-_SAM2_MODEL_CONFIG = "configs/sam2.1/sam2.1_hiera_l.yaml"
+class BooleanTensor(Protocol):
+    def cpu(self) -> "BooleanTensor": ...
+
+    def numpy(self) -> BinaryMask: ...
 
 
-class SAM2Predictor:
-    """
-    Wraps SAM2 predictor to provide a consistent interface for video propagation.
-    """
+class MaskLogits(Protocol):
+    def gt(self, threshold: float) -> BooleanTensor: ...
 
-    def __init__(self, sam2_predictor):
-        self.sam2_predictor = sam2_predictor
 
-    def init_state(self, video_path: str) -> dict[str, torch.Tensor]:
-        """
-        Initialize the inference state for video propagation.
-        """
-
-        return self.sam2_predictor.init_state(
-            video_path=video_path,
-            offload_video_to_cpu=_OFFLOAD_VIDEO_TO_CPU,
-            offload_state_to_cpu=_OFFLOAD_STATE_TO_CPU,
-        )
-
-    def propagate_in_video(self, state: dict[str, torch.Tensor]):
-        """
-        Propagate the masks in the video using the initialized state.
-        """
-
-        return self.sam2_predictor.propagate_in_video(state)
+class Sam2Backend(Protocol):
+    def init_state(
+        self,
+        video_path: str,
+        *,
+        offload_video_to_cpu: bool,
+        offload_state_to_cpu: bool,
+    ) -> object: ...
 
     def add_new_points_or_box(
         self,
-        inference_state: dict[str, torch.Tensor],
+        *,
+        inference_state: object,
         frame_idx: int,
         obj_id: int,
-        box: np.ndarray,
-    ) -> None:
-        """
-        Add new points or a bounding box to the inference state for a specific object.
-        """
+        box: SeedBox,
+    ) -> object: ...
 
-        self.sam2_predictor.add_new_points_or_box(
+    def propagate_in_video(
+        self, state: object
+    ) -> Iterator[tuple[int, Sequence[int], Sequence[MaskLogits]]]: ...
+
+
+class Sam2Builder(Protocol):
+    def __call__(
+        self,
+        config_file: str,
+        ckpt_path: str,
+        *,
+        device: str,
+    ) -> Sam2Backend: ...
+
+
+class SAM2Predictor:
+    def __init__(self, backend: Sam2Backend) -> None:
+        self.backend = backend
+
+    def init_state(self, video_path: str) -> object:
+        return self.backend.init_state(
+            video_path=video_path,
+            offload_video_to_cpu=True,
+            offload_state_to_cpu=False,
+        )
+
+    def add_new_points_or_box(
+        self,
+        inference_state: object,
+        frame_idx: int,
+        obj_id: int,
+        box: SeedBox,
+    ) -> None:
+        self.backend.add_new_points_or_box(
             inference_state=inference_state,
             frame_idx=frame_idx,
             obj_id=obj_id,
             box=box,
         )
 
+    def propagate_in_video(self, state: object) -> Iterator[Prediction]:
+        # These SAM2 methods are already decorated with torch.inference_mode.
+        for frame_idx, object_ids, logits in self.backend.propagate_in_video(state):
+            masks: dict[str, BinaryMask] = {}
 
-def build_sam2_predictor() -> SAM2Predictor:
-    """
-    Build a SAM2 predictor for video propagation.
-    """
+            for object_id, logits_mask in zip(object_ids, logits, strict=True):
+                mask = logits_mask.gt(0).cpu().numpy()
 
-    sam2_predictor = build_sam2_video_predictor(
-        _SAM2_MODEL_CONFIG,
-        _SAM2_CHECKPOINT,
-        device=_DEVICE,
-        dtype=torch.bfloat16,  # pyright: ignore
+                if mask.ndim == 3 and mask.shape[0] == 1:
+                    mask = mask[0]
+
+                if mask.ndim != 2:
+                    raise ValueError("SAM2 must return one two-dimensional mask per object")
+
+                masks[str(int(object_id))] = mask
+
+            yield Prediction(frame_idx, masks)
+
+
+def build_sam2_predictor(
+    checkpoint: Path = Path("external/sam2/checkpoints/sam2.1_hiera_large.pt"),
+) -> SAM2Predictor:
+    module = importlib.import_module("sam2.build_sam")
+
+    # SAM2 does not declare this public interface. The adapter is the sole
+    # typed boundary; processing never handles Torch tensors or SAM2 state.
+    builder = cast(Sam2Builder, module.build_sam2_video_predictor)
+
+    backend = builder(
+        "configs/sam2.1/sam2.1_hiera_l.yaml",
+        str(checkpoint),
+        device="cuda",
     )
 
-    return SAM2Predictor(sam2_predictor)
+    return SAM2Predictor(backend)

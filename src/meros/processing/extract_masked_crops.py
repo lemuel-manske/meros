@@ -3,46 +3,48 @@ from __future__ import annotations
 import cv2 as cv
 import numpy as np
 
-from typing import TYPE_CHECKING
+from collections.abc import Callable
+from meros.project import Project, default_project
 
-if TYPE_CHECKING:
-    from meros.external import SAM2Predictor
+from meros.domain.prediction import VideoPredictor
+from meros.external import build_sam2_predictor
+from meros.processing.extract_tracks import tracks_complete
 
-from meros import media, metadata
 
+def masked_crops_complete(project: Project = default_project) -> bool:
+    if not tracks_complete(project):
+        return False
 
-def masked_crops_complete() -> bool:
-    for video in metadata.read_videos():
-        try:
-            track_metadata = metadata.read_track(video.video_id)
-        except FileNotFoundError:
-            return False
+    for video in project.metadata.read_videos():
+        track_metadata = project.metadata.read_track(video.video_id)
 
-        for (
-            track_id,
-            track,
-        ) in track_metadata.tracks.items():
-            for frame_idx in track.frames:
-                if not media.masked_crop_exists(
-                    video.video_id,
-                    track_id,
-                    int(frame_idx),
-                ):
+        for track_id, track in track_metadata.tracks.items():
+            for frame_idx, observation in track.frames.items():
+                x1, y1, x2, y2 = observation.bbox
+
+                shape = (y2 - y1 + 1, x2 - x1 + 1)
+
+                path = project.media.paths.masked_crop(video.video_id, track_id, int(frame_idx))
+
+                if not project.media.valid_image(path, 4, shape):
                     return False
 
     return True
 
 
-def run() -> None:
-    import torch
-    from meros.external import build_sam2_predictor
+def run(
+    project: Project = default_project,
+    *,
+    predictor_factory: Callable[[], VideoPredictor] | None = None,
+) -> None:
+    predictor = (
+        predictor_factory() if predictor_factory else build_sam2_predictor(project.checkpoint)
+    )
 
-    predictor = build_sam2_predictor()
-
-    with torch.inference_mode():
-        count = sum(
-            extract_masked_crops(video.video_id, predictor) for video in metadata.read_videos()
-        )
+    count = sum(
+        extract_masked_crops(video.video_id, predictor, project=project)
+        for video in project.metadata.read_videos()
+    )
 
     print(f"Saved {count} masked crops.")
 
@@ -81,10 +83,9 @@ def build_masked_crop(
 
 
 def extract_masked_crops(
-    video_id: str,
-    predictor: SAM2Predictor,
+    video_id: str, predictor: VideoPredictor, *, project: Project = default_project
 ) -> int:
-    track_metadata = metadata.read_track(video_id)
+    track_metadata = project.metadata.read_track(video_id)
 
     tracks = track_metadata.tracks
 
@@ -92,7 +93,7 @@ def extract_masked_crops(
         raise ValueError(f"{video_id}: no saved tracks available.")
 
     state = predictor.init_state(
-        video_path=str(media.frames_path(video_id)),
+        video_path=str(project.media.frames_path(video_id)),
     )
 
     for track_id, track in tracks.items():
@@ -105,29 +106,23 @@ def extract_masked_crops(
 
     count = 0
 
-    for frame_idx, obj_ids, mask_logits in predictor.propagate_in_video(state):
-        frame = media.read_frame(video_id, frame_idx)
+    for prediction in predictor.propagate_in_video(state):
+        frame_idx = prediction.frame_idx
 
-        for obj_id, logits in zip(obj_ids, mask_logits):
-            track_id = str(int(obj_id))
+        frame = project.media.read_frame(video_id, frame_idx)
 
+        for track_id, mask in prediction.masks.items():
             track = tracks[track_id]
 
-            # Only export observations belonging to the saved track.
             if frame_idx < track.initial_frame or str(frame_idx) not in track.frames:
                 continue
-
-            mask = (logits > 0).cpu().numpy()
-
-            if mask.ndim == 3 and mask.shape[0] == 1:
-                mask = mask[0]
 
             crop = build_masked_crop(frame, mask)
 
             if crop is None:
                 continue
 
-            media.write_masked_crop(
+            project.media.write_masked_crop(
                 video_id,
                 track_id,
                 frame_idx,

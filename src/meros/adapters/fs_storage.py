@@ -25,67 +25,54 @@ from meros.domain import (
     Video,
 )
 
-_DATA_FOLDER = Path("data")
-_MEDIA_FOLDER = _DATA_FOLDER / "media"
-_ALIGNMENT_MEDIA_FOLDER = _MEDIA_FOLDER / "alignment"
-_SELECTION_MEDIA_FOLDER = _ALIGNMENT_MEDIA_FOLDER / "selections"
-_CROPS_MEDIA_FOLDER = _MEDIA_FOLDER / "crops"
-_FRAMES_MEDIA_FOLDER = _MEDIA_FOLDER / "frames"
-_MASKED_CROPS_MEDIA_FOLDER = _MEDIA_FOLDER / "masked_crops"
-_MATCHES_MEDIA_FOLDER = _MEDIA_FOLDER / "matches"
-_VIDEOS_MEDIA_FOLDER = _MEDIA_FOLDER / "videos"
-_VISUALIZATIONS_MEDIA_FOLDER = _MEDIA_FOLDER / "visualizations"
-_METADATA_FOLDER = _DATA_FOLDER / "metadata"
-_ALIGNMENT_METADATA_FOLDER = _METADATA_FOLDER / "alignment"
-_ANNOTATIONS_METADATA_FOLDER = _METADATA_FOLDER / "annotations"
-_INDIVIDUALS_METADATA_FOLDER = _METADATA_FOLDER / "individuals"
-_TRACKS_METADATA_FOLDER = _METADATA_FOLDER / "tracks"
-_VIDEOS_METADATA_FOLDER = _METADATA_FOLDER / "videos"
-
 
 @dataclass(frozen=True)
 class MediaPaths:
+    root: Path = Path("data")
+
     def video(self, video_id: str) -> Path:
-        return _VIDEOS_MEDIA_FOLDER / f"{video_id}.mov"
+        return (self.root / "media/videos") / f"{video_id}.mov"
 
     def frame(self, video_id: str, frame_idx: int) -> Path:
-        return _FRAMES_MEDIA_FOLDER / video_id / f"{frame_idx}.jpg"
+        return (self.root / "media/frames") / video_id / f"{frame_idx}.jpg"
 
     def masked_crop(self, video_id: str, track_id: str, frame_idx: int) -> Path:
-        return _MASKED_CROPS_MEDIA_FOLDER / video_id / track_id / f"{frame_idx}.png"
+        return (self.root / "media/masked_crops") / video_id / track_id / f"{frame_idx}.png"
 
     def aligned_overlay_crop(
         self, video_id: str, track_id: str, frame_idx: int, *, selection_id: str
     ) -> Path:
-        return _SELECTION_MEDIA_FOLDER / selection_id / f"{frame_idx}_overlay.png"
+        return (
+            (self.root / "media/alignment/selections") / selection_id / f"{frame_idx}_overlay.png"
+        )
 
     def aligned_crop(
         self, video_id: str, track_id: str, frame_idx: int, *, selection_id: str
     ) -> Path:
-        return _SELECTION_MEDIA_FOLDER / selection_id / f"{frame_idx}.png"
+        return (self.root / "media/alignment/selections") / selection_id / f"{frame_idx}.png"
 
     def composite(
         self, video_id: str, track_id: str, reference_frame: int, *, selection_id: str
     ) -> Path:
-        return _SELECTION_MEDIA_FOLDER / selection_id / "composite.png"
+        return (self.root / "media/alignment/selections") / selection_id / "composite.png"
 
     def composite_enhanced(
         self, video_id: str, track_id: str, reference_frame: int, *, selection_id: str
     ) -> Path:
-        return _SELECTION_MEDIA_FOLDER / selection_id / "enhanced_composite.png"
+        return (self.root / "media/alignment/selections") / selection_id / "enhanced_composite.png"
 
     def composite_comparison(
         self, video_id: str, track_id: str, reference_frame: int, *, selection_id: str
     ) -> Path:
-        return _SELECTION_MEDIA_FOLDER / selection_id / "comparison.png"
+        return (self.root / "media/alignment/selections") / selection_id / "comparison.png"
 
     def visualization(self, video_id: str, frame_idx: int) -> Path:
-        return _VISUALIZATIONS_MEDIA_FOLDER / video_id / f"{frame_idx}.jpg"
+        return (self.root / "media/visualizations") / video_id / f"{frame_idx}.jpg"
 
 
 class LocalFsMediaStore(MediaStore):
-    def __init__(self) -> None:
-        self.paths = MediaPaths()
+    def __init__(self, root: Path = Path("data")) -> None:
+        self.paths = MediaPaths(root)
 
     @staticmethod
     def _read_image(path: Path, flags: int = cv.IMREAD_COLOR) -> np.ndarray:
@@ -102,6 +89,32 @@ class LocalFsMediaStore(MediaStore):
 
         if not cv.imwrite(str(path), image):
             raise RuntimeError(f"Could not write image: {path}")
+
+    @staticmethod
+    def valid_image(path: Path, channels: int, shape: tuple[int, int] | None = None) -> bool:
+        if not path.is_file():
+            return False
+
+        try:
+            image = cv.imread(str(path), cv.IMREAD_UNCHANGED)
+        except cv.error:
+            return False
+
+        if (
+            image is None
+            or image.dtype != np.uint8
+            or image.ndim != 3
+            or image.shape[2] != channels
+        ):
+            return False
+
+        if shape is not None and image.shape[:2] != shape:
+            return False
+
+        if channels == 4 and not np.any(image[:, :, 3] == 255):
+            return False
+
+        return True
 
     def has_frames(self, video_id: str) -> bool:
         return any(self.frames_path(video_id).glob("*.jpg"))
@@ -141,7 +154,7 @@ class LocalFsMediaStore(MediaStore):
         return self.paths.visualization(video_id, frame_idx).is_file()
 
     def frames_path(self, video_id: str) -> Path:
-        return _FRAMES_MEDIA_FOLDER / video_id
+        return (self.paths.root / "media/frames") / video_id
 
     def frame_path(self, video_id: str, frame_idx: int) -> Path:
         return self.paths.frame(video_id, frame_idx)
@@ -153,7 +166,7 @@ class LocalFsMediaStore(MediaStore):
         return sorted(int(p.stem) for p in self.frames_path(video_id).glob("*.jpg"))
 
     def read_frames(self, video_id: str) -> list[FrameMedia]:
-        parent = _FRAMES_MEDIA_FOLDER / video_id
+        parent = (self.paths.root / "media/frames") / video_id
 
         paths = sorted(parent.glob("*.jpg"), key=lambda path: int(path.stem))
 
@@ -304,8 +317,10 @@ class LocalFsMediaStore(MediaStore):
 
 @dataclass(frozen=True)
 class MetadataPaths:
+    root: Path = Path("data")
+
     def track(self, video_id: str) -> Path:
-        return _TRACKS_METADATA_FOLDER / video_id / "metadata.json"
+        return (self.root / "metadata/tracks") / video_id / "metadata.json"
 
     def alignment(
         self,
@@ -316,19 +331,19 @@ class MetadataPaths:
         reference_frame: int,
     ) -> Path:
         return (
-            _ALIGNMENT_METADATA_FOLDER
+            (self.root / "metadata/alignment")
             / video_id
             / f"{track_id}_{start_frame}_{end_frame}_ref_{reference_frame}.json"
         )
 
     def videos(self) -> Path:
-        return _VIDEOS_METADATA_FOLDER / "videos.json"
+        return (self.root / "metadata/videos") / "videos.json"
 
     def bboxes(self) -> Path:
-        return _VIDEOS_METADATA_FOLDER / "bboxes.json"
+        return (self.root / "metadata/videos") / "bboxes.json"
 
     def individuals(self) -> Path:
-        return _INDIVIDUALS_METADATA_FOLDER / "individuals.json"
+        return (self.root / "metadata/individuals") / "individuals.json"
 
 
 def write_json_atomic(path: Path, payload: object) -> None:
@@ -348,8 +363,8 @@ def write_json_atomic(path: Path, payload: object) -> None:
 
 
 class LocalFsMetadataStore(MetadataStore):
-    def __init__(self) -> None:
-        self.paths = MetadataPaths()
+    def __init__(self, root: Path = Path("data")) -> None:
+        self.paths = MetadataPaths(root)
 
         self.individuals_path: Path | None = None
 

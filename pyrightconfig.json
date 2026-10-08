@@ -1,7 +1,11 @@
 {
-  "venvPath": ".",
-  "venv": ".venv",
-  "extraPaths": [
-    "./external/sam2"
-  ]
+  "include": ["src", "tests"],
+
+  "extraPaths": ["src"],
+
+  "pythonVersion": "3.12",
+
+  "typeCheckingMode": "standard",
+
+  "reportMissingParameterType": "error"
 }

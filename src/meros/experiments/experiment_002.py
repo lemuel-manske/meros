@@ -8,22 +8,51 @@ import json
 import shutil
 import subprocess
 import uuid
-from dataclasses import asdict
 from datetime import datetime, timezone
 from itertools import combinations, product
 from pathlib import Path
+from collections.abc import Iterator, Sequence
+from typing import Literal, TypedDict
+
+import numpy as np
+from numpy.typing import NDArray
 
 import cv2 as cv
-import numpy as np
 
-from meros import media, metadata
-from meros.config import options
+from meros.project import Project, default_project
+from meros.domain import Individual, TrackSelection
 from meros.processing.match_images import match_images
 
-REPRESENTATIONS = ("reference", "composite", "enhanced_composite")
+type Representation = Literal["reference", "composite", "enhanced_composite"]
 
 
-def iter_pairs(individuals, *, cross_video_only=False):
+REPRESENTATIONS: tuple[Representation, ...] = ("reference", "composite", "enhanced_composite")
+
+
+class ComparisonRow(TypedDict):
+    source_individual_id: str
+    target_individual_id: str
+
+    source_selection_id: str
+    target_selection_id: str
+
+    same_individual: bool
+    same_video: bool
+
+    representation: Representation
+
+    source_keypoints: int
+    target_keypoints: int
+    forward_good: int
+    backward_good: int
+    mutual_matches: int
+    inliers: int
+    ransac_attempted: bool
+
+
+def iter_pairs(
+    individuals: Sequence[Individual], *, cross_video_only: bool = False
+) -> Iterator[tuple[str, str, TrackSelection, TrackSelection]]:
     for individual in individuals:
         for a, b in combinations(individual.tracks, 2):
             if not cross_video_only or a.video_id != b.video_id:
@@ -35,19 +64,21 @@ def iter_pairs(individuals, *, cross_video_only=False):
                 yield source.individual_id, target.individual_id, a, b
 
 
-def read_representation(track, representation):
+def read_representation(
+    track: TrackSelection, representation: Representation, *, project: Project = default_project
+) -> NDArray[np.uint8]:
     args = (track.video_id, track.track_id, track.reference_frame)
 
     if representation == "reference":
-        return media.read_masked_crop(*args)
+        return project.media.read_masked_crop(*args)
 
     if representation == "composite":
-        return media.read_composite(*args, selection_id=track.selection_id)
+        return project.media.read_composite(*args, selection_id=track.selection_id)
 
-    return media.read_composite_enhanced(*args, selection_id=track.selection_id)
+    return project.media.read_composite_enhanced(*args, selection_id=track.selection_id)
 
 
-def validate_individuals(individuals):
+def validate_individuals(individuals: Sequence[Individual]) -> None:
     if not individuals or any(not individual.tracks for individual in individuals):
         raise ValueError("Experiment requires nonempty individuals/selections")
 
@@ -68,13 +99,19 @@ def validate_individuals(individuals):
             seen.add(track.selection_id)
 
 
-def git_revision():
+def git_revision() -> str | None:
     result = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True)
 
     return result.stdout.strip() if result.returncode == 0 else None
 
 
-def evaluate(individuals, output: Path, *, cross_video_only=False):
+def evaluate(
+    individuals: Sequence[Individual],
+    output: Path,
+    *,
+    cross_video_only: bool = False,
+    project: Project = default_project,
+) -> list[ComparisonRow]:
     validate_individuals(individuals)
 
     if output.exists():
@@ -92,7 +129,7 @@ def evaluate(individuals, output: Path, *, cross_video_only=False):
         for individual in individuals:
             for track in individual.tracks:
                 for representation in REPRESENTATIONS:
-                    image = read_representation(track, representation)
+                    image = read_representation(track, representation, project=project)
 
                     path = (
                         temporary / "representations" / track.selection_id / f"{representation}.png"
@@ -107,7 +144,7 @@ def evaluate(individuals, output: Path, *, cross_video_only=False):
 
                     images[key] = image
 
-        rows = []
+        rows: list[ComparisonRow] = []
 
         for source_id, target_id, a, b in iter_pairs(
             individuals, cross_video_only=cross_video_only
@@ -116,10 +153,10 @@ def evaluate(individuals, output: Path, *, cross_video_only=False):
                 canvas, stats = match_images(
                     images[a.selection_id, representation],
                     images[b.selection_id, representation],
-                    draw=options.diagnostics,
+                    draw=project.options.diagnostics,
                 )
 
-                row = {
+                row: ComparisonRow = {
                     "source_individual_id": source_id,
                     "target_individual_id": target_id,
                     "source_selection_id": a.selection_id,
@@ -127,7 +164,13 @@ def evaluate(individuals, output: Path, *, cross_video_only=False):
                     "same_individual": source_id == target_id,
                     "same_video": a.video_id == b.video_id,
                     "representation": representation,
-                    **asdict(stats),
+                    "source_keypoints": stats.source_keypoints,
+                    "target_keypoints": stats.target_keypoints,
+                    "forward_good": stats.forward_good,
+                    "backward_good": stats.backward_good,
+                    "mutual_matches": stats.mutual_matches,
+                    "inliers": stats.inliers,
+                    "ransac_attempted": stats.ransac_attempted,
                 }
 
                 rows.append(row)
@@ -168,7 +211,7 @@ def evaluate(individuals, output: Path, *, cross_video_only=False):
         raise
 
 
-def main(argv: list[str] | None = None) -> None:
+def main(argv: list[str] | None = None, *, project: Project = default_project) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
 
     parser.add_argument(
@@ -193,28 +236,24 @@ def main(argv: list[str] | None = None) -> None:
 
     args = parser.parse_args(argv)
 
-    options.diagnostics = args.diagnostics
+    project.options.diagnostics = args.diagnostics
 
-    metadata.individuals_path = args.manifest
+    project.metadata.individuals_path = args.manifest
 
-    individuals = metadata.read_individuals()
+    individuals = project.metadata.read_individuals()
 
     validate_individuals(individuals)
 
     if not args.evaluate_only:
-        from meros.pipeline import pipeline
+        from meros.pipeline.engine import create_pipeline
 
-        pipeline.run("enhanced_composites", force=args.force)
+        create_pipeline(project).run("enhanced_composites", force=args.force)
 
     output = args.output or Path("results/002") / (
         datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
     )
 
-    rows = evaluate(
-        individuals,
-        output,
-        cross_video_only=args.cross_video_only,
-    )
+    rows = evaluate(individuals, output, cross_video_only=args.cross_video_only, project=project)
 
     print(f"Wrote {len(rows)} comparisons to {output}")
 

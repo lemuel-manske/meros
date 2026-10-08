@@ -43,7 +43,7 @@ Preserve the README numbers as historical reported observations. Do not silently
 
 `frames_stage_fingerprint()` omits `mirrored`, although frame extraction flips `101_11`. Tracking fingerprints omit seed boxes and automatic/manual mode. Segmentation fingerprints omit checkpoint contents, external revision, and relevant execution configuration. Enhancement fingerprint values duplicate implementation constants; changing `CLIP_LIMIT` or `STRENGTH` leaves the declared fingerprint unchanged. Matching fingerprints omit pair-selection flags. Algorithm changes depend on manually maintained version strings.
 
-Use one explicit configuration per stage, shared by execution and fingerprinting. Preserve the 002 values before moving them. Use media content identity for archived runs; mtime-based fingerprints are local optimization and change across machines. Include implementation/configuration identity in run provenance.
+Use one explicit configuration per stage, shared by execution and fingerprinting. Preserve the 002 values before moving them. Keep content identity in disposable cache fingerprints; archived runs retain their source commit and compared representations. Run provenance records the source commit; implementation/configuration identity belongs in disposable cache fingerprints.
 
 ### 6. Medium: completion checks can accept incomplete outputs
 
@@ -111,7 +111,7 @@ Use the new schema directly. Earlier layouts and pointers are available in Git h
 
 ## Refactoring order and acceptance criteria
 
-1. **Capture baseline evidence.** Record source commit, DVC hashes, checkpoint hash, external revision, versions, all selections/configuration, and reported historical results. Verify baseline media is recoverable. An immutable tag/snapshot can be created as part of implementation; none was created in this review.
+1. **Capture baseline evidence.** Keep the source commit, selections, and reported historical results. Git history retains earlier implementations; verify that the DVC media is recoverable.
 2. **Repair reproduction separately.** Resolve missing video counts, unsafe tracking reruns, incomplete output checks, and path collisions. Compare fresh results with preserved artifacts; any numerical difference must be explained. A defect fix that changes images is a new run, not a silent replacement of historical 002.
 3. **Persist experiment output.** Export structured metrics and provenance for all representations. Under the current manifest and policies, expect 21 pairs × 3 representations = 63 rows, including the separately labeled same-video positive. This row count is not a performance claim.
 4. **Remove proven unused code.** Delete the plain-crop exporter and associated interfaces; consolidate pair enumeration; retire unused annotation interfaces while archiving source information. Check references and smoke-test the experiment path.
