@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import cv2 as cv
+import numpy as np
+import scipy
+from importlib.metadata import version, PackageNotFoundError
 from functools import lru_cache
 
 from collections.abc import Callable
@@ -217,8 +221,18 @@ def content_hash(path: str, size: int, mtime: int) -> str:
 
 def implementation_fingerprint() -> str:
     root = Path(__file__).resolve().parents[1]
+    try:
+        torch_version = version("torch")
+    except PackageNotFoundError:
+        torch_version = None
     return fingerprint(
-        [(str(p.relative_to(root)), file_fingerprint(p)) for p in sorted(root.rglob("*.py"))]
+        {
+            "opencv": cv.__version__,
+            "numpy": np.__version__,
+            "scipy": scipy.__version__,
+            "torch": torch_version,
+        },
+        [(str(p.relative_to(root)), file_fingerprint(p)) for p in sorted(root.rglob("*.py"))],
     )
 
 

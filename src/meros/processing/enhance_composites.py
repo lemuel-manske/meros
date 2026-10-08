@@ -10,6 +10,9 @@ STRENGTH = 0.5
 
 
 def enhanced_composites_complete() -> bool:
+    individuals = metadata.read_individuals()
+    if not individuals or not any(ind.tracks for ind in individuals):
+        return False
     return all(
         (
             media.composite_enhanced_exists(
@@ -18,7 +21,7 @@ def enhanced_composites_complete() -> bool:
                 track.reference_frame,
                 selection_id=track.selection_id,
             )
-            for individual in metadata.read_individuals()
+            for individual in individuals
             for track in individual.tracks
         )
     )
