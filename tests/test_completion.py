@@ -360,3 +360,14 @@ def test_crop_coverage_must_match_observation(prepared_project: ProjectFixture):
     assert cv.imwrite(str(path), image)
 
     assert not masked_crops_complete(prepared_project.project)
+
+
+@pytest.mark.parametrize(
+    "check", [alignments_complete, composites_complete, enhanced_composites_complete]
+)
+def test_selection_stages_require_explicit_manifest(
+    prepared_project: ProjectFixture, check: Callable[[Project], bool]
+):
+    prepared_project.project.metadata.individuals_path = None
+
+    assert not check(prepared_project.project)

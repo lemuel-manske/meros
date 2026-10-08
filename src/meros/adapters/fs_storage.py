@@ -355,9 +355,6 @@ class MetadataPaths:
     def bboxes(self) -> Path:
         return (self.root / "metadata/videos") / "bboxes.json"
 
-    def individuals(self) -> Path:
-        return (self.root / "metadata/individuals") / "individuals.json"
-
 
 def write_json_atomic(path: Path, payload: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -413,7 +410,10 @@ class LocalFsMetadataStore(MetadataStore):
         return [Video(**video_metadata) for video_metadata in metadata]
 
     def read_individuals(self) -> list[Individual]:
-        with (self.individuals_path or self.paths.individuals()).open("r", encoding="utf-8") as f:
+        if self.individuals_path is None:
+            raise ValueError("Choose a selection manifest before preparing representations")
+
+        with self.individuals_path.open("r", encoding="utf-8") as f:
             metadata = json.load(f)
 
         return [
