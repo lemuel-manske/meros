@@ -4,13 +4,14 @@ Computer-vision research for identifying individual Goliath Groupers (*Epinephel
 
 ## Setup
 
-Run commands from the repository root. Python 3.12+ is required.
+Run commands from the repository root. Python 3.12+ and Make are required.
+
+The Makefile is the shared command entry point for local work, this README, and GitHub Actions. `make help` lists the targets. Commands use `.venv/bin/python` when available; override with `PYTHON=...` for another environment.
 
 ```sh
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install -e '.[data,dev]'
-dvc pull data/media.dvc
+make init
+
+make data-pull
 ```
 
 DVC access requires credentials for the configured Backblaze S3 remote. No credentials are stored here. Evaluation of existing artifacts needs NumPy, OpenCV, and SciPy; it does not import Torch or SAM2.
@@ -18,8 +19,7 @@ DVC access requires credentials for the configured Backblaze S3 remote. No crede
 For rebuilding tracking/masked crops, initialize the pinned SAM2 submodule, install Torch/Torchvision for your CUDA environment, and install SAM2:
 
 ```sh
-git submodule update --init external/sam2
-python -m pip install -e external/sam2
+make install-sam2
 ```
 
 Obtain the official SAM2.1 Hiera Large checkpoint using the pinned submodule's documented checkpoint download instructions. Place it at `external/sam2/checkpoints/sam2.1_hiera_large.pt`. The current wrapper uses CUDA. Manual seed selection requires a desktop OpenCV session; the default uses saved human-provided seed boxes.
@@ -31,19 +31,20 @@ The historical full environment freeze is retained at `experiments/002/requireme
 To reuse old composites, first copy them into selection-scoped paths with validation and a checksum receipt. Originals are retained:
 
 ```sh
-meros-migrate-002
-meros-002 --evaluate-only
+make migrate
+
+make evaluate
 ```
 
 To rebuild all required representations and evaluate:
 
 ```sh
-meros-002
+make run
 ```
 
-Use `--manifest path/to/selections.json` for another selection set. The default is the frozen `experiments/002/selections.json`. `--cross-video-only` excludes same-video comparisons. `--output results/002/my-run` sets an explicit destination; existing run directories cannot be overwritten.
+Pass CLI options through `ARGS`, for example `make evaluate ARGS="--manifest path/to/selections.json --output results/002/my-run"`. The default is the frozen `experiments/002/selections.json`. `--cross-video-only` excludes same-video comparisons. `--output results/002/my-run` sets an explicit destination; existing run directories cannot be overwritten.
 
-`--diagnostics` saves optional previews and match drawings. `--force --diagnostics` also recreates upstream previews when preparation is already cached. Deleting previews does not invalidate computed outputs.
+`make diagnostics` saves optional previews and match drawings. `make diagnostics ARGS="--force"` also recreates upstream previews when preparation is already cached. Deleting previews does not invalidate computed outputs.
 
 Each successful run contains `metrics.csv`, `run.json`, and the exact 21 PNG representations used for the current seven selections. The current manifest produces 63 rows: 21 pairs × three representations. Same-video comparisons are explicitly labeled. Zero inliers when `ransac_attempted` is false means geometric verification was skipped.
 
@@ -61,7 +62,7 @@ Each successful run contains `metrics.csv`, `run.json`, and the exact 21 PNG rep
 
 Aligned crops are reconstructed from transforms in memory during composite construction. They do not need to be saved. Original videos remain the source data. Cache fingerprints include source contents, mirroring, seeds, checkpoint contents, implementation identity, and processing settings; changing code conservatively invalidates preparation.
 
-Media remains inside the existing DVC-managed `data/media` tree to avoid a blind migration of unavailable media. After producing new artifacts, explicitly version them with `dvc add data/media` and `dvc push`. Run evidence under `results/` is excluded from Git; preserve it with `dvc add results/002/<run-id>` and `dvc push`, then commit the pointer. Pipeline fingerprints under `data/.pipeline` are local disposable state.
+Media remains inside the existing DVC-managed `data/media` tree to avoid a blind migration of unavailable media. After producing new artifacts, explicitly version them with `make data-save` and `make data-push`. Run evidence under `results/` is excluded from Git; preserve it with `make results-save RUN_DIR=results/002/<run-id>` and `make data-push`, then commit the pointer. Pipeline fingerprints under `data/.pipeline` are local disposable state.
 
 ## Code and metadata
 
@@ -79,9 +80,9 @@ The broader research objectives remain in `SPEC.md`. See `docs/engineering-revie
 ## Validation
 
 ```sh
-python -m pytest
-ruff check src tests
-ruff format --check src tests
+make check
 ```
+
+`make test`, `make lint`, `make format-check`, and `make cli-check` can also run separately. `make format` applies the formatting rules. GitHub Actions uses `make install EXTRAS=dev` followed by the same `make check` target.
 
 Tests cover tracking reruns, incomplete caches, selection isolation, optional diagnostics, transparency-aware aggregation, and structured evaluation. Real media/GPU reproduction must be performed separately; synthetic checks do not validate biological identification performance.
