@@ -42,7 +42,7 @@ def test_evaluation_persists_all_representations_and_metrics(monkeypatch, tmp_pa
 
     assert len(list(csv.DictReader((output / "metrics.csv").open()))) == 63
 
-    assert len(json.loads((output / "run.json").read_text())["image_sha256"]) == 21
+    assert set(json.loads((output / "run.json").read_text())) == {"source_commit"}
 
     with pytest.raises(FileExistsError):
         exp.evaluate(metadata.read_individuals(), output)

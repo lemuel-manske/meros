@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import json
 import shutil
 import subprocess
-import sys
 import uuid
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -76,7 +74,7 @@ def git_revision():
     return result.stdout.strip() if result.returncode == 0 else None
 
 
-def evaluate(individuals, output: Path, *, cross_video_only=False, preparation_fingerprint=None):
+def evaluate(individuals, output: Path, *, cross_video_only=False):
     validate_individuals(individuals)
 
     if output.exists():
@@ -90,8 +88,6 @@ def evaluate(individuals, output: Path, *, cross_video_only=False, preparation_f
 
     try:
         images = {}
-
-        image_hashes = {}
 
         for individual in individuals:
             for track in individual.tracks:
@@ -110,10 +106,6 @@ def evaluate(individuals, output: Path, *, cross_video_only=False, preparation_f
                     key = (track.selection_id, representation)
 
                     images[key] = image
-
-                    image_hashes[str(path.relative_to(temporary))] = hashlib.sha256(
-                        path.read_bytes()
-                    ).hexdigest()
 
         rows = []
 
@@ -163,44 +155,7 @@ def evaluate(individuals, output: Path, *, cross_video_only=False, preparation_f
 
             writer.writerows(rows)
 
-        from meros.processing import (
-            match_images as matching,
-            align_masked_crops,
-            enhance_composites,
-        )
-
-        def constants(module):
-            return {
-                name: value
-                for name, value in vars(module).items()
-                if name.isupper() and isinstance(value, (int, float, str, bool))
-            }
-
-        provenance = {
-            "schema_version": 1,
-            "experiment": "002",
-            "source_commit": git_revision(),
-            "source_sha256": {
-                str(p.relative_to(Path(__file__).resolve().parents[1])): hashlib.sha256(
-                    p.read_bytes()
-                ).hexdigest()
-                for p in sorted(Path(__file__).resolve().parents[1].rglob("*.py"))
-            },
-            "python": sys.version,
-            "opencv": cv.__version__,
-            "numpy": np.__version__,
-            "selections": [asdict(ind) for ind in individuals],
-            "cross_video_only": cross_video_only,
-            "rows": len(rows),
-            "image_sha256": image_hashes,
-            "preparation_fingerprint": preparation_fingerprint,
-            "preparation_parameters_verified": preparation_fingerprint is not None,
-            "configuration": {
-                "matching": constants(matching),
-                "alignment": constants(align_masked_crops),
-                "enhancement": constants(enhance_composites),
-            },
-        }
+        provenance = {"source_commit": git_revision()}
 
         (temporary / "run.json").write_text(json.dumps(provenance, indent=2) + "\n")
 
@@ -213,7 +168,7 @@ def evaluate(individuals, output: Path, *, cross_video_only=False, preparation_f
         raise
 
 
-def main():
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
 
     parser.add_argument(
@@ -236,7 +191,7 @@ def main():
 
     parser.add_argument("--output", type=Path)
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     options.diagnostics = args.diagnostics
 
@@ -246,14 +201,10 @@ def main():
 
     validate_individuals(individuals)
 
-    preparation_fingerprint = None
-
     if not args.evaluate_only:
         from meros.pipeline import pipeline
 
         pipeline.run("enhanced_composites", force=args.force)
-
-        preparation_fingerprint = pipeline.stages["enhanced_composites"].fingerprint()
 
     output = args.output or Path("results/002") / (
         datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
@@ -263,7 +214,6 @@ def main():
         individuals,
         output,
         cross_video_only=args.cross_video_only,
-        preparation_fingerprint=preparation_fingerprint,
     )
 
     print(f"Wrote {len(rows)} comparisons to {output}")
