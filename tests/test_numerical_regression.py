@@ -15,25 +15,27 @@ from meros.processing.match_images import match_images
 BASELINE = "386bdcec3b00ea348c523f1d3904c41210f175ba"
 
 
-def legacy(name: str) -> types.ModuleType:
-    source = subprocess.check_output(
-        ["git", "show", f"{BASELINE}:src/meros/cmd/{name}.py"], text=True
+def load_baseline_module(name: str, path: str) -> types.ModuleType:
+    source = subprocess.check_output(["git", "show", f"{BASELINE}:{path}"], text=True)
+
+    source = source.replace("from src.meros import media, metadata", "").replace(
+        "from src.meros.domain import", "from _baseline_storage import"
     )
 
-    source = (
-        source.replace("src.meros", "meros")
-        .replace("IndividualTrack", "TrackSelection")
-        .replace("IndividualId", "TrackSelectionKey")
-        .replace("from meros import media, metadata", "")
-    )
+    module = types.ModuleType(name)
 
-    module = types.ModuleType(f"_baseline_{name}")
+    sys.modules[name] = module
 
-    sys.modules[module.__name__] = module
-
-    exec(compile(source, f"<baseline:{name}>", "exec"), module.__dict__)
+    exec(compile(source, f"<baseline:{path}>", "exec"), module.__dict__)
 
     return module
+
+
+def legacy(name: str) -> types.ModuleType:
+    if "_baseline_storage" not in sys.modules:
+        load_baseline_module("_baseline_storage", "src/meros/domain/storage.py")
+
+    return load_baseline_module(f"_baseline_{name}", f"src/meros/cmd/{name}.py")
 
 
 @pytest.fixture

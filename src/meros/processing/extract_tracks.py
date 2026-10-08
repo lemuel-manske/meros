@@ -79,6 +79,11 @@ def tracks_complete(project: Project = default_project) -> bool:
         ):
             return False
 
+        try:
+            height, width = project.media.read_frame(video.video_id, 0).shape[:2]
+        except (OSError, ValueError, cv.error):
+            return False
+
         video_seeds = seeds.get(video.video_id, {})
 
         if AUTO and set(saved.tracks) != set(video_seeds):
@@ -98,7 +103,7 @@ def tracks_complete(project: Project = default_project) -> bool:
 
                     x1, y1, x2, y2 = observation.bbox
 
-                    if not 0 <= x1 <= x2 or not 0 <= y1 <= y2 or observation.mask_area <= 0:
+                    if not 0 <= x1 <= x2 < width or not 0 <= y1 <= y2 < height:
                         return False
             except (ValueError, TypeError):
                 return False

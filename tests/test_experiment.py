@@ -100,3 +100,61 @@ def test_runner_forwards_experiment_help(capsys: pytest.CaptureFixture[str]):
     assert error.value.code == 0
 
     assert "--evaluate-only" in capsys.readouterr().out
+
+
+def test_evaluate_only_cli_reads_real_files(prepared_project: ProjectFixture, tmp_path: Path):
+    manifest = prepared_project.project.metadata.individuals_path
+
+    assert manifest is not None
+
+    output = tmp_path / "cli-run"
+
+    exp.main(
+        [
+            "--evaluate-only",
+            "--manifest",
+            str(manifest),
+            "--output",
+            str(output),
+        ],
+        project=prepared_project.project,
+    )
+
+    assert (output / "metrics.csv").is_file()
+
+    assert (output / "run.json").is_file()
+
+
+def test_diagnostics_are_optional_after_real_generation(
+    project_fixture: ProjectFixture, tmp_path: Path
+):
+    project = project_fixture.project
+
+    project.options.diagnostics = True
+
+    project_fixture.prepare()
+
+    output = tmp_path / "diagnostic-run"
+
+    exp.evaluate(project_fixture.individuals, output, project=project)
+
+    assert len(list((output / "diagnostics").rglob("*.png"))) == 9
+
+    assert len(list((project.media.paths.root / "media/visualizations").rglob("*.jpg"))) == 6
+
+    for track in project_fixture.selections():
+        path = project.media.paths.composite(
+            track.video_id, track.track_id, track.reference_frame, selection_id=track.selection_id
+        )
+
+        for diagnostic in path.parent.glob("*.png"):
+            if diagnostic.name not in {"composite.png", "enhanced_composite.png"}:
+                diagnostic.unlink()
+
+    states = len(project_fixture.predictor.states)
+
+    project.options.diagnostics = False
+
+    project_fixture.pipeline().run("enhanced_composites")
+
+    assert len(project_fixture.predictor.states) == states

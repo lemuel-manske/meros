@@ -26,7 +26,7 @@ def masked_crops_complete(project: Project = default_project) -> bool:
 
                 path = project.media.paths.masked_crop(video.video_id, track_id, int(frame_idx))
 
-                if not project.media.valid_image(path, 4, shape):
+                if not project.media.valid_image(path, 4, shape, mask_area=observation.mask_area):
                     return False
 
     return True
