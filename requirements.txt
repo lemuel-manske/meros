@@ -1,2 +1,0 @@
--e .[data,dev]
-# Segmentation additionally needs Torch and the pinned external/sam2 checkout.

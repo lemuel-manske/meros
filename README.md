@@ -24,7 +24,7 @@ make install-sam2
 
 Obtain the official SAM2.1 Hiera Large checkpoint using the pinned submodule's documented checkpoint download instructions. Place it at `external/sam2/checkpoints/sam2.1_hiera_large.pt`. The current wrapper uses CUDA. Manual seed selection requires a desktop OpenCV session; the default uses saved human-provided seed boxes.
 
-The historical full environment freeze is retained at `experiments/002/requirements-baseline.txt`; it is evidence, not the fresh-install recipe. New run manifests record actual library versions and source/image hashes. This PR does not claim the complete historical GPU environment was recreated.
+`pyproject.toml` declares the runtime dependencies and optional development/data groups. New run manifests record actual library versions and source/image hashes. The full historical GPU environment has not been recreated.
 
 ## Run experiment 002
 
