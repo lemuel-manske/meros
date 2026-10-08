@@ -24,7 +24,7 @@ make install-sam2
 
 Obtain the official SAM2.1 Hiera Large checkpoint using the pinned submodule's documented checkpoint download instructions. Place it at `external/sam2/checkpoints/sam2.1_hiera_large.pt`. The current wrapper uses CUDA. Manual seed selection requires a desktop OpenCV session; the default uses saved human-provided seed boxes.
 
-`pyproject.toml` declares the runtime dependencies and optional development/data groups. New run manifests record actual library versions and source/image hashes. The full historical GPU environment has not been recreated.
+`pyproject.toml` declares the runtime dependencies and optional development/data groups. Run provenance records the source commit. The full historical GPU environment has not been recreated.
 
 ## Run experiment 002
 
@@ -33,6 +33,8 @@ Build the required representations and evaluate using the current organization:
 ```sh
 make run
 ```
+
+The shared runner loads `meros.experiments.experiment_<id>`. Use `EXPERIMENT=003` for a future `experiment_003.py`; each module provides `main(argv)`. `ARGS` are forwarded to the selected experiment.
 
 To evaluate representations already prepared in the current layout:
 

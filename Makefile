@@ -12,6 +12,8 @@ EXTRAS ?= data,dev
 
 # Optional arguments and artifact locations.
 
+EXPERIMENT ?= 002
+
 ARGS ?=
 
 RUN_DIR ?=
@@ -36,7 +38,7 @@ help:
 	@printf '%s\n' \
 		'Setup:       init, install, install-sam2' \
 		'Data:        data-pull, data-save, data-push, results-save RUN_DIR=...' \
-		'Experiment:  run, evaluate, diagnostics (optional ARGS="...")' \
+		'Experiment:  run, evaluate, diagnostics (EXPERIMENT=002, optional ARGS="...")' \
 		'Checks:      test, lint, format, format-check, cli-check, check' \
 		'Preview:     serve-media (optional PORT=... BIND=...)'
 
@@ -81,18 +83,18 @@ results-save:
 	$(PYTHON) -m dvc add "$(RUN_DIR)"
 
 
-# Experiment 002.
+# Experiments.
 
 run:
-	$(PYTHON) -m meros.experiments.experiment_002 $(ARGS)
+	$(PYTHON) -m meros.experiments $(EXPERIMENT) $(ARGS)
 
 
 evaluate:
-	$(PYTHON) -m meros.experiments.experiment_002 --evaluate-only $(ARGS)
+	$(PYTHON) -m meros.experiments $(EXPERIMENT) --evaluate-only $(ARGS)
 
 
 diagnostics:
-	$(PYTHON) -m meros.experiments.experiment_002 --diagnostics $(ARGS)
+	$(PYTHON) -m meros.experiments $(EXPERIMENT) --diagnostics $(ARGS)
 
 
 # Tests, code style, and CPU CLI checks.
@@ -114,7 +116,9 @@ format-check:
 
 
 cli-check:
-	$(PYTHON) -m meros.experiments.experiment_002 --help
+	$(PYTHON) -m meros.experiments --help
+
+	$(PYTHON) -m meros.experiments $(EXPERIMENT) --help
 
 
 check: test lint format-check cli-check
