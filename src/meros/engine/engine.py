@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from functools import lru_cache
 
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -220,12 +221,21 @@ def file_fingerprint(
     """
     path = Path(path)
     stat = path.stat()
+    return content_hash(str(path), stat.st_size, stat.st_mtime_ns)
 
-    return fingerprint(
-        str(path),
-        stat.st_size,
-        stat.st_mtime_ns,
-    )
+
+@lru_cache(maxsize=128)
+def content_hash(path: str, size: int, mtime: int) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open('rb') as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def implementation_fingerprint() -> str:
+    root = Path(__file__).resolve().parents[1]
+    return fingerprint([(str(p.relative_to(root)), file_fingerprint(p)) for p in sorted(root.rglob('*.py'))])
 
 
 def videos_fingerprint() -> str:
@@ -242,6 +252,8 @@ def videos_fingerprint() -> str:
         rows.append(
             (
                 video.video_id,
+                video.mirrored,
+                video.frame_count,
                 file_fingerprint(path),
             )
         )
@@ -322,14 +334,17 @@ def individuals_fingerprint() -> str:
 
 def frames_stage_fingerprint() -> str:
     return fingerprint(
-        "extract_frames:v2",
+        "extract_frames:v3",
+        implementation_fingerprint(),
         videos_fingerprint(),
     )
 
 
 def tracks_stage_fingerprint() -> str:
     return fingerprint(
-        "extract_tracks:v2",
+        "extract_tracks:v3",
+        metadata.read_bboxes(),
+        extract_tracks.AUTO,
         frames_stage_fingerprint(),
     )
 
@@ -340,6 +355,7 @@ def masked_crops_stage_fingerprint() -> str:
         tracks_stage_fingerprint(),
         tracks_fingerprint(),
         "sam2.1_hiera_large",
+        file_fingerprint("external/sam2/checkpoints/sam2.1_hiera_large.pt"),
     )
 
 
@@ -398,8 +414,8 @@ def enhanced_composites_stage_fingerprint() -> str:
         composites_stage_fingerprint(),
         {
             "method": "clahe",
-            "clip_limit": 1.5,
-            "strength": 0.5,
+            "clip_limit": enhance_composites.CLIP_LIMIT,
+            "strength": enhance_composites.STRENGTH,
             "tile_grid": [8, 8],
         },
     )
