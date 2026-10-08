@@ -8,12 +8,14 @@ import pytest
 from meros.experiments import experiment_002 as exp
 from meros.experiments.__main__ import main as run_experiment
 from meros.processing.match_images import match_images
-from meros.project import default_project
+from meros.project import Project
 from tests.support import ProjectFixture
 
 
 def test_current_manifest_has_21_pairs_without_filename_collisions():
-    individuals = default_project.metadata.read_individuals()
+    individuals = Project.open(
+        manifest=Path("experiments/002/selections.json")
+    ).metadata.read_individuals()
 
     pairs = list(exp.iter_pairs(individuals))
 

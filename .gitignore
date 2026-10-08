@@ -4,7 +4,7 @@
 .pipeline
 __pycache__
 
-# media belongs to dvc; git tracks metadata and dvc pointer files.
+# Media belongs to DVC; Git tracks source metadata and DVC pointer files.
 /data/*
 
 # ignore * except for metadata and dvc pointer files
@@ -18,3 +18,7 @@ __pycache__
 .ruff_cache/
 /build/
 /dist/
+
+# Disposable derived metadata is rebuilt by the pipeline.
+/data/metadata/tracks/
+/data/metadata/alignment/

@@ -62,6 +62,8 @@ Each successful run contains `metrics.csv`, `run.json`, and the exact 21 PNG rep
 
 Aligned crops are reconstructed from transforms in memory during composite construction. They do not need to be saved. Original videos remain the source data. Cache fingerprints include source contents, mirroring, seeds, checkpoint contents, implementation identity, and processing settings; changing code conservatively invalidates preparation.
 
+Selection manifests live with their experiments and are chosen explicitly when constructing a project. Generated tracking/alignment metadata is a disposable cache excluded from Git; human annotations and video/seed manifests remain versioned.
+
 Raw videos and generated media are stored in the DVC-managed `data/media` tree. After producing new artifacts, explicitly version them with `make data-save` and `make data-push`. Run evidence under `results/` is excluded from Git; preserve it with `make results-save RUN_DIR=results/002/<run-id>` and `make data-push`, then commit the pointer. Pipeline fingerprints under `data/.pipeline` are local disposable state.
 
 ## Code and metadata
