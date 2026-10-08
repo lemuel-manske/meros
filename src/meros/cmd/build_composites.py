@@ -4,6 +4,19 @@ from src.meros import media, metadata
 from src.meros.domain import IndividualTrack
 
 
+def composites_complete() -> bool:
+    return all(
+        media.composite_exists(
+            track.video_id,
+            track.track_id,
+            track.reference_frame,
+        )
+        for individual
+        in metadata.read_individuals()
+        for track in individual.tracks
+    )
+
+
 def run() -> None:
     for individual in metadata.read_individuals():
         for track in individual.tracks:

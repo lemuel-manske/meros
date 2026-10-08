@@ -28,6 +28,39 @@ class ImageFeatures:
     descriptors: np.ndarray | None
 
 
+def alignments_complete() -> bool:
+    for individual in metadata.read_individuals():
+        for track in individual.tracks:
+            try:
+                alignment = metadata.read_alignment(track.id)
+            except FileNotFoundError:
+                return False
+
+            if (
+                alignment.start_frame
+                != track.start_frame
+                or alignment.end_frame
+                != track.end_frame
+                or alignment.reference_frame
+                != track.reference_frame
+            ):
+                return False
+
+            for row in alignment.frames:
+                if (
+                    row.status == "candidate"
+                    and row.frame_idx is not None
+                    and not media.aligned_crop_exists(
+                        track.video_id,
+                        track.track_id,
+                        row.frame_idx,
+                    )
+                ):
+                    return False
+
+    return True
+
+
 def run() -> None:
     for individual in metadata.read_individuals():
         for track in individual.tracks:

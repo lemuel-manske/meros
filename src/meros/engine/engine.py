@@ -7,7 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.meros import media, metadata
+from src.meros import metadata
 
 from src.meros.cmd import (
     align_masked_crops,
@@ -19,12 +19,13 @@ from src.meros.cmd import (
     match_composites,
 )
 
+from src.meros.cmd.align_masked_crops import alignments_complete
+from src.meros.cmd.build_composites import composites_complete
+from src.meros.cmd.enhance_composites import enhanced_composites_complete
+from src.meros.cmd.extract_frames import frames_complete
+from src.meros.cmd.extract_masked_crops import masked_crops_complete
 from src.meros.cmd.extract_tracks import tracks_complete
 from src.meros.cmd.match_composites import matches_complete
-
-
-# TODO:
-# - move `_complete` functions to their respective command modules
 
 
 _STATE_FOLDER = Path("data/.pipeline")
@@ -317,103 +318,6 @@ def individuals_fingerprint() -> str:
         )
 
     return fingerprint(rows)
-
-
-def frames_complete() -> bool:
-    return all(
-        media.has_frames(video.video_id)
-        for video in metadata.read_videos()
-    )
-
-
-def masked_crops_complete() -> bool:
-    for video in metadata.read_videos():
-        try:
-            track_metadata = metadata.read_track(
-                video.video_id
-            )
-        except FileNotFoundError:
-            return False
-
-        for (
-            track_id,
-            track,
-        ) in track_metadata.tracks.items():
-            for frame_idx in track.frames:
-                if not media.masked_crop_exists(
-                    video.video_id,
-                    track_id,
-                    int(frame_idx),
-                ):
-                    return False
-
-    return True
-
-
-def alignments_complete() -> bool:
-    for individual in metadata.read_individuals():
-        for track in individual.tracks:
-            try:
-                alignment = metadata.read_alignment(track.id)
-            except FileNotFoundError:
-                return False
-
-            if (
-                alignment.start_frame
-                != track.start_frame
-                or alignment.end_frame
-                != track.end_frame
-                or alignment.reference_frame
-                != track.reference_frame
-            ):
-                return False
-
-            for row in alignment.frames:
-                if (
-                    row.status == "candidate"
-                    and row.frame_idx is not None
-                    and not media.aligned_crop_exists(
-                        track.video_id,
-                        track.track_id,
-                        row.frame_idx,
-                    )
-                ):
-                    return False
-
-    return True
-
-
-def composites_complete() -> bool:
-    return all(
-        media.composite_exists(
-            track.video_id,
-            track.track_id,
-            track.reference_frame,
-        )
-        for individual
-        in metadata.read_individuals()
-        for track in individual.tracks
-    )
-
-
-def enhanced_composites_complete() -> bool:
-    return all(
-        (
-            media.composite_enhanced_exists(
-                track.video_id,
-                track.track_id,
-                track.reference_frame,
-            )
-            and media.composite_comparison_exists(
-                track.video_id,
-                track.track_id,
-                track.reference_frame,
-            )
-        )
-        for individual
-        in metadata.read_individuals()
-        for track in individual.tracks
-    )
 
 
 def frames_stage_fingerprint() -> str:

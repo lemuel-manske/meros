@@ -6,6 +6,30 @@ from src.meros import media, metadata
 from src.meros.external import build_sam2_predictor, SAM2Predictor
 
 
+def masked_crops_complete() -> bool:
+    for video in metadata.read_videos():
+        try:
+            track_metadata = metadata.read_track(
+                video.video_id
+            )
+        except FileNotFoundError:
+            return False
+
+        for (
+            track_id,
+            track,
+        ) in track_metadata.tracks.items():
+            for frame_idx in track.frames:
+                if not media.masked_crop_exists(
+                    video.video_id,
+                    track_id,
+                    int(frame_idx),
+                ):
+                    return False
+
+    return True
+
+
 def run() -> None:
     predictor = build_sam2_predictor()
 

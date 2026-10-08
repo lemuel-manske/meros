@@ -10,6 +10,26 @@ CLIP_LIMIT = 1.5
 STRENGTH = 0.5
 
 
+def enhanced_composites_complete() -> bool:
+    return all(
+        (
+            media.composite_enhanced_exists(
+                track.video_id,
+                track.track_id,
+                track.reference_frame,
+            )
+            and media.composite_comparison_exists(
+                track.video_id,
+                track.track_id,
+                track.reference_frame,
+            )
+        )
+        for individual
+        in metadata.read_individuals()
+        for track in individual.tracks
+    )
+
+
 def run() -> None:
     for individual in metadata.read_individuals():
         for track in individual.tracks:

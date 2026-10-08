@@ -3,6 +3,13 @@ import cv2 as cv
 from src.meros import media, metadata
 
 
+def frames_complete() -> bool:
+    return all(
+        media.has_frames(video.video_id)
+        for video in metadata.read_videos()
+    )
+
+
 def run() -> None:
     for video in metadata.read_videos():
         capture = cv.VideoCapture(video.path)
