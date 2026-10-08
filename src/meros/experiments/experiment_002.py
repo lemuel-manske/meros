@@ -65,7 +65,7 @@ def git_revision():
     return result.stdout.strip() if result.returncode == 0 else None
 
 
-def evaluate(individuals, output: Path, *, cross_video_only=False):
+def evaluate(individuals, output: Path, *, cross_video_only=False, preparation_fingerprint=None):
     validate_individuals(individuals)
     if output.exists():
         raise FileExistsError(f"Refusing to overwrite run: {output}")
@@ -157,6 +157,8 @@ def evaluate(individuals, output: Path, *, cross_video_only=False):
             "cross_video_only": cross_video_only,
             "rows": len(rows),
             "image_sha256": image_hashes,
+            "preparation_fingerprint": preparation_fingerprint,
+            "preparation_parameters_verified": preparation_fingerprint is not None,
             "configuration": {
                 "matching": constants(matching),
                 "alignment": constants(align_masked_crops),
@@ -194,14 +196,21 @@ def main():
     metadata.individuals_path = args.manifest
     individuals = metadata.read_individuals()
     validate_individuals(individuals)
+    preparation_fingerprint = None
     if not args.evaluate_only:
         from meros.pipeline import pipeline
 
         pipeline.run("enhanced_composites", force=args.force)
+        preparation_fingerprint = pipeline.stages["enhanced_composites"].fingerprint()
     output = args.output or Path("results/002") / (
         datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
     )
-    rows = evaluate(individuals, output, cross_video_only=args.cross_video_only)
+    rows = evaluate(
+        individuals,
+        output,
+        cross_video_only=args.cross_video_only,
+        preparation_fingerprint=preparation_fingerprint,
+    )
     print(f"Wrote {len(rows)} comparisons to {output}")
 
 
