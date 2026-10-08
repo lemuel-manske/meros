@@ -313,14 +313,12 @@ class MetadataPaths:
         track_id: str,
         start_frame: int,
         end_frame: int,
-        reference_frame: int | None = None,
+        reference_frame: int,
     ) -> Path:
-        suffix = "" if reference_frame is None else f"_ref_{reference_frame}"
-
         return (
             _ALIGNMENT_METADATA_FOLDER
             / video_id
-            / f"{track_id}_{start_frame}_{end_frame}{suffix}.json"
+            / f"{track_id}_{start_frame}_{end_frame}_ref_{reference_frame}.json"
         )
 
     def videos(self) -> Path:
@@ -409,7 +407,7 @@ class LocalFsMetadataStore(MetadataStore):
         return TrackMetadata(
             video_id=metadata["video_id"],
             tracks=tracks,
-            processed_frame_count=metadata.get("processed_frame_count"),
+            processed_frame_count=metadata["processed_frame_count"],
         )
 
     def write_track(self, video_id: str, metadata: TrackMetadata) -> None:
@@ -445,18 +443,11 @@ class LocalFsMetadataStore(MetadataStore):
 
         path = self.paths.alignment(video_id, track_id, start_frame, end_frame, selected_reference)
 
-        if not path.exists():
-            path = self.paths.alignment(video_id, track_id, start_frame, end_frame)
-
         with path.open("r", encoding="utf-8") as f:
             metadata = json.load(f)
 
         if metadata["reference_frame"] != selected_reference:
             raise ValueError("Alignment reference differs from selection")
-
-        for row in metadata["frames"]:
-            if row["status"] == "candidate":
-                row["status"] = "accepted"
 
         return AlignmentRunMetadata(
             video_id=metadata["video_id"],

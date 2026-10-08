@@ -5,7 +5,7 @@ Scope: tracked Python, metadata, documentation, setup, and DVC pointers. No prod
 
 ## Recommendation
 
-Keep the processing methods that support 002. First preserve its evidence and repair reproducibility, then remove unused interfaces and migrate names and storage. The largest problem is that fish identity, a video track, and a selected interval are conflated. This already causes output collisions; it is more consequential than folder spelling.
+Keep the processing methods that support 002. First preserve its evidence and repair reproducibility, then remove unused interfaces and establish the new names and storage layout. The largest problem is that fish identity, a video track, and a selected interval are conflated. This already causes output collisions; it is more consequential than folder spelling.
 
 002's dependency path is frames → tracks → masked crops → alignments → composites → enhanced composites, followed by comparisons of reference/composite/enhanced representations. `match_composites()` is essential even though the separate `matches` pipeline stage is not invoked by 002.
 
@@ -55,7 +55,7 @@ Validate expected frame IDs/counts, nonempty selected data, tracking records, co
 
 No current processing code reads the annotation CSVs. `MetadataPaths.annotations()` expects a track subdirectory that does not match their actual video-level locations. Six rows in `101_11/metadata.csv` have four fields under a five-field header. Annotation track IDs also differ from the current track inventory.
 
-Archive these as original human annotations, with their originating tracking revision. Do not guess missing track IDs or decrement all IDs automatically. Validate and explicitly migrate them if retained in active metadata. Viewpoint and quality information remains relevant to interpreting 002.
+Archive these as original human annotations, with their originating tracking revision. Do not guess missing track IDs or decrement all IDs automatically. Validate their labels before using them in active evaluation. Viewpoint and quality information remains relevant to interpreting 002.
 
 ### 8. Medium: setup does not describe a reproducible experiment
 
@@ -93,7 +93,7 @@ Do not add another framework or second pipeline scheduler during cleanup. The cu
 | `reference_frame` | Frame defining selection alignment coordinates | `ref_frame_idx` variants. |
 | `frame_idx` | Zero-based frame index | `frame_num` variants; normalize JSON keys at the storage boundary. |
 | `reference`, `composite`, `enhanced_composite` | Three compared representations | `original`, `enhanced`, `median` filename terminology. |
-| `accepted` | Alignment satisfying automatic geometry checks | Current `candidate`; migrate stored statuses explicitly. |
+| `accepted` | Alignment satisfying automatic geometry checks | Use `accepted` in the current schema. |
 | `match_images` | Pairwise feature matching | Current `match_composites` also processes reference crops. |
 | `select_track_seeds` | Choose initial prompts for SAM2 | `select_subjects`; automatic mode uses human-defined boxes, not an automatic detector. |
 
@@ -107,15 +107,15 @@ Keep `data/raw/videos/` immutable; keep authoritative inventory, track seeds, id
 
 Separate identity labels from the experiment selection manifest: changing a label should not require recalculating image alignment. Keep the four-video subset in the 002 manifest, not as the only inventory. Store coordinate conventions, frame inclusivity, mirrored-frame conventions, and BGRA/alpha handling in a short schema document.
 
-These are migration targets, not instructions to move the existing DVC directory blindly. Preserve old pointers and build a reversible old-path → new-path manifest with checksums before publishing a new DVC snapshot. Raw media and reproducibility outputs require durable storage; scratch caches and optional previews have different retention rules.
+Use the new schema directly. Earlier layouts and pointers are available in Git history. Raw media and reproducibility outputs require durable storage; scratch caches and optional previews have different retention rules.
 
-## Migration order and acceptance criteria
+## Refactoring order and acceptance criteria
 
 1. **Capture baseline evidence.** Record source commit, DVC hashes, checkpoint hash, external revision, versions, all selections/configuration, and reported historical results. Verify baseline media is recoverable. An immutable tag/snapshot can be created as part of implementation; none was created in this review.
 2. **Repair reproduction separately.** Resolve missing video counts, unsafe tracking reruns, incomplete output checks, and path collisions. Compare fresh results with preserved artifacts; any numerical difference must be explained. A defect fix that changes images is a new run, not a silent replacement of historical 002.
 3. **Persist experiment output.** Export structured metrics and provenance for all representations. Under the current manifest and policies, expect 21 pairs × 3 representations = 63 rows, including the separately labeled same-video positive. This row count is not a performance claim.
 4. **Remove proven unused code.** Delete the plain-crop exporter and associated interfaces; consolidate pair enumeration; retire unused annotation interfaces while archiving source information. Check references and smoke-test the experiment path.
-5. **Migrate names and directories.** Introduce stable selection IDs and an explicit schema version; validate every reference and checksum. Read old data through a migration tool rather than maintaining two writable schemas indefinitely.
+5. **Establish the current names and directories.** Use stable selection IDs and one schema. Rebuild derived artifacts in the current layout; do not maintain readers or tools for earlier layouts.
 6. **Document one supported workflow.** Provide install/data/model setup and one command for 002, including how to evaluate existing artifacts without rebuilding SAM2 outputs. Add focused regression checks for reruns, selection collisions, manifest validity, cache invalidation, alpha-aware composites, and result completeness.
 
 Completion means historical evidence remains recoverable, current 002 executes from a clean environment with available media/model, no selected inputs are ambiguous, pair results cannot overwrite one another, and cleanup preserves expected representation outputs and match statistics within explicitly recorded reproducibility limits.
