@@ -27,6 +27,7 @@ class SAM2Predictor:
         """
         Initialize the inference state for video propagation.
         """
+
         return self.sam2_predictor.init_state(
             video_path=video_path,
             offload_video_to_cpu=_OFFLOAD_VIDEO_TO_CPU,
@@ -37,6 +38,7 @@ class SAM2Predictor:
         """
         Propagate the masks in the video using the initialized state.
         """
+
         return self.sam2_predictor.propagate_in_video(state)
 
     def add_new_points_or_box(
@@ -49,6 +51,7 @@ class SAM2Predictor:
         """
         Add new points or a bounding box to the inference state for a specific object.
         """
+
         self.sam2_predictor.add_new_points_or_box(
             inference_state=inference_state,
             frame_idx=frame_idx,
@@ -61,6 +64,7 @@ def build_sam2_predictor() -> SAM2Predictor:
     """
     Build a SAM2 predictor for video propagation.
     """
+
     sam2_predictor = build_sam2_video_predictor(
         _SAM2_MODEL_CONFIG,
         _SAM2_CHECKPOINT,

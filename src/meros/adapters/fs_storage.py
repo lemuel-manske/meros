@@ -1,10 +1,14 @@
 import cv2 as cv
+
 import json
 import os
 import tempfile
+
 import numpy as np
+
 from dataclasses import asdict, dataclass
 from pathlib import Path
+
 from meros.domain import (
     AlignmentMetadata,
     AlignmentRunMetadata,
@@ -86,13 +90,16 @@ class LocalFsMediaStore(MediaStore):
     @staticmethod
     def _read_image(path: Path, flags: int = cv.IMREAD_COLOR) -> np.ndarray:
         image = cv.imread(str(path), flags)
+
         if image is None:
             raise FileNotFoundError(f"Could not read image: {path}")
+
         return image
 
     @staticmethod
     def _write_image(path: Path, image: np.ndarray) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
+
         if not cv.imwrite(str(path), image):
             raise RuntimeError(f"Could not write image: {path}")
 
@@ -147,7 +154,9 @@ class LocalFsMediaStore(MediaStore):
 
     def read_frames(self, video_id: str) -> list[FrameMedia]:
         parent = _FRAMES_MEDIA_FOLDER / video_id
+
         paths = sorted(parent.glob("*.jpg"), key=lambda path: int(path.stem))
+
         return [FrameMedia(frame_idx=int(path.stem), data=self._read_image(path)) for path in paths]
 
     def write_frame(self, video_id: str, frame_idx: int, frame: np.ndarray) -> None:
@@ -169,6 +178,7 @@ class LocalFsMediaStore(MediaStore):
         self.paths.aligned_crop(video_id, track_id, frame_idx, selection_id=selection_id).unlink(
             missing_ok=True
         )
+
         self.paths.aligned_overlay_crop(
             video_id, track_id, frame_idx, selection_id=selection_id
         ).unlink(missing_ok=True)
@@ -306,6 +316,7 @@ class MetadataPaths:
         reference_frame: int | None = None,
     ) -> Path:
         suffix = "" if reference_frame is None else f"_ref_{reference_frame}"
+
         return (
             _ALIGNMENT_METADATA_FOLDER
             / video_id
@@ -324,11 +335,15 @@ class MetadataPaths:
 
 def write_json_atomic(path: Path, payload: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+
     fd, temporary = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
             json.dump(payload, stream, indent=2)
+
             stream.write("\n")
+
         os.replace(temporary, path)
     finally:
         Path(temporary).unlink(missing_ok=True)
@@ -337,28 +352,34 @@ def write_json_atomic(path: Path, payload: object) -> None:
 class LocalFsMetadataStore(MetadataStore):
     def __init__(self) -> None:
         self.paths = MetadataPaths()
+
         self.individuals_path: Path | None = None
 
     def read_video(self, video_id: str) -> Video:
         videos = self.read_videos()
+
         for video in videos:
             if video.video_id == video_id:
                 return video
+
         raise ValueError(f"Video not found: {video_id}")
 
     def read_bboxes(self) -> dict[str, BBox]:
         with self.paths.bboxes().open("r", encoding="utf-8") as f:
             metadata = json.load(f)
+
         return metadata
 
     def read_videos(self) -> list[Video]:
         with self.paths.videos().open("r", encoding="utf-8") as f:
             metadata = json.load(f)
+
         return [Video(**video_metadata) for video_metadata in metadata]
 
     def read_individuals(self) -> list[Individual]:
         with (self.individuals_path or self.paths.individuals()).open("r", encoding="utf-8") as f:
             metadata = json.load(f)
+
         return [
             Individual(
                 individual_id=item["individual_id"],
@@ -369,8 +390,10 @@ class LocalFsMetadataStore(MetadataStore):
 
     def read_track(self, video_id: str) -> TrackMetadata:
         path = self.paths.track(video_id)
+
         with path.open("r", encoding="utf-8") as f:
             metadata = json.load(f)
+
         tracks = {
             track_id: Track(
                 initial_frame=track["initial_frame"],
@@ -382,6 +405,7 @@ class LocalFsMetadataStore(MetadataStore):
             )
             for track_id, track in metadata["tracks"].items()
         }
+
         return TrackMetadata(
             video_id=metadata["video_id"],
             tracks=tracks,
@@ -390,15 +414,20 @@ class LocalFsMetadataStore(MetadataStore):
 
     def write_track(self, video_id: str, metadata: TrackMetadata) -> None:
         path = self.paths.track(video_id)
+
         path.parent.mkdir(parents=True, exist_ok=True)
+
         write_json_atomic(path, asdict(metadata))
 
     def write_alignment(
         self, _id: TrackSelectionKey, reference_frame: int, rows: list[AlignmentMetadata]
     ) -> None:
         video_id, track_id, start_frame, end_frame, selected_reference = _id
+
         path = self.paths.alignment(video_id, track_id, start_frame, end_frame, selected_reference)
+
         path.parent.mkdir(parents=True, exist_ok=True)
+
         payload = {
             "video_id": video_id,
             "track_id": track_id,
@@ -408,20 +437,27 @@ class LocalFsMetadataStore(MetadataStore):
             "method": "SIFT mutual ratio matches, affine RANSAC",
             "frames": [asdict(row) for row in rows],
         }
+
         write_json_atomic(path, payload)
 
     def read_alignment(self, _id: TrackSelectionKey) -> AlignmentRunMetadata:
         video_id, track_id, start_frame, end_frame, selected_reference = _id
+
         path = self.paths.alignment(video_id, track_id, start_frame, end_frame, selected_reference)
+
         if not path.exists():
             path = self.paths.alignment(video_id, track_id, start_frame, end_frame)
+
         with path.open("r", encoding="utf-8") as f:
             metadata = json.load(f)
+
         if metadata["reference_frame"] != selected_reference:
             raise ValueError("Alignment reference differs from selection")
+
         for row in metadata["frames"]:
             if row["status"] == "candidate":
                 row["status"] = "accepted"
+
         return AlignmentRunMetadata(
             video_id=metadata["video_id"],
             track_id=metadata["track_id"],

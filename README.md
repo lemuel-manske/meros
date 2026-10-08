@@ -83,6 +83,8 @@ The broader research objectives remain in `SPEC.md`. See `docs/engineering-revie
 make check
 ```
 
-`make test`, `make lint`, `make format-check`, and `make cli-check` can also run separately. `make format` applies the formatting rules. GitHub Actions uses `make install EXTRAS=dev` followed by the same `make check` target.
+`make test`, `make lint`, `make format-check`, and `make cli-check` can also run separately. `make format` applies the formatting rules.
+
+Code follows the spacing used on `main`: separate import groups, setup, calculations, control-flow blocks, and returns with blank lines. Keep Makefile target groups and workflow steps visually separated too. GitHub Actions uses `make install EXTRAS=dev` followed by the same `make check` target.
 
 Tests cover tracking reruns, incomplete caches, selection isolation, optional diagnostics, transparency-aware aggregation, and structured evaluation. Real media/GPU reproduction must be performed separately; synthetic checks do not validate biological identification performance.

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import cv2 as cv
 import numpy as np
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -54,6 +55,7 @@ def build_masked_crop(
         raise ValueError("Mask and frame dimensions differ.")
 
     mask = mask.astype(bool)
+
     ys, xs = np.where(mask)
 
     if len(xs) == 0:
@@ -61,6 +63,7 @@ def build_masked_crop(
 
     # Slice endpoints are exclusive; retain the final row and column.
     x1, x2 = int(xs.min()), int(xs.max()) + 1
+
     y1, y2 = int(ys.min()), int(ys.max()) + 1
 
     crop_mask = mask[y1:y2, x1:x2]
@@ -71,6 +74,7 @@ def build_masked_crop(
     )
 
     crop[~crop_mask] = 0
+
     crop[:, :, 3] = crop_mask.astype(np.uint8) * 255
 
     return crop
@@ -81,6 +85,7 @@ def extract_masked_crops(
     predictor: SAM2Predictor,
 ) -> int:
     track_metadata = metadata.read_track(video_id)
+
     tracks = track_metadata.tracks
 
     if not tracks:
@@ -105,6 +110,7 @@ def extract_masked_crops(
 
         for obj_id, logits in zip(obj_ids, mask_logits):
             track_id = str(int(obj_id))
+
             track = tracks[track_id]
 
             # Only export observations belonging to the saved track.
