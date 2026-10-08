@@ -3,6 +3,7 @@
 import argparse
 import importlib
 import re
+import sys
 
 from typing import Protocol, cast
 
@@ -16,7 +17,11 @@ def main(argv: list[str] | None = None) -> None:
 
     parser.add_argument("experiment", help="Experiment identifier, for example 002 or pose")
 
-    args, remaining = parser.parse_known_args(argv)
+    arguments = sys.argv[1:] if argv is None else argv
+
+    args = parser.parse_args(arguments[:1])
+
+    remaining = arguments[1:]
 
     if not re.fullmatch(r"[A-Za-z0-9_]+", args.experiment):
         parser.error("Use letters, digits, or underscores in the experiment identifier")

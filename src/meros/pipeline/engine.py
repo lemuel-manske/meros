@@ -8,13 +8,14 @@ import numpy as np
 import scipy
 
 from importlib.metadata import version, PackageNotFoundError
-from functools import lru_cache
+from functools import lru_cache, partial
 
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from meros import metadata
+from meros.project import Project, default_project
+from meros.domain.prediction import VideoPredictor
 
 from meros.processing import (
     align_masked_crops,
@@ -54,8 +55,15 @@ class Pipeline:
     def __init__(
         self,
         stages: list[Stage],
+        *,
+        state_folder: Path = _STATE_FOLDER,
     ) -> None:
+        self.state_folder = state_folder
+
         self.stages = {stage.name: stage for stage in stages}
+
+        if len(self.stages) != len(stages):
+            raise ValueError("Duplicate pipeline stage names")
 
         self._validate()
 
@@ -64,6 +72,29 @@ class Pipeline:
             for dependency in stage.depends_on:
                 if dependency not in self.stages:
                     raise ValueError(f"{stage.name}: unknown dependency {dependency!r}.")
+
+        visited: set[str] = set()
+
+        active: set[str] = set()
+
+        def visit(name: str) -> None:
+            if name in active:
+                raise ValueError(f"Cyclic pipeline dependency: {name!r}")
+
+            if name in visited:
+                return
+
+            active.add(name)
+
+            for dependency in self.stages[name].depends_on:
+                visit(dependency)
+
+            active.remove(name)
+
+            visited.add(name)
+
+        for name in self.stages:
+            visit(name)
 
     def run(
         self,
@@ -74,6 +105,9 @@ class Pipeline:
         if target not in self.stages:
             raise ValueError(f"Unknown pipeline stage: {target!r}.")
 
+        self._run_targets((target,), force=force)
+
+    def _run_targets(self, targets: tuple[str, ...], *, force: bool) -> None:
         visited: set[str] = set()
 
         def execute(name: str) -> None:
@@ -108,18 +142,15 @@ class Pipeline:
 
             visited.add(name)
 
-        execute(target)
+        for target in targets:
+            execute(target)
 
     def run_all(
         self,
         *,
         force: bool = False,
     ) -> None:
-        for name in self.stages:
-            self.run(
-                name,
-                force=force,
-            )
+        self._run_targets(tuple(self.stages), force=force)
 
     def _is_current(
         self,
@@ -141,7 +172,7 @@ class Pipeline:
         self,
         stage_name: str,
     ) -> Path:
-        return _STATE_FOLDER / f"{stage_name}.json"
+        return self.state_folder / f"{stage_name}.json"
 
     def _read_fingerprint(
         self,
@@ -152,13 +183,17 @@ class Pipeline:
         if not path.exists():
             return None
 
-        with path.open(
-            "r",
-            encoding="utf-8",
-        ) as f:
-            state = json.load(f)
+        try:
+            state = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
 
-        return state.get("fingerprint")
+        if not isinstance(state, dict):
+            return None
+
+        saved = state.get("fingerprint")
+
+        return saved if isinstance(saved, str) else None
 
     def _save_fingerprint(
         self,
@@ -248,7 +283,7 @@ def implementation_fingerprint() -> str:
     )
 
 
-def videos_fingerprint() -> str:
+def videos_fingerprint(project: Project = default_project) -> str:
     """
     Raw video identity.
 
@@ -257,7 +292,7 @@ def videos_fingerprint() -> str:
 
     rows = []
 
-    for video in metadata.read_videos():
+    for video in project.metadata.read_videos():
         path = Path(video.path)
 
         rows.append(
@@ -272,12 +307,12 @@ def videos_fingerprint() -> str:
     return fingerprint(rows)
 
 
-def tracks_fingerprint() -> str:
+def tracks_fingerprint(project: Project = default_project) -> str:
     rows = []
 
-    for video in metadata.read_videos():
+    for video in project.metadata.read_videos():
         try:
-            track_metadata = metadata.read_track(video.video_id)
+            track_metadata = project.metadata.read_track(video.video_id)
         except FileNotFoundError:
             rows.append((video.video_id, None))
 
@@ -314,10 +349,10 @@ def tracks_fingerprint() -> str:
     return fingerprint(rows)
 
 
-def individuals_fingerprint() -> str:
+def individuals_fingerprint(project: Project = default_project) -> str:
     rows = []
 
-    for individual in metadata.read_individuals():
+    for individual in project.metadata.read_individuals():
         rows.append(
             (
                 individual.individual_id,
@@ -337,41 +372,41 @@ def individuals_fingerprint() -> str:
     return fingerprint(rows)
 
 
-def frames_stage_fingerprint() -> str:
+def frames_stage_fingerprint(project: Project = default_project) -> str:
     return fingerprint(
         "extract_frames:v3",
         implementation_fingerprint(),
-        videos_fingerprint(),
+        videos_fingerprint(project),
     )
 
 
-def tracks_stage_fingerprint() -> str:
+def tracks_stage_fingerprint(project: Project = default_project) -> str:
     return fingerprint(
         "extract_tracks:v3",
-        metadata.read_bboxes(),
+        project.metadata.read_bboxes(),
         extract_tracks.AUTO,
-        file_fingerprint("external/sam2/checkpoints/sam2.1_hiera_large.pt"),
-        frames_stage_fingerprint(),
+        file_fingerprint(project.checkpoint),
+        frames_stage_fingerprint(project),
     )
 
 
-def masked_crops_stage_fingerprint() -> str:
+def masked_crops_stage_fingerprint(project: Project = default_project) -> str:
     return fingerprint(
         "extract_masked_crops:v2",
-        tracks_stage_fingerprint(),
-        tracks_fingerprint(),
+        tracks_stage_fingerprint(project),
+        tracks_fingerprint(project),
         "sam2.1_hiera_large",
-        file_fingerprint("external/sam2/checkpoints/sam2.1_hiera_large.pt"),
+        file_fingerprint(project.checkpoint),
     )
 
 
-def alignments_stage_fingerprint() -> str:
+def alignments_stage_fingerprint(project: Project = default_project) -> str:
     return fingerprint(
         "align_masked_crops:v2",
         # Important: alignment now depends explicitly
         # on the upstream masked-crop stage.
-        masked_crops_stage_fingerprint(),
-        individuals_fingerprint(),
+        masked_crops_stage_fingerprint(project),
+        individuals_fingerprint(project),
         {
             "sift_features": align_masked_crops.SIFT_FEATURES,
             "ratio": align_masked_crops.MATCH_RATIO,
@@ -385,21 +420,21 @@ def alignments_stage_fingerprint() -> str:
     )
 
 
-def composites_stage_fingerprint() -> str:
+def composites_stage_fingerprint(project: Project = default_project) -> str:
     return fingerprint(
         "build_composites:v2",
-        alignments_stage_fingerprint(),
-        individuals_fingerprint(),
+        alignments_stage_fingerprint(project),
+        individuals_fingerprint(project),
         {
             "method": "median",
         },
     )
 
 
-def enhanced_composites_stage_fingerprint() -> str:
+def enhanced_composites_stage_fingerprint(project: Project = default_project) -> str:
     return fingerprint(
         "enhance_composites:v2",
-        composites_stage_fingerprint(),
+        composites_stage_fingerprint(project),
         {
             "method": "clahe",
             "clip_limit": enhance_composites.CLIP_LIMIT,
@@ -409,48 +444,57 @@ def enhanced_composites_stage_fingerprint() -> str:
     )
 
 
-pipeline = Pipeline(
-    [
+def create_pipeline(
+    project: Project = default_project,
+    *,
+    predictor_factory: Callable[[], VideoPredictor] | None = None,
+) -> Pipeline:
+    """Bind stages to one project and an explicit inference implementation."""
+
+    stages = [
         Stage(
             name="frames",
-            run=extract_frames.run,
-            is_complete=frames_complete,
-            fingerprint=frames_stage_fingerprint,
+            run=partial(extract_frames.run, project=project),
+            is_complete=partial(frames_complete, project=project),
+            fingerprint=partial(frames_stage_fingerprint, project=project),
         ),
         Stage(
             name="tracks",
-            run=extract_tracks.run,
-            is_complete=tracks_complete,
-            fingerprint=tracks_stage_fingerprint,
+            run=partial(extract_tracks.run, project=project, predictor_factory=predictor_factory),
+            is_complete=partial(tracks_complete, project=project),
+            fingerprint=partial(tracks_stage_fingerprint, project=project),
             depends_on=("frames",),
         ),
         Stage(
             name="masked_crops",
-            run=extract_masked_crops.run,
-            is_complete=masked_crops_complete,
-            fingerprint=masked_crops_stage_fingerprint,
+            run=partial(
+                extract_masked_crops.run, project=project, predictor_factory=predictor_factory
+            ),
+            is_complete=partial(masked_crops_complete, project=project),
+            fingerprint=partial(masked_crops_stage_fingerprint, project=project),
             depends_on=("tracks",),
         ),
         Stage(
             name="alignments",
-            run=align_masked_crops.run,
-            is_complete=alignments_complete,
-            fingerprint=alignments_stage_fingerprint,
+            run=partial(align_masked_crops.run, project=project),
+            is_complete=partial(alignments_complete, project=project),
+            fingerprint=partial(alignments_stage_fingerprint, project=project),
             depends_on=("masked_crops",),
         ),
         Stage(
             name="composites",
-            run=build_composites.run,
-            is_complete=composites_complete,
-            fingerprint=composites_stage_fingerprint,
+            run=partial(build_composites.run, project=project),
+            is_complete=partial(composites_complete, project=project),
+            fingerprint=partial(composites_stage_fingerprint, project=project),
             depends_on=("alignments",),
         ),
         Stage(
             name="enhanced_composites",
-            run=enhance_composites.run,
-            is_complete=enhanced_composites_complete,
-            fingerprint=enhanced_composites_stage_fingerprint,
+            run=partial(enhance_composites.run, project=project),
+            is_complete=partial(enhanced_composites_complete, project=project),
+            fingerprint=partial(enhanced_composites_stage_fingerprint, project=project),
             depends_on=("composites",),
         ),
     ]
-)
+
+    return Pipeline(stages, state_folder=project.media.paths.root / ".pipeline")

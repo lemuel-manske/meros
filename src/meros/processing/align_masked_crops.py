@@ -2,9 +2,10 @@ import cv2 as cv
 import numpy as np
 
 from dataclasses import dataclass, replace
+from collections.abc import Sequence
 
-from meros import media, metadata
-from meros.config import options
+from meros.project import Project, default_project
+
 from meros.domain import AlignmentMetadata, TrackSelectionKey
 
 SIFT_FEATURES = 4000
@@ -24,21 +25,33 @@ MIN_HULL_FRACTION = 0.1
 class ImageFeatures:
     gray: np.ndarray
     mask: np.ndarray
-    keys: list
+    keys: Sequence[cv.KeyPoint]
     descriptors: np.ndarray | None
 
 
-def alignments_complete() -> bool:
-    individuals = metadata.read_individuals()
+def alignments_complete(project: Project = default_project) -> bool:
+    try:
+        individuals = project.metadata.read_individuals()
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
 
-    if not individuals or not any(ind.tracks for ind in individuals):
+    if not individuals or any(not ind.tracks for ind in individuals):
         return False
 
     for individual in individuals:
         for track in individual.tracks:
             try:
-                alignment = metadata.read_alignment(track.id)
-            except (FileNotFoundError, ValueError):
+                alignment = project.metadata.read_alignment(track.id)
+            except (OSError, ValueError, KeyError, TypeError):
+                return False
+
+            if (
+                alignment.video_id,
+                alignment.track_id,
+                alignment.start_frame,
+                alignment.end_frame,
+                alignment.reference_frame,
+            ) != track.id:
                 return False
 
             expected = set(range(track.start_frame, track.end_frame + 1)) - {track.reference_frame}
@@ -49,16 +62,36 @@ def alignments_complete() -> bool:
                 return False
 
             for row in alignment.frames:
-                if row.status == "accepted" and row.source_to_reference is None:
+                if row.status not in {
+                    "accepted",
+                    "insufficient_matches",
+                    "estimation_failed",
+                    "rejected_geometry",
+                }:
                     return False
+
+                if row.matches < 0 or not 0 <= row.inliers <= row.matches:
+                    return False
+
+                if row.status == "accepted":
+                    try:
+                        matrix = np.asarray(row.source_to_reference, dtype=np.float64)
+                    except (ValueError, TypeError):
+                        return False
+
+                    if matrix.shape != (2, 3) or not np.isfinite(matrix).all():
+                        return False
+
+                    if abs(np.linalg.det(matrix[:, :2])) < 1e-12:
+                        return False
 
     return True
 
 
-def run() -> None:
-    for individual in metadata.read_individuals():
+def run(project: Project = default_project) -> None:
+    for individual in project.metadata.read_individuals():
         for track in individual.tracks:
-            accepted, total = align_sequence(track.id, track.reference_frame)
+            accepted, total = align_sequence(track.id, track.reference_frame, project=project)
 
             print(f"{track.video_id}/{track.track_id}: {accepted}/{total} alignment candidates.")
 
@@ -78,7 +111,7 @@ def gray_it(
     return (gray, mask)
 
 
-def extract_features(image: np.ndarray, sift) -> ImageFeatures:
+def extract_features(image: np.ndarray, sift: cv.SIFT) -> ImageFeatures:
     gray, mask = gray_it(image)
 
     keys, descriptors = sift.detectAndCompute(gray, mask)
@@ -200,7 +233,9 @@ def estimate_alignment(
     )
 
 
-def align_sequence(_id: TrackSelectionKey, reference_frame: int) -> tuple[int, int]:
+def align_sequence(
+    _id: TrackSelectionKey, reference_frame: int, *, project: Project = default_project
+) -> tuple[int, int]:
     video_id, track_id, start_frame, end_frame, selected_reference = _id
 
     if reference_frame != selected_reference:
@@ -211,7 +246,7 @@ def align_sequence(_id: TrackSelectionKey, reference_frame: int) -> tuple[int, i
     if not start_frame <= reference_frame <= end_frame:
         raise ValueError("Reference frame must belong to the selected interval.")
 
-    reference = media.read_masked_crop(video_id, track_id, reference_frame)
+    reference = project.media.read_masked_crop(video_id, track_id, reference_frame)
 
     height, width = reference.shape[:2]
 
@@ -227,7 +262,7 @@ def align_sequence(_id: TrackSelectionKey, reference_frame: int) -> tuple[int, i
         if frame_idx == reference_frame:
             continue
 
-        source = media.read_masked_crop(video_id, track_id, frame_idx)
+        source = project.media.read_masked_crop(video_id, track_id, frame_idx)
 
         source_features = extract_features(source, sift)
 
@@ -238,11 +273,11 @@ def align_sequence(_id: TrackSelectionKey, reference_frame: int) -> tuple[int, i
         rows.append(result)
 
         if matrix is None:
-            media.remove_alignment(video_id, track_id, frame_idx, selection_id=selection_id)
+            project.media.remove_alignment(video_id, track_id, frame_idx, selection_id=selection_id)
 
             continue
 
-        if options.diagnostics:
+        if project.options.diagnostics:
             aligned = cv.warpAffine(source, matrix, (width, height))
 
             aligned_gray = cv.warpAffine(source_features.gray, matrix, (width, height))
@@ -263,16 +298,16 @@ def align_sequence(_id: TrackSelectionKey, reference_frame: int) -> tuple[int, i
 
             overlay[~overlap] = 0
 
-            media.write_aligned_crop(
+            project.media.write_aligned_crop(
                 video_id, track_id, frame_idx, aligned, selection_id=selection_id
             )
 
-            media.write_aligned_overlay(
+            project.media.write_aligned_overlay(
                 video_id, track_id, frame_idx, overlay, selection_id=selection_id
             )
 
         accepted += 1
 
-    metadata.write_alignment(_id, reference_frame, rows)
+    project.metadata.write_alignment(_id, reference_frame, rows)
 
     return (accepted, len(rows))

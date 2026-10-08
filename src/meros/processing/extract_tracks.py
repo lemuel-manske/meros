@@ -5,17 +5,16 @@ import numpy as np
 
 import os
 import tempfile
-from typing import TYPE_CHECKING
+from collections.abc import Callable
+from meros.project import Project, default_project
 
-if TYPE_CHECKING:
-    import torch
-    from meros.external import SAM2Predictor
+from meros.domain.prediction import Prediction, VideoPredictor
+from meros.external import build_sam2_predictor
 
 from pathlib import Path
 
-from meros.config import options
 
-from meros import media, metadata, Track, TrackMetadata, TrackObservation
+from meros import Track, TrackMetadata, TrackObservation
 
 
 AUTO = True  # controls whether to automatically select subjects or prompt for manual selection
@@ -24,74 +23,95 @@ _QUIT_KEY = "q"
 _ADD_TRACK_KEY = "a"
 
 
-def run() -> None:
-    import torch
-    from meros.external import build_sam2_predictor
+def run(
+    project: Project = default_project,
+    *,
+    predictor_factory: Callable[[], VideoPredictor] | None = None,
+) -> None:
+    predictor = (
+        predictor_factory() if predictor_factory else build_sam2_predictor(project.checkpoint)
+    )
 
-    predictor = build_sam2_predictor()
-
-    for video in metadata.read_videos():
+    for video in project.metadata.read_videos():
         video_id = video.video_id
 
         tracks = (
-            manually_select_track_seeds(video_id)
+            manually_select_track_seeds(video_id, project=project)
             if not AUTO
-            else select_known_track_seeds(video_id)
+            else select_known_track_seeds(video_id, project=project)
         )
 
-        with torch.inference_mode():
-            track_metadata = propagate_tracks(video_id, tracks, predictor)
+        track_metadata = propagate_tracks(video_id, tracks, predictor, project=project)
 
         if not track_metadata.tracks or any(not t.frames for t in track_metadata.tracks.values()):
             raise RuntimeError(f"{video_id}: incomplete tracking; saved metadata was not replaced")
 
-        metadata.write_track(
-            video_id,
-            track_metadata,
-        )
+        project.metadata.write_track(video_id, track_metadata)
 
         print(f"Saved {len(tracks)} tracks for {video_id}.")
 
 
-def tracks_complete() -> bool:
-    videos = metadata.read_videos()
+def tracks_complete(project: Project = default_project) -> bool:
+    try:
+        videos = project.metadata.read_videos()
+
+        seeds = project.metadata.read_bboxes() if AUTO else {}
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
 
     if not videos:
         return False
 
     for video in videos:
         try:
-            saved = metadata.read_track(video.video_id)
-        except (FileNotFoundError, ValueError, KeyError):
+            saved = project.metadata.read_track(video.video_id)
+
+            frame_ids = project.media.frame_ids(video.video_id)
+        except (OSError, ValueError, KeyError, TypeError):
             return False
 
-        frame_ids = set(get_frame_ids(video.video_id))
-
-        if not frame_ids or not saved.tracks or saved.processed_frame_count != len(frame_ids):
+        if (
+            not frame_ids
+            or frame_ids != list(range(len(frame_ids)))
+            or not saved.tracks
+            or saved.video_id != video.video_id
+            or saved.processed_frame_count != len(frame_ids)
+        ):
             return False
 
-        seeds = metadata.read_bboxes().get(video.video_id, {})
+        video_seeds = seeds.get(video.video_id, {})
 
-        if AUTO and set(saved.tracks) != set(seeds):
+        if AUTO and set(saved.tracks) != set(video_seeds):
             return False
 
-        for track in saved.tracks.values():
-            observed = {int(idx) for idx in track.frames}
+        for track_id, track in saved.tracks.items():
+            if track.initial_frame not in frame_ids or not track.frames:
+                return False
 
-            if not observed or not observed <= frame_ids:
+            if AUTO and (track.initial_frame != 0 or track.initial_bbox != video_seeds[track_id]):
+                return False
+
+            try:
+                for idx, observation in track.frames.items():
+                    if str(int(idx)) != idx or not track.initial_frame <= int(idx) < len(frame_ids):
+                        return False
+
+                    x1, y1, x2, y2 = observation.bbox
+
+                    if not 0 <= x1 <= x2 or not 0 <= y1 <= y2 or observation.mask_area <= 0:
+                        return False
+            except (ValueError, TypeError):
                 return False
 
     return True
 
 
-def get_frame_ids(
-    video_id: str,
-) -> list[int]:
-    return media.frame_ids(video_id)
+def get_frame_ids(video_id: str, *, project: Project = default_project) -> list[int]:
+    return project.media.frame_ids(video_id)
 
 
 def select_known_track_seeds(
-    video_id: str,
+    video_id: str, *, project: Project = default_project
 ) -> dict[str, Track]:
     """
     Automatically selects the subjects to track in the video.
@@ -99,7 +119,7 @@ def select_known_track_seeds(
     it will return a dictionary of tracks with the initial frame and bbox for each subject.
     """
 
-    bboxes = metadata.read_bboxes()
+    bboxes = project.metadata.read_bboxes()
 
     if video_id not in bboxes.keys():
         raise ValueError(
@@ -107,7 +127,7 @@ def select_known_track_seeds(
             "Please use `manually_select_track_seeds` instead.",
         )
 
-    frame_ids = get_frame_ids(video_id)
+    frame_ids = get_frame_ids(video_id, project=project)
 
     if not frame_ids:
         raise ValueError(f"{video_id}: no extracted frames available.")
@@ -127,7 +147,7 @@ def select_known_track_seeds(
 
 
 def manually_select_track_seeds(
-    video_id: str,
+    video_id: str, *, project: Project = default_project
 ) -> dict[str, Track]:
     """
     Prompts for user interaction for select the subjects to track in the video.
@@ -214,7 +234,7 @@ def manually_select_track_seeds(
             frames={},
         )
 
-    frame_ids = get_frame_ids(video_id)
+    frame_ids = get_frame_ids(video_id, project=project)
 
     if not frame_ids:
         raise ValueError(f"{video_id}: no extracted frames available.")
@@ -249,7 +269,7 @@ def manually_select_track_seeds(
                 frame_ids,
             )
 
-            frame = media.read_frame(
+            frame = project.media.read_frame(
                 video_id,
                 frame_idx,
             )
@@ -287,13 +307,15 @@ def manually_select_track_seeds(
 def propagate_tracks(
     video_id: str,
     tracks: dict[str, Track],
-    predictor: SAM2Predictor,
+    predictor: VideoPredictor,
+    *,
+    project: Project = default_project,
 ) -> TrackMetadata:
 
     def add_track_prompts(
-        state: dict[str, torch.Tensor],
+        state: object,
         tracks: dict[str, Track],
-        predictor: SAM2Predictor,
+        predictor: VideoPredictor,
     ) -> None:
         for track_id, track in tracks.items():
             predictor.add_new_points_or_box(
@@ -313,7 +335,7 @@ def propagate_tracks(
 
     # SAM2 must see the full ordered sequence on every run. Diagnostic
     # images are not checkpoints and must never remove frames from inference.
-    needed_frames = get_frame_ids(video_id)
+    needed_frames = get_frame_ids(video_id, project=project)
 
     if needed_frames != list(range(len(needed_frames))):
         raise ValueError(f"{video_id}: expected contiguous zero-based frames")
@@ -321,23 +343,19 @@ def propagate_tracks(
     if not needed_frames:
         raise ValueError(f"{video_id}: no frames available")
 
-    with tempfile.TemporaryDirectory(dir=media.frames_path(video_id).parent) as tmp_dir:
+    with tempfile.TemporaryDirectory(dir=project.media.frames_path(video_id).parent) as tmp_dir:
         tmp_path = Path(tmp_dir)
 
         frame_map: list[int] = []
 
         for temp_idx, original_idx in enumerate(needed_frames):
-            src = media.frame_path(video_id, original_idx).resolve()
+            src = project.media.frame_path(video_id, original_idx).resolve()
 
             dst = tmp_path / f"{temp_idx:06d}.jpg"
 
             os.link(src, dst)
 
             frame_map.append(original_idx)
-
-        # If there are no frames to process, return the track metadata without running the predictor.
-        if not frame_map:
-            return track_metadata
 
         state = predictor.init_state(
             video_path=str(tmp_path),
@@ -351,24 +369,19 @@ def propagate_tracks(
 
         processed = set()
 
-        for (
-            tmp_idx,
-            obj_ids,
-            mask_logits,
-        ) in predictor.propagate_in_video(state):
+        for prediction in predictor.propagate_in_video(state):
+            tmp_idx = prediction.frame_idx
+
             if tmp_idx in processed or not 0 <= tmp_idx < len(frame_map):
-                raise RuntimeError("Invalid SAM2 frame index")
+                raise RuntimeError("Invalid predictor frame index")
 
             processed.add(tmp_idx)
 
-            frame_idx = frame_map[tmp_idx]
-
             process_frame(
                 video_id,
-                frame_idx,
-                obj_ids,
-                mask_logits,
+                Prediction(frame_map[tmp_idx], prediction.masks),
                 track_metadata,
+                project=project,
             )
 
         if processed != set(range(len(frame_map))):
@@ -379,11 +392,12 @@ def propagate_tracks(
 
 def process_frame(
     video_id: str,
-    frame_idx: int,
-    obj_ids: torch.Tensor,
-    mask_logits: torch.Tensor,
+    prediction: Prediction,
     track_metadata: TrackMetadata,
+    *,
+    project: Project = default_project,
 ) -> None:
+    frame_idx = prediction.frame_idx
 
     def draw_mask(
         frame: np.ndarray,
@@ -431,33 +445,21 @@ def process_frame(
             int(ys.max()),
         ]
 
-    frame = media.read_frame(
+    frame = project.media.read_frame(
         video_id,
         frame_idx,
     )
 
-    visualization = frame.copy() if options.diagnostics else None
+    visualization = frame.copy() if project.options.diagnostics else None
 
-    for obj_id, logits in zip(
-        obj_ids,
-        mask_logits,
-    ):
-        track_id = str(int(obj_id))
-
+    for track_id, mask in prediction.masks.items():
         track = track_metadata.tracks[track_id]
 
         if frame_idx < track.initial_frame:
             continue
 
-        mask = np.squeeze((logits > 0).cpu().numpy())
-
         if mask.shape != frame.shape[:2]:
-            print(
-                f"Warning: mask shape {mask.shape} does not match "
-                f"frame shape {frame.shape[:2]} for frame {frame_idx}."
-            )
-
-            continue
+            raise ValueError(f"{video_id}/{frame_idx}: mask and frame dimensions differ")
 
         bbox = bbox_from_mask(mask)
 
@@ -474,9 +476,9 @@ def process_frame(
             draw_mask(
                 visualization,
                 mask,
-                obj_id=int(obj_id),
+                obj_id=int(track_id),
                 bbox=bbox,
             )
 
     if visualization is not None:
-        media.write_visualization(video_id, frame_idx, visualization)
+        project.media.write_visualization(video_id, frame_idx, visualization)

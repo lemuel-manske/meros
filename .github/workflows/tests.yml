@@ -31,5 +31,5 @@ jobs:
       - name: Install CPU development dependencies
         run: make install EXTRAS=dev
 
-      - name: Run regression tests, style checks, and CLI smoke checks
+      - name: Run integration tests, type checking, style, and CLI checks
         run: make check

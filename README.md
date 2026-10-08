@@ -83,8 +83,12 @@ The broader research objectives remain in `SPEC.md`. Experiment findings and lim
 make check
 ```
 
-`make test`, `make lint`, `make format-check`, and `make cli-check` can also run separately. `make format` applies the formatting rules.
+`make test`, `make typecheck`, `make lint`, `make format-check`, and `make cli-check` can also run separately. `make format` applies the formatting rules.
 
 Code follows the spacing used on `main`: separate import groups, setup, calculations, control-flow blocks, and returns with blank lines. Keep Makefile target groups and workflow steps visually separated too. GitHub Actions uses `make install EXTRAS=dev` followed by the same `make check` target.
 
-Tests cover tracking reruns, incomplete caches, selection isolation, optional diagnostics, transparency-aware aggregation, and structured evaluation. Real media/GPU reproduction must be performed separately; synthetic checks do not validate biological identification performance.
+`make typecheck` runs Pyright over production code and tests, including required parameter annotations. SAM2 is isolated behind a typed predictor contract; processing uses ordinary NumPy masks without conditional typing imports.
+
+Tests use temporary project roots, real encoded videos, PNG/JPEG files, metadata serialization, SIFT, transforms, aggregation, enhancement, and pair evaluation. A readable recorded predictor replaces only GPU segmentation through its public API; tests do not patch globals. Every stage's completion check is exercised with valid, missing, corrupt, and inconsistent outputs. Numerical comparisons load the pre-refactor algorithms from Git history.
+
+Real media/GPU reproduction must be performed separately; these checks do not validate biological identification performance.

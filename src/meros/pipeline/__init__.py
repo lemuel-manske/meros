@@ -1,11 +1,4 @@
-from .engine import (
-    Pipeline,
-    Stage,
-    pipeline,
-)
+from .engine import Pipeline, Stage, create_pipeline
 
-__all__ = [
-    "Pipeline",
-    "Stage",
-    "pipeline",
-]
+
+__all__ = ["Pipeline", "Stage", "create_pipeline"]
