@@ -18,6 +18,8 @@ from src.meros.cmd import (
     extract_tracks,
     match_composites,
 )
+
+from src.meros.cmd.extract_tracks import tracks_complete
 from src.meros.cmd.match_composites import matches_complete
 
 
@@ -322,21 +324,6 @@ def frames_complete() -> bool:
         media.has_frames(video.video_id)
         for video in metadata.read_videos()
     )
-
-
-def tracks_complete() -> bool:
-    for video in metadata.read_videos():
-        try:
-            track_metadata = metadata.read_track(
-                video.video_id
-            )
-        except FileNotFoundError:
-            return False
-
-        if not track_metadata.tracks:
-            return False
-
-    return True
 
 
 def masked_crops_complete() -> bool:

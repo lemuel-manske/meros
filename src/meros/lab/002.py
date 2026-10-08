@@ -8,8 +8,9 @@ from .utils import compare_representation
 
 
 def compare_tracks(a: IndividualTrack, b: IndividualTrack) -> None:
+    print()
     print(
-        f"Comparing "
+        f"Comparing {a}"
         f"{a.video_id}/{a.track_id}@{a.reference_frame} with "
         f"{b.video_id}/{b.track_id}@{b.reference_frame}"
     )

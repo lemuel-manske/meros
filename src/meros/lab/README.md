@@ -4,9 +4,14 @@ This directory contains small experiments used to validate assumptions in the im
 
 The goal is not to treat these scripts as final evaluation code. Each experiment isolates one question about the current method and helps decide what should be tested next.
 
+> Moved experiments are archived in Git version control, and kept as reference on this file.
+
 ## 001
 
 ### Question
+
+> [!NOTE]
+> Moved to: [experiment 002](#002)
 
 > Can the current SIFT-based matcher distinguish the same individual from different individuals using track composites?
 

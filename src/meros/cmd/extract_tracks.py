@@ -1,12 +1,16 @@
 import cv2 as cv
 import numpy as np
+import os
+import tempfile
 import torch
+
+from pathlib import Path
 
 from src.meros import media, metadata, Track, TrackMetadata, TrackObservation
 from src.meros.external import build_sam2_predictor, SAM2Predictor
 
 
-AUTO = True
+AUTO = True  # controls whether to automatically select subjects or prompt for manual selection
 
 _QUIT_KEY = "q"
 _ADD_TRACK_KEY = "a"
@@ -31,6 +35,18 @@ def run() -> None:
         )
 
         print(f"Saved {len(tracks)} tracks for {video_id}.")
+
+
+def tracks_complete() -> bool:
+    for video in metadata.read_videos():
+        for frame_idx in range(video.frame_count):
+            if not media.visualization_exists(
+                video.video_id,
+                frame_idx
+            ):
+                return False
+
+    return True
 
 
 def get_frame_ids(
@@ -268,30 +284,55 @@ def propagate_tracks(
         tracks=tracks,
     )
 
-    state = predictor.init_state(
-        video_path=str(media.frames_path(video_id)),  # pyright: ignore (assume fs implementation)
-    )
+    needed_frames = [
+        frame_idx
+        for frame_idx in range(metadata.read_video(video_id).frame_count)
+        if not media.visualization_exists(video_id, frame_idx)
+    ]
 
-    add_track_prompts(
-        state,
-        tracks,
-        predictor,
-    )
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
 
-    for (
-        frame_idx,
-        obj_ids,
-        mask_logits,
-    ) in predictor.propagate_in_video(state):
-        process_frame(
-            video_id,
-            frame_idx,
-            obj_ids,
-            mask_logits,
-            track_metadata,
+        frame_map: list[int] = []
+
+        for temp_idx, original_idx in enumerate(needed_frames):
+            src = media.frame_path(video_id, original_idx).resolve()  # pyright: ignore (assume fs implementation)
+            dst = tmp_path / f"{temp_idx:06d}.jpg"
+
+            os.link(src, dst)
+
+            frame_map.append(original_idx)
+
+        # If there are no frames to process, return the track metadata without running the predictor.
+        if not frame_map:
+            return track_metadata
+
+        state = predictor.init_state(
+            video_path=str(tmp_path),  # pyright: ignore (assume fs implementation)
         )
 
-    return track_metadata
+        add_track_prompts(
+            state,
+            tracks,
+            predictor,
+        )
+
+        for (
+            tmp_idx,
+            obj_ids,
+            mask_logits,
+        ) in predictor.propagate_in_video(state):
+            frame_idx = frame_map[tmp_idx]
+
+            process_frame(
+                video_id,
+                frame_idx,
+                obj_ids,
+                mask_logits,
+                track_metadata,
+            )
+
+        return track_metadata
 
 
 def process_frame(

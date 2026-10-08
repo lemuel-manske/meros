@@ -63,6 +63,12 @@ class MediaStore(Protocol):
         enhanced: bool = False,
     ) -> bool: ...
 
+    def visualization_exists(
+        self,
+        video_id: str,
+        frame_idx: int,
+    ) -> bool: ...
+
     def read_frame(
         self,
         video_id: str,
@@ -285,6 +291,7 @@ class Video:
     mirrored: bool
     fname: str
     path: str
+    frame_count: int
 
 
 type BBox  = dict[str, list[int]]

@@ -280,11 +280,28 @@ class LocalFsMediaStore(MediaStore):
             enhanced,
         ).is_file()
 
+    def visualization_exists(
+        self,
+        video_id: str,
+        frame_idx: int,
+    ) -> bool:
+        return self.paths.visualization(
+            video_id,
+            frame_idx,
+        ).is_file()
+
     def frames_path(
         self,
         video_id: str,
     ) -> Path:
         return _FRAMES_MEDIA_FOLDER / video_id
+
+    def frame_path(
+        self,
+        video_id: str,
+        frame_idx: int,
+    ) -> Path:
+        return self.paths.frame(video_id, frame_idx)
 
     def read_frame(
         self,
