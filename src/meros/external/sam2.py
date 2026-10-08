@@ -15,7 +15,7 @@ _SAM2_CHECKPOINT = "external/sam2/checkpoints/sam2.1_hiera_large.pt"
 _SAM2_MODEL_CONFIG = "configs/sam2.1/sam2.1_hiera_l.yaml"
 
 
-class SAM2Predictor():
+class SAM2Predictor:
     """
     Wraps SAM2 predictor to provide a consistent interface for video propagation.
     """

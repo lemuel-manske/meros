@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "meros"
+version = "0.1.0"
+description = "Video-based individual identification experiments for Goliath Groupers"
+requires-python = ">=3.12"
+dependencies = ["numpy>=2,<3", "opencv-python>=4.10,<6", "scipy>=1.14,<2"]
+
+[project.optional-dependencies]
+data = ["dvc[s3]>=3.67,<4"]
+dev = ["pytest>=8,<10", "ruff>=0.14"]
+
+[project.scripts]
+meros-002 = "meros.experiments.experiment_002:main"
+meros-migrate-002 = "meros.experiments.migrate_002:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["meros*"]
+namespaces = true
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

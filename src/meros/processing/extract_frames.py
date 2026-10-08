@@ -1,6 +1,6 @@
 import cv2 as cv
 
-from src.meros import media, metadata
+from meros import media, metadata
 
 
 def frames_complete() -> bool:
@@ -19,7 +19,7 @@ def frames_complete() -> bool:
                 capture.release()
         if expected <= 0:
             return False
-        actual = {frame.frame_idx for frame in media.read_frames(video.video_id)}
+        actual = set(media.frame_ids(video.video_id))
         if actual != set(range(expected)):
             return False
     return True
@@ -30,9 +30,7 @@ def run() -> None:
         capture = cv.VideoCapture(video.path)
 
         if not capture.isOpened():
-            raise RuntimeError(
-                f"Could not open video: {video.path}"
-            )
+            raise RuntimeError(f"Could not open video: {video.path}")
 
         # Remove obsolete frames from an earlier extraction only after opening.
         for path in media.frames_path(video.video_id).glob("*.jpg"):
@@ -61,10 +59,6 @@ def run() -> None:
             capture.release()
 
         if frame_idx == 0:
-            raise RuntimeError(
-                f"{video.video_id}: no frames extracted."
-            )
+            raise RuntimeError(f"{video.video_id}: no frames extracted.")
 
-        print(
-            f"{video.video_id}: extracted {frame_idx} frames."
-        )
+        print(f"{video.video_id}: extracted {frame_idx} frames.")

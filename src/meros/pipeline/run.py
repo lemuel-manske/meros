@@ -1,4 +1,4 @@
-"""Compatibility entry point; use the experiment CLI for new runs."""
+"""Prepare images or execute experiment 002 through its supported CLI."""
 
 from meros.experiments.experiment_002 import main
 

@@ -5,18 +5,15 @@ import numpy as np
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    import torch
-    from src.meros.external import SAM2Predictor
+    from meros.external import SAM2Predictor
 
-from src.meros import media, metadata
+from meros import media, metadata
 
 
 def masked_crops_complete() -> bool:
     for video in metadata.read_videos():
         try:
-            track_metadata = metadata.read_track(
-                video.video_id
-            )
+            track_metadata = metadata.read_track(video.video_id)
         except FileNotFoundError:
             return False
 
@@ -37,14 +34,13 @@ def masked_crops_complete() -> bool:
 
 def run() -> None:
     import torch
-    from src.meros.external import build_sam2_predictor
+    from meros.external import build_sam2_predictor
 
     predictor = build_sam2_predictor()
 
     with torch.inference_mode():
         count = sum(
-            extract_masked_crops(video.video_id, predictor)
-            for video in metadata.read_videos()
+            extract_masked_crops(video.video_id, predictor) for video in metadata.read_videos()
         )
 
     print(f"Saved {count} masked crops.")
@@ -112,10 +108,7 @@ def extract_masked_crops(
             track = tracks[track_id]
 
             # Only export observations belonging to the saved track.
-            if (
-                frame_idx < track.initial_frame
-                or str(frame_idx) not in track.frames
-            ):
+            if frame_idx < track.initial_frame or str(frame_idx) not in track.frames:
                 continue
 
             mask = (logits > 0).cpu().numpy()

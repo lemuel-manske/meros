@@ -1,5 +1,7 @@
-from src.meros.adapters import *
-from src.meros.domain import *
+from .adapters import LocalFsMediaStore, LocalFsMetadataStore
+from .domain import Individual, Track, TrackMetadata, TrackObservation
 
-media: MediaStore = LocalFsMediaStore()
-metadata: MetadataStore = LocalFsMetadataStore()
+media = LocalFsMediaStore()
+metadata = LocalFsMetadataStore()
+
+__all__ = ["media", "metadata", "Individual", "Track", "TrackMetadata", "TrackObservation"]
