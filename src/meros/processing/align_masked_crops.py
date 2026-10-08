@@ -62,17 +62,6 @@ def alignments_complete(project: Project = default_project) -> bool:
                 return False
 
             for row in alignment.frames:
-                if row.status not in {
-                    "accepted",
-                    "insufficient_matches",
-                    "estimation_failed",
-                    "rejected_geometry",
-                }:
-                    return False
-
-                if row.matches < 0 or not 0 <= row.inliers <= row.matches:
-                    return False
-
                 if row.status == "accepted":
                     try:
                         matrix = np.asarray(row.source_to_reference, dtype=np.float64)
@@ -82,7 +71,16 @@ def alignments_complete(project: Project = default_project) -> bool:
                     if matrix.shape != (2, 3) or not np.isfinite(matrix).all():
                         return False
 
-                    if abs(np.linalg.det(matrix[:, :2])) < 1e-12:
+                    if np.linalg.det(matrix[:, :2]) <= 0:
+                        return False
+
+                    if (
+                        row.inliers < MIN_INLIERS
+                        or row.inlier_ratio is None
+                        or row.inlier_ratio < MIN_INLIER_RATIO
+                        or row.inlier_hull_fraction is None
+                        or row.inlier_hull_fraction < MIN_HULL_FRACTION
+                    ):
                         return False
 
     return True

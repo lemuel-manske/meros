@@ -2,12 +2,14 @@
 
 import json
 from collections.abc import Callable
+from dataclasses import asdict
 from pathlib import Path
 
 import cv2 as cv
 import pytest
 
 from meros.adapters.fs_storage import write_json_atomic
+from meros.domain import Individual, TrackSelection
 from meros.processing.align_masked_crops import alignments_complete
 from meros.processing.build_composites import composites_complete
 from meros.processing.enhance_composites import enhanced_composites_complete
@@ -113,7 +115,16 @@ def test_images_must_match_output_contract(
 
 @pytest.mark.parametrize(
     "damage",
-    ["count", "video", "seed", "initial_frame", "empty", "outside", "negative_area", "bbox"],
+    [
+        "count",
+        "video",
+        "seed",
+        "initial_frame",
+        "empty",
+        "outside",
+        "negative_area",
+        "bbox",
+    ],
 )
 def test_track_metadata_must_describe_processed_sequence(
     prepared_project: ProjectFixture, damage: str
@@ -204,3 +215,148 @@ def test_rejected_alignment_is_a_complete_result(prepared_project: ProjectFixtur
     write_json_atomic(path, payload)
 
     assert alignments_complete(prepared_project.project)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("frame_count", "three"),
+        ("frame_count", 0),
+        ("mirrored", "false"),
+    ],
+)
+def test_malformed_video_metadata_is_incomplete(
+    prepared_project: ProjectFixture, field: str, value: object
+):
+    path = prepared_project.project.metadata.paths.videos()
+
+    payload = json.loads(path.read_text())
+
+    payload[0][field] = value
+
+    write_json_atomic(path, payload)
+
+    assert not frames_complete(prepared_project.project)
+
+
+@pytest.mark.parametrize(
+    "damage",
+    ["area_overflow", "frame_type", "frames_type", "tracks_type", "count_type", "outside_bbox"],
+)
+def test_malformed_track_fields_are_incomplete(prepared_project: ProjectFixture, damage: str):
+    path = artifact_path(prepared_project, "tracks")
+
+    payload = json.loads(path.read_text())
+
+    track = payload["tracks"]["0"]
+
+    if damage == "area_overflow":
+        track["frames"]["0"]["mask_area"] = 999999
+    elif damage == "frame_type":
+        track["initial_frame"] = "zero"
+    elif damage == "frames_type":
+        track["frames"] = None
+    elif damage == "tracks_type":
+        payload["tracks"] = []
+    elif damage == "count_type":
+        payload["processed_frame_count"] = "three"
+    else:
+        track["frames"]["0"]["bbox"] = [0, 0, 999, 999]
+
+    write_json_atomic(path, payload)
+
+    assert not tracks_complete(prepared_project.project)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("source_to_reference", None),
+        ("source_to_reference", [[-1, 0, 0], [0, 1, 0]]),
+        ("inlier_ratio", 0.1),
+        ("inlier_hull_fraction", 0.01),
+        ("inlier_ratio", float("nan")),
+        ("matches", "many"),
+        ("frame_idx", []),
+    ],
+)
+def test_malformed_or_unqualified_alignment_is_incomplete(
+    prepared_project: ProjectFixture, field: str, value: object
+):
+    path = artifact_path(prepared_project, "alignments")
+
+    payload = json.loads(path.read_text())
+
+    payload["frames"][0][field] = value
+
+    write_json_atomic(path, payload)
+
+    assert not alignments_complete(prepared_project.project)
+
+
+def test_frame_cache_rejects_extra_and_non_numeric_files(prepared_project: ProjectFixture):
+    project = prepared_project.project
+
+    path = project.media.frames_path("a") / "preview.jpg"
+
+    path.write_bytes(project.media.frame_path("a", 0).read_bytes())
+
+    assert not frames_complete(project)
+
+    path.rename(path.with_name("9.jpg"))
+
+    assert not frames_complete(project)
+
+
+def test_single_frame_selection_needs_no_alignment_rows(prepared_project: ProjectFixture):
+    project = prepared_project.project
+
+    selection = TrackSelection("a", "0", 0, 0, 0)
+
+    assert project.metadata.individuals_path is not None
+
+    write_json_atomic(
+        project.metadata.individuals_path, [asdict(Individual("single", [selection]))]
+    )
+
+    project.metadata.write_alignment(selection.id, 0, [])
+
+    assert alignments_complete(project)
+
+
+@pytest.mark.parametrize("payload", [[], {"a": []}, {"a": {"0": [1, 2]}}])
+def test_malformed_seed_metadata_is_incomplete(prepared_project: ProjectFixture, payload: object):
+    write_json_atomic(prepared_project.project.metadata.paths.bboxes(), payload)
+
+    assert not tracks_complete(prepared_project.project)
+
+    assert not masked_crops_complete(prepared_project.project)
+
+
+@pytest.mark.parametrize("stage", ["masked_crops", "composites", "enhanced_composites"])
+def test_generated_images_require_binary_alpha(prepared_project: ProjectFixture, stage: str):
+    path = artifact_path(prepared_project, stage)
+
+    image = cv.imread(str(path), cv.IMREAD_UNCHANGED)
+
+    assert image is not None
+
+    image[0, 0, 3] = 127
+
+    assert cv.imwrite(str(path), image)
+
+    assert not CHECKS[stage](prepared_project.project)
+
+
+def test_crop_coverage_must_match_observation(prepared_project: ProjectFixture):
+    path = artifact_path(prepared_project, "masked_crops")
+
+    image = cv.imread(str(path), cv.IMREAD_UNCHANGED)
+
+    assert image is not None
+
+    image[0, 0] = 0
+
+    assert cv.imwrite(str(path), image)
+
+    assert not masked_crops_complete(prepared_project.project)

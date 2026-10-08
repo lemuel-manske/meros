@@ -24,6 +24,7 @@ from meros.domain import (
     TrackObservation,
     Video,
 )
+from meros.domain.storage import validate_bbox
 
 
 @dataclass(frozen=True)
@@ -91,7 +92,13 @@ class LocalFsMediaStore(MediaStore):
             raise RuntimeError(f"Could not write image: {path}")
 
     @staticmethod
-    def valid_image(path: Path, channels: int, shape: tuple[int, int] | None = None) -> bool:
+    def valid_image(
+        path: Path,
+        channels: int,
+        shape: tuple[int, int] | None = None,
+        *,
+        mask_area: int | None = None,
+    ) -> bool:
         if not path.is_file():
             return False
 
@@ -111,8 +118,14 @@ class LocalFsMediaStore(MediaStore):
         if shape is not None and image.shape[:2] != shape:
             return False
 
-        if channels == 4 and not np.any(image[:, :, 3] == 255):
-            return False
+        if channels == 4:
+            alpha = image[:, :, 3]
+
+            if not np.all((alpha == 0) | (alpha == 255)) or not np.any(alpha == 255):
+                return False
+
+            if mask_area is not None and np.count_nonzero(alpha) != mask_area:
+                return False
 
         return True
 
@@ -381,6 +394,16 @@ class LocalFsMetadataStore(MetadataStore):
         with self.paths.bboxes().open("r", encoding="utf-8") as f:
             metadata = json.load(f)
 
+        if not isinstance(metadata, dict):
+            raise ValueError("Seed boxes must be keyed by video and track")
+
+        for tracks in metadata.values():
+            if not isinstance(tracks, dict):
+                raise ValueError("Seed boxes must be keyed by track")
+
+            for bbox in tracks.values():
+                validate_bbox(bbox)
+
         return metadata
 
     def read_videos(self) -> list[Video]:
@@ -406,6 +429,13 @@ class LocalFsMetadataStore(MetadataStore):
 
         with path.open("r", encoding="utf-8") as f:
             metadata = json.load(f)
+
+        if not isinstance(metadata, dict) or not isinstance(metadata.get("tracks"), dict):
+            raise ValueError("Tracking metadata must contain a tracks object")
+
+        for track in metadata["tracks"].values():
+            if not isinstance(track, dict) or not isinstance(track.get("frames"), dict):
+                raise ValueError("Track observations must be a frames object")
 
         tracks = {
             track_id: Track(
