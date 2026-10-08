@@ -1,11 +1,10 @@
 import csv
 import json
-from pathlib import Path
 import numpy as np
 import pytest
-from src.meros import metadata
-from src.meros.experiments import experiment_002 as exp
-from src.meros.cmd.match_composites import match_images
+from meros import metadata
+from meros.experiments import experiment_002 as exp
+from meros.processing.match_images import match_images
 
 
 def test_current_manifest_has_21_pairs_without_filename_collisions():
@@ -20,14 +19,14 @@ def test_current_manifest_has_21_pairs_without_filename_collisions():
 def test_evaluation_persists_all_representations_and_metrics(monkeypatch, tmp_path):
     image = np.zeros((32, 32, 4), dtype=np.uint8)
     image[:, :, 3] = 255
-    monkeypatch.setattr(exp, 'read_representation', lambda *args: image)
-    output = tmp_path / 'run'
+    monkeypatch.setattr(exp, "read_representation", lambda *args: image)
+    output = tmp_path / "run"
     rows = exp.evaluate(metadata.read_individuals(), output)
     assert len(rows) == 63
-    assert len(list((output / 'representations').rglob('*.png'))) == 21
-    assert not (output / 'diagnostics').exists()
-    assert len(list(csv.DictReader((output / 'metrics.csv').open()))) == 63
-    assert len(json.loads((output / 'run.json').read_text())['image_sha256']) == 21
+    assert len(list((output / "representations").rglob("*.png"))) == 21
+    assert not (output / "diagnostics").exists()
+    assert len(list(csv.DictReader((output / "metrics.csv").open()))) == 63
+    assert len(json.loads((output / "run.json").read_text())["image_sha256"]) == 21
     with pytest.raises(FileExistsError):
         exp.evaluate(metadata.read_individuals(), output)
 

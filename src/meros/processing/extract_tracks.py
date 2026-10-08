@@ -8,12 +8,12 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import torch
-    from src.meros.external import SAM2Predictor
+    from meros.external import SAM2Predictor
 
 from pathlib import Path
-from src.meros.config import options
+from meros.config import options
 
-from src.meros import media, metadata, Track, TrackMetadata, TrackObservation
+from meros import media, metadata, Track, TrackMetadata, TrackObservation
 
 
 AUTO = True  # controls whether to automatically select subjects or prompt for manual selection
@@ -24,14 +24,18 @@ _ADD_TRACK_KEY = "a"
 
 def run() -> None:
     import torch
-    from src.meros.external import build_sam2_predictor
+    from meros.external import build_sam2_predictor
 
     predictor = build_sam2_predictor()
 
     for video in metadata.read_videos():
         video_id = video.video_id
 
-        tracks = manually_select_subjects(video_id) if not AUTO else auto_select_subjects(video_id)
+        tracks = (
+            manually_select_track_seeds(video_id)
+            if not AUTO
+            else select_known_track_seeds(video_id)
+        )
         with torch.inference_mode():
             track_metadata = propagate_tracks(video_id, tracks, predictor)
 
@@ -56,7 +60,7 @@ def tracks_complete() -> bool:
         except (FileNotFoundError, ValueError, KeyError):
             return False
         frame_ids = set(get_frame_ids(video.video_id))
-        if not frame_ids or not saved.tracks:
+        if not frame_ids or not saved.tracks or saved.processed_frame_count != len(frame_ids):
             return False
         seeds = metadata.read_bboxes().get(video.video_id, {})
         if AUTO and set(saved.tracks) != set(seeds):
@@ -71,13 +75,10 @@ def tracks_complete() -> bool:
 def get_frame_ids(
     video_id: str,
 ) -> list[int]:
-    return [
-        frame.frame_idx
-        for frame in media.read_frames(video_id)
-    ]
+    return media.frame_ids(video_id)
 
 
-def auto_select_subjects(
+def select_known_track_seeds(
     video_id: str,
 ) -> dict[str, Track]:
     """
@@ -90,15 +91,13 @@ def auto_select_subjects(
     if video_id not in bboxes.keys():
         raise ValueError(
             f"{video_id}: no known initial bboxes available. ",
-            "Please use `manually_select_subjects` instead."
+            "Please use `manually_select_track_seeds` instead.",
         )
 
     frame_ids = get_frame_ids(video_id)
 
     if not frame_ids:
-        raise ValueError(
-            f"{video_id}: no extracted frames available."
-        )
+        raise ValueError(f"{video_id}: no extracted frames available.")
 
     initial_frame = frame_ids[0]
 
@@ -114,7 +113,7 @@ def auto_select_subjects(
     return tracks
 
 
-def manually_select_subjects(
+def manually_select_track_seeds(
     video_id: str,
 ) -> dict[str, Track]:
     """
@@ -205,9 +204,7 @@ def manually_select_subjects(
     frame_ids = get_frame_ids(video_id)
 
     if not frame_ids:
-        raise ValueError(
-            f"{video_id}: no extracted frames available."
-        )
+        raise ValueError(f"{video_id}: no extracted frames available.")
 
     tracks: dict[str, Track] = {}
 
@@ -269,9 +266,7 @@ def manually_select_subjects(
         cv.destroyAllWindows()
 
     if not tracks:
-        raise ValueError(
-            f"{video_id}: no fish selected."
-        )
+        raise ValueError(f"{video_id}: no fish selected.")
 
     return tracks
 
@@ -311,13 +306,13 @@ def propagate_tracks(
     if not needed_frames:
         raise ValueError(f"{video_id}: no frames available")
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
+    with tempfile.TemporaryDirectory(dir=media.frames_path(video_id).parent) as tmp_dir:
         tmp_path = Path(tmp_dir)
 
         frame_map: list[int] = []
 
         for temp_idx, original_idx in enumerate(needed_frames):
-            src = media.frame_path(video_id, original_idx).resolve()  # pyright: ignore (assume fs implementation)
+            src = media.frame_path(video_id, original_idx).resolve()
             dst = tmp_path / f"{temp_idx:06d}.jpg"
 
             os.link(src, dst)
@@ -329,7 +324,7 @@ def propagate_tracks(
             return track_metadata
 
         state = predictor.init_state(
-            video_path=str(tmp_path),  # pyright: ignore (assume fs implementation)
+            video_path=str(tmp_path),
         )
 
         add_track_prompts(
@@ -338,11 +333,15 @@ def propagate_tracks(
             predictor,
         )
 
+        processed = set()
         for (
             tmp_idx,
             obj_ids,
             mask_logits,
         ) in predictor.propagate_in_video(state):
+            if tmp_idx in processed or not 0 <= tmp_idx < len(frame_map):
+                raise RuntimeError("Invalid SAM2 frame index")
+            processed.add(tmp_idx)
             frame_idx = frame_map[tmp_idx]
 
             process_frame(
@@ -353,7 +352,9 @@ def propagate_tracks(
                 track_metadata,
             )
 
-        return track_metadata
+        if processed != set(range(len(frame_map))):
+            raise RuntimeError("SAM2 did not process the full sequence")
+        return TrackMetadata(video_id, tracks, len(processed))
 
 
 def process_frame(
@@ -382,8 +383,7 @@ def process_frame(
         )
 
         frame[mask] = (
-            frame[mask].astype(np.float32) * 0.5
-            + color.astype(np.float32) * 0.5
+            frame[mask].astype(np.float32) * 0.5 + color.astype(np.float32) * 0.5
         ).astype(np.uint8)
 
         cv.putText(
@@ -428,9 +428,7 @@ def process_frame(
         if frame_idx < track.initial_frame:
             continue
 
-        mask = np.squeeze(
-            (logits > 0).cpu().numpy()
-        )
+        mask = np.squeeze((logits > 0).cpu().numpy())
 
         if mask.shape != frame.shape[:2]:
             print(
@@ -453,10 +451,10 @@ def process_frame(
         if visualization is not None:
             draw_mask(
                 visualization,
-            mask,
-            obj_id=int(obj_id),
-            bbox=bbox,
-        )
+                mask,
+                obj_id=int(obj_id),
+                bbox=bbox,
+            )
 
     if visualization is not None:
         media.write_visualization(video_id, frame_idx, visualization)

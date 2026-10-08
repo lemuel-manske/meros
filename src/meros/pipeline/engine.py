@@ -8,9 +8,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.meros import metadata
+from meros import metadata
 
-from src.meros.cmd import (
+from meros.processing import (
     align_masked_crops,
     build_composites,
     enhance_composites,
@@ -19,12 +19,12 @@ from src.meros.cmd import (
     extract_tracks,
 )
 
-from src.meros.cmd.align_masked_crops import alignments_complete
-from src.meros.cmd.build_composites import composites_complete
-from src.meros.cmd.enhance_composites import enhanced_composites_complete
-from src.meros.cmd.extract_frames import frames_complete
-from src.meros.cmd.extract_masked_crops import masked_crops_complete
-from src.meros.cmd.extract_tracks import tracks_complete
+from meros.processing.align_masked_crops import alignments_complete
+from meros.processing.build_composites import composites_complete
+from meros.processing.enhance_composites import enhanced_composites_complete
+from meros.processing.extract_frames import frames_complete
+from meros.processing.extract_masked_crops import masked_crops_complete
+from meros.processing.extract_tracks import tracks_complete
 
 
 _STATE_FOLDER = Path("data/.pipeline")
@@ -49,10 +49,7 @@ class Pipeline:
         self,
         stages: list[Stage],
     ) -> None:
-        self.stages = {
-            stage.name: stage
-            for stage in stages
-        }
+        self.stages = {stage.name: stage for stage in stages}
 
         self._validate()
 
@@ -60,10 +57,7 @@ class Pipeline:
         for stage in self.stages.values():
             for dependency in stage.depends_on:
                 if dependency not in self.stages:
-                    raise ValueError(
-                        f"{stage.name}: unknown dependency "
-                        f"{dependency!r}."
-                    )
+                    raise ValueError(f"{stage.name}: unknown dependency {dependency!r}.")
 
     def run(
         self,
@@ -72,9 +66,7 @@ class Pipeline:
         force: bool = False,
     ) -> None:
         if target not in self.stages:
-            raise ValueError(
-                f"Unknown pipeline stage: {target!r}."
-            )
+            raise ValueError(f"Unknown pipeline stage: {target!r}.")
 
         visited: set[str] = set()
 
@@ -97,10 +89,7 @@ class Pipeline:
             stage.run()
 
             if not stage.is_complete():
-                raise RuntimeError(
-                    f"{stage.name}: stage completed but "
-                    "its outputs are incomplete."
-                )
+                raise RuntimeError(f"{stage.name}: stage completed but its outputs are incomplete.")
 
             self._save_fingerprint(
                 stage.name,
@@ -203,19 +192,14 @@ def fingerprint(
         default=str,
     )
 
-    return hashlib.sha256(
-        serialized.encode("utf-8")
-    ).hexdigest()
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
 def file_fingerprint(
     path: str | Path,
 ) -> str:
     """
-    Fingerprint a file without reading its contents.
-
-    For large immutable-ish source files such as videos,
-    size + mtime is sufficient for pipeline invalidation.
+    Hash file contents; size/mtime only memoize reads within this process.
     """
     path = Path(path)
     stat = path.stat()
@@ -225,15 +209,17 @@ def file_fingerprint(
 @lru_cache(maxsize=128)
 def content_hash(path: str, size: int, mtime: int) -> str:
     digest = hashlib.sha256()
-    with Path(path).open('rb') as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+    with Path(path).open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
 
 
 def implementation_fingerprint() -> str:
     root = Path(__file__).resolve().parents[1]
-    return fingerprint([(str(p.relative_to(root)), file_fingerprint(p)) for p in sorted(root.rglob('*.py'))])
+    return fingerprint(
+        [(str(p.relative_to(root)), file_fingerprint(p)) for p in sorted(root.rglob("*.py"))]
+    )
 
 
 def videos_fingerprint() -> str:
@@ -264,28 +250,21 @@ def tracks_fingerprint() -> str:
 
     for video in metadata.read_videos():
         try:
-            track_metadata = metadata.read_track(
-                video.video_id
-            )
+            track_metadata = metadata.read_track(video.video_id)
         except FileNotFoundError:
-            rows.append(
-                (video.video_id, None)
-            )
+            rows.append((video.video_id, None))
             continue
 
         tracks = []
 
-        for track_id, track in sorted(
-            track_metadata.tracks.items()
-        ):
+        for track_id, track in sorted(track_metadata.tracks.items()):
             frames = [
                 (
                     frame_idx,
                     observation.bbox,
                     observation.mask_area,
                 )
-                for frame_idx, observation
-                in sorted(track.frames.items())
+                for frame_idx, observation in sorted(track.frames.items())
             ]
 
             tracks.append(
@@ -343,6 +322,7 @@ def tracks_stage_fingerprint() -> str:
         "extract_tracks:v3",
         metadata.read_bboxes(),
         extract_tracks.AUTO,
+        file_fingerprint("external/sam2/checkpoints/sam2.1_hiera_large.pt"),
         frames_stage_fingerprint(),
     )
 
@@ -360,37 +340,19 @@ def masked_crops_stage_fingerprint() -> str:
 def alignments_stage_fingerprint() -> str:
     return fingerprint(
         "align_masked_crops:v2",
-
         # Important: alignment now depends explicitly
         # on the upstream masked-crop stage.
         masked_crops_stage_fingerprint(),
-
         individuals_fingerprint(),
-
         {
-            "sift_features":
-                align_masked_crops.SIFT_FEATURES,
-
-            "ratio":
-                align_masked_crops.MATCH_RATIO,
-
-            "min_inliers":
-                align_masked_crops.MIN_INLIERS,
-
-            "ransac_error":
-                align_masked_crops.MAX_ERROR,
-
-            "ransac_iterations":
-                align_masked_crops.RANSAC_MAX_ITERS,
-
-            "ransac_confidence":
-                align_masked_crops.RANSAC_CONFIDENCE,
-
-            "min_inlier_ratio":
-                align_masked_crops.MIN_INLIER_RATIO,
-
-            "min_hull_fraction":
-                align_masked_crops.MIN_HULL_FRACTION,
+            "sift_features": align_masked_crops.SIFT_FEATURES,
+            "ratio": align_masked_crops.MATCH_RATIO,
+            "min_inliers": align_masked_crops.MIN_INLIERS,
+            "ransac_error": align_masked_crops.MAX_ERROR,
+            "ransac_iterations": align_masked_crops.RANSAC_MAX_ITERS,
+            "ransac_confidence": align_masked_crops.RANSAC_CONFIDENCE,
+            "min_inlier_ratio": align_masked_crops.MIN_INLIER_RATIO,
+            "min_hull_fraction": align_masked_crops.MIN_HULL_FRACTION,
         },
     )
 
@@ -419,8 +381,6 @@ def enhanced_composites_stage_fingerprint() -> str:
     )
 
 
-
-
 pipeline = Pipeline(
     [
         Stage(
@@ -429,57 +389,40 @@ pipeline = Pipeline(
             is_complete=frames_complete,
             fingerprint=frames_stage_fingerprint,
         ),
-
         Stage(
             name="tracks",
             run=extract_tracks.run,
             is_complete=tracks_complete,
             fingerprint=tracks_stage_fingerprint,
-            depends_on=(
-                "frames",
-            ),
+            depends_on=("frames",),
         ),
-
         Stage(
             name="masked_crops",
             run=extract_masked_crops.run,
             is_complete=masked_crops_complete,
             fingerprint=masked_crops_stage_fingerprint,
-            depends_on=(
-                "tracks",
-            ),
+            depends_on=("tracks",),
         ),
-
         Stage(
             name="alignments",
             run=align_masked_crops.run,
             is_complete=alignments_complete,
             fingerprint=alignments_stage_fingerprint,
-            depends_on=(
-                "masked_crops",
-            ),
+            depends_on=("masked_crops",),
         ),
-
         Stage(
             name="composites",
             run=build_composites.run,
             is_complete=composites_complete,
             fingerprint=composites_stage_fingerprint,
-            depends_on=(
-                "alignments",
-            ),
+            depends_on=("alignments",),
         ),
-
         Stage(
             name="enhanced_composites",
             run=enhance_composites.run,
             is_complete=enhanced_composites_complete,
             fingerprint=enhanced_composites_stage_fingerprint,
-            depends_on=(
-                "composites",
-            ),
+            depends_on=("composites",),
         ),
-
-
     ]
 )

@@ -1,9 +1,10 @@
 import cv2 as cv
 import numpy as np
 from dataclasses import dataclass, replace
-from src.meros import media, metadata
-from src.meros.config import options
-from src.meros.domain import AlignmentMetadata, TrackSelectionKey
+from meros import media, metadata
+from meros.config import options
+from meros.domain import AlignmentMetadata, TrackSelectionKey
+
 SIFT_FEATURES = 4000
 MATCH_RATIO = 0.75
 MIN_INLIERS = 12
@@ -13,12 +14,14 @@ RANSAC_CONFIDENCE = 0.999
 MIN_INLIER_RATIO = 0.4
 MIN_HULL_FRACTION = 0.1
 
+
 @dataclass(frozen=True)
 class ImageFeatures:
     gray: np.ndarray
     mask: np.ndarray
     keys: list
     descriptors: np.ndarray | None
+
 
 def alignments_complete() -> bool:
     individuals = metadata.read_individuals()
@@ -35,7 +38,7 @@ def alignments_complete() -> bool:
             if set(actual) != expected or len(actual) != len(expected):
                 return False
             for row in alignment.frames:
-                if row.status == 'candidate' and row.source_to_reference is None:
+                if row.status == "accepted" and row.source_to_reference is None:
                     return False
     return True
 
@@ -44,9 +47,12 @@ def run() -> None:
     for individual in metadata.read_individuals():
         for track in individual.tracks:
             accepted, total = align_sequence(track.id, track.reference_frame)
-            print(f'{track.video_id}/{track.track_id}: {accepted}/{total} alignment candidates.')
+            print(f"{track.video_id}/{track.track_id}: {accepted}/{total} alignment candidates.")
 
-def gray_it(image: np.ndarray, apply_erode: bool=True, erode_size: int=21) -> tuple[np.ndarray, np.ndarray]:
+
+def gray_it(
+    image: np.ndarray, apply_erode: bool = True, erode_size: int = 21
+) -> tuple[np.ndarray, np.ndarray]:
     gray = cv.cvtColor(image[:, :, :3], cv.COLOR_BGR2GRAY)
     mask = (image[:, :, 3] == 255).astype(np.uint8) * 255
     if apply_erode:
@@ -54,53 +60,112 @@ def gray_it(image: np.ndarray, apply_erode: bool=True, erode_size: int=21) -> tu
     gray = cv.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
     return (gray, mask)
 
+
 def extract_features(image: np.ndarray, sift) -> ImageFeatures:
     gray, mask = gray_it(image)
     keys, descriptors = sift.detectAndCompute(gray, mask)
     return ImageFeatures(gray=gray, mask=mask, keys=keys, descriptors=descriptors)
 
-def estimate_alignment_from_features(source: ImageFeatures, reference: ImageFeatures, min_inliers: int=MIN_INLIERS, max_error: float=MAX_ERROR) -> tuple[np.ndarray | None, AlignmentMetadata]:
-    result = AlignmentMetadata(status='insufficient_matches', matches=0, inliers=0)
+
+def estimate_alignment_from_features(
+    source: ImageFeatures,
+    reference: ImageFeatures,
+    min_inliers: int = MIN_INLIERS,
+    max_error: float = MAX_ERROR,
+) -> tuple[np.ndarray | None, AlignmentMetadata]:
+    result = AlignmentMetadata(status="insufficient_matches", matches=0, inliers=0)
     if source.descriptors is None or reference.descriptors is None:
         return (None, result)
     matcher = cv.BFMatcher()
     forward = matcher.knnMatch(source.descriptors, reference.descriptors, k=2)
     backward = matcher.knnMatch(reference.descriptors, source.descriptors, k=2)
-    reverse = {pair[0].queryIdx: pair[0].trainIdx for pair in backward if len(pair) == 2 and pair[0].distance < MATCH_RATIO * pair[1].distance}
-    matches = [pair[0] for pair in forward if len(pair) == 2 and pair[0].distance < MATCH_RATIO * pair[1].distance and (reverse.get(pair[0].trainIdx) == pair[0].queryIdx)]
+    reverse = {
+        pair[0].queryIdx: pair[0].trainIdx
+        for pair in backward
+        if len(pair) == 2 and pair[0].distance < MATCH_RATIO * pair[1].distance
+    }
+    matches = [
+        pair[0]
+        for pair in forward
+        if len(pair) == 2
+        and pair[0].distance < MATCH_RATIO * pair[1].distance
+        and (reverse.get(pair[0].trainIdx) == pair[0].queryIdx)
+    ]
     if len(matches) < min_inliers:
-        return (None, AlignmentMetadata(status='insufficient_matches', matches=len(matches), inliers=0))
-    source_points = np.asarray([source.keys[match.queryIdx].pt for match in matches], dtype=np.float32)
-    reference_points = np.asarray([reference.keys[match.trainIdx].pt for match in matches], dtype=np.float32)
+        return (
+            None,
+            AlignmentMetadata(status="insufficient_matches", matches=len(matches), inliers=0),
+        )
+    source_points = np.asarray(
+        [source.keys[match.queryIdx].pt for match in matches], dtype=np.float32
+    )
+    reference_points = np.asarray(
+        [reference.keys[match.trainIdx].pt for match in matches], dtype=np.float32
+    )
     cv.setRNGSeed(0)
-    matrix, inliers = cv.estimateAffine2D(source_points, reference_points, method=cv.RANSAC, ransacReprojThreshold=max_error, maxIters=RANSAC_MAX_ITERS, confidence=RANSAC_CONFIDENCE)
+    matrix, inliers = cv.estimateAffine2D(
+        source_points,
+        reference_points,
+        method=cv.RANSAC,
+        ransacReprojThreshold=max_error,
+        maxIters=RANSAC_MAX_ITERS,
+        confidence=RANSAC_CONFIDENCE,
+    )
     if matrix is None or inliers is None:
-        return (None, AlignmentMetadata(status='estimation_failed', matches=len(matches), inliers=0))
+        return (
+            None,
+            AlignmentMetadata(status="estimation_failed", matches=len(matches), inliers=0),
+        )
     keep = inliers.ravel().astype(bool)
     predicted = cv.transform(source_points[:, None, :], matrix)[:, 0, :]
     errors = np.linalg.norm(predicted - reference_points, axis=1)
     hull = cv.convexHull(reference_points[keep])
     coverage = cv.contourArea(hull) / max(1, cv.countNonZero(reference.mask))
-    accepted = keep.sum() >= min_inliers and keep.mean() >= MIN_INLIER_RATIO and (coverage >= MIN_HULL_FRACTION) and (np.linalg.det(matrix[:, :2]) > 0)
-    result = AlignmentMetadata(status='candidate' if accepted else 'rejected_geometry', matches=len(matches), inliers=int(keep.sum()), inlier_ratio=float(keep.mean()), median_error_px=float(np.median(errors[keep])), inlier_hull_fraction=float(coverage), source_to_reference=matrix.tolist())
+    accepted = (
+        keep.sum() >= min_inliers
+        and keep.mean() >= MIN_INLIER_RATIO
+        and (coverage >= MIN_HULL_FRACTION)
+        and (np.linalg.det(matrix[:, :2]) > 0)
+    )
+    result = AlignmentMetadata(
+        status="accepted" if accepted else "rejected_geometry",
+        matches=len(matches),
+        inliers=int(keep.sum()),
+        inlier_ratio=float(keep.mean()),
+        median_error_px=float(np.median(errors[keep])),
+        inlier_hull_fraction=float(coverage),
+        source_to_reference=matrix.tolist(),
+    )
     return (matrix if accepted else None, result)
 
-def estimate_alignment(source: np.ndarray, reference: np.ndarray, min_inliers: int=MIN_INLIERS, max_error: float=MAX_ERROR) -> tuple[np.ndarray | None, AlignmentMetadata]:
+
+def estimate_alignment(
+    source: np.ndarray,
+    reference: np.ndarray,
+    min_inliers: int = MIN_INLIERS,
+    max_error: float = MAX_ERROR,
+) -> tuple[np.ndarray | None, AlignmentMetadata]:
     """
     Convenience function for tests / individual comparisons.
 
     align_sequence() uses the cached-feature version directly.
     """
     sift = cv.SIFT.create(nfeatures=SIFT_FEATURES)
-    return estimate_alignment_from_features(extract_features(source, sift), extract_features(reference, sift), min_inliers=min_inliers, max_error=max_error)
+    return estimate_alignment_from_features(
+        extract_features(source, sift),
+        extract_features(reference, sift),
+        min_inliers=min_inliers,
+        max_error=max_error,
+    )
+
 
 def align_sequence(_id: TrackSelectionKey, reference_frame: int) -> tuple[int, int]:
     video_id, track_id, start_frame, end_frame, selected_reference = _id
     if reference_frame != selected_reference:
-        raise ValueError('Reference differs from selection key')
-    selection_id = f'{video_id}--{track_id}--{start_frame}-{end_frame}--ref-{reference_frame}'
+        raise ValueError("Reference differs from selection key")
+    selection_id = f"{video_id}--{track_id}--{start_frame}-{end_frame}--ref-{reference_frame}"
     if not start_frame <= reference_frame <= end_frame:
-        raise ValueError('Reference frame must belong to the selected interval.')
+        raise ValueError("Reference frame must belong to the selected interval.")
     reference = media.read_masked_crop(video_id, track_id, reference_frame)
     height, width = reference.shape[:2]
     sift = cv.SIFT.create(nfeatures=SIFT_FEATURES)
@@ -121,15 +186,21 @@ def align_sequence(_id: TrackSelectionKey, reference_frame: int) -> tuple[int, i
         if options.diagnostics:
             aligned = cv.warpAffine(source, matrix, (width, height))
             aligned_gray = cv.warpAffine(source_features.gray, matrix, (width, height))
-            aligned_mask = cv.warpAffine(source_features.mask, matrix, (width, height), flags=cv.INTER_NEAREST)
+            aligned_mask = cv.warpAffine(
+                source_features.mask, matrix, (width, height), flags=cv.INTER_NEAREST
+            )
             overlap = (reference_features.mask > 0) & (aligned_mask > 0)
             overlay = np.zeros((height, width, 3), dtype=np.uint8)
             overlay[:, :, 0] = reference_features.gray
             overlay[:, :, 1] = aligned_gray
             overlay[:, :, 2] = reference_features.gray
             overlay[~overlap] = 0
-            media.write_aligned_crop(video_id, track_id, frame_idx, aligned, selection_id=selection_id)
-            media.write_aligned_overlay(video_id, track_id, frame_idx, overlay, selection_id=selection_id)
+            media.write_aligned_crop(
+                video_id, track_id, frame_idx, aligned, selection_id=selection_id
+            )
+            media.write_aligned_overlay(
+                video_id, track_id, frame_idx, overlay, selection_id=selection_id
+            )
         accepted += 1
     metadata.write_alignment(_id, reference_frame, rows)
     return (accepted, len(rows))
