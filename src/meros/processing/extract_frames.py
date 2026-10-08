@@ -5,23 +5,32 @@ from meros import media, metadata
 
 def frames_complete() -> bool:
     videos = metadata.read_videos()
+
     if not videos:
         return False
+
     for video in videos:
         expected = video.frame_count
+
         if expected is None:
             capture = cv.VideoCapture(video.path)
+
             try:
                 if not capture.isOpened():
                     return False
+
                 expected = int(capture.get(cv.CAP_PROP_FRAME_COUNT))
             finally:
                 capture.release()
+
         if expected <= 0:
             return False
+
         actual = set(media.frame_ids(video.video_id))
+
         if actual != set(range(expected)):
             return False
+
     return True
 
 
@@ -35,6 +44,7 @@ def run() -> None:
         # Remove obsolete frames from an earlier extraction only after opening.
         for path in media.frames_path(video.video_id).glob("*.jpg"):
             path.unlink()
+
         frame_idx = 0
 
         try:

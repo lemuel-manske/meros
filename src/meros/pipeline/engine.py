@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+
 import cv2 as cv
 import numpy as np
 import scipy
+
 from importlib.metadata import version, PackageNotFoundError
 from functools import lru_cache
 
@@ -85,7 +87,9 @@ class Pipeline:
 
             if not force and self._is_current(stage):
                 print(f"{stage.name}: up to date")
+
                 visited.add(name)
+
                 return
 
             print(f"{stage.name}: running")
@@ -189,6 +193,7 @@ def fingerprint(
     """
     Produce a deterministic fingerprint for JSON-compatible values.
     """
+
     serialized = json.dumps(
         values,
         sort_keys=True,
@@ -205,26 +210,33 @@ def file_fingerprint(
     """
     Hash file contents; size/mtime only memoize reads within this process.
     """
+
     path = Path(path)
+
     stat = path.stat()
+
     return content_hash(str(path), stat.st_size, stat.st_mtime_ns)
 
 
 @lru_cache(maxsize=128)
 def content_hash(path: str, size: int, mtime: int) -> str:
     digest = hashlib.sha256()
+
     with Path(path).open("rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
+
     return digest.hexdigest()
 
 
 def implementation_fingerprint() -> str:
     root = Path(__file__).resolve().parents[1]
+
     try:
         torch_version = version("torch")
     except PackageNotFoundError:
         torch_version = None
+
     return fingerprint(
         {
             "opencv": cv.__version__,
@@ -242,6 +254,7 @@ def videos_fingerprint() -> str:
 
     If the raw video changes, downstream frame extraction becomes stale.
     """
+
     rows = []
 
     for video in metadata.read_videos():
@@ -267,6 +280,7 @@ def tracks_fingerprint() -> str:
             track_metadata = metadata.read_track(video.video_id)
         except FileNotFoundError:
             rows.append((video.video_id, None))
+
             continue
 
         tracks = []

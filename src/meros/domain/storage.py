@@ -1,4 +1,5 @@
 import numpy as np
+
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, NamedTuple, Protocol
@@ -213,6 +214,7 @@ class TrackSelection:
     def __post_init__(self) -> None:
         if not 0 <= self.start_frame <= self.reference_frame <= self.end_frame:
             raise ValueError("Invalid selection interval/reference")
+
         for value in (self.video_id, self.track_id):
             if not value or "--" in value or not all((c.isalnum() or c in "_-" for c in value)):
                 raise ValueError("Selection IDs must use letters, digits, underscore or hyphen")

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import cv2 as cv
 import numpy as np
+
 import os
 import tempfile
 from typing import TYPE_CHECKING
@@ -11,6 +12,7 @@ if TYPE_CHECKING:
     from meros.external import SAM2Predictor
 
 from pathlib import Path
+
 from meros.config import options
 
 from meros import media, metadata, Track, TrackMetadata, TrackObservation
@@ -36,6 +38,7 @@ def run() -> None:
             if not AUTO
             else select_known_track_seeds(video_id)
         )
+
         with torch.inference_mode():
             track_metadata = propagate_tracks(video_id, tracks, predictor)
 
@@ -52,23 +55,32 @@ def run() -> None:
 
 def tracks_complete() -> bool:
     videos = metadata.read_videos()
+
     if not videos:
         return False
+
     for video in videos:
         try:
             saved = metadata.read_track(video.video_id)
         except (FileNotFoundError, ValueError, KeyError):
             return False
+
         frame_ids = set(get_frame_ids(video.video_id))
+
         if not frame_ids or not saved.tracks or saved.processed_frame_count != len(frame_ids):
             return False
+
         seeds = metadata.read_bboxes().get(video.video_id, {})
+
         if AUTO and set(saved.tracks) != set(seeds):
             return False
+
         for track in saved.tracks.values():
             observed = {int(idx) for idx in track.frames}
+
             if not observed or not observed <= frame_ids:
                 return False
+
     return True
 
 
@@ -86,6 +98,7 @@ def select_known_track_seeds(
     Based on a previos initial bbox definition for each video,
     it will return a dictionary of tracks with the initial frame and bbox for each subject.
     """
+
     bboxes = metadata.read_bboxes()
 
     if video_id not in bboxes.keys():
@@ -301,8 +314,10 @@ def propagate_tracks(
     # SAM2 must see the full ordered sequence on every run. Diagnostic
     # images are not checkpoints and must never remove frames from inference.
     needed_frames = get_frame_ids(video_id)
+
     if needed_frames != list(range(len(needed_frames))):
         raise ValueError(f"{video_id}: expected contiguous zero-based frames")
+
     if not needed_frames:
         raise ValueError(f"{video_id}: no frames available")
 
@@ -313,6 +328,7 @@ def propagate_tracks(
 
         for temp_idx, original_idx in enumerate(needed_frames):
             src = media.frame_path(video_id, original_idx).resolve()
+
             dst = tmp_path / f"{temp_idx:06d}.jpg"
 
             os.link(src, dst)
@@ -334,6 +350,7 @@ def propagate_tracks(
         )
 
         processed = set()
+
         for (
             tmp_idx,
             obj_ids,
@@ -341,7 +358,9 @@ def propagate_tracks(
         ) in predictor.propagate_in_video(state):
             if tmp_idx in processed or not 0 <= tmp_idx < len(frame_map):
                 raise RuntimeError("Invalid SAM2 frame index")
+
             processed.add(tmp_idx)
+
             frame_idx = frame_map[tmp_idx]
 
             process_frame(
@@ -354,6 +373,7 @@ def propagate_tracks(
 
         if processed != set(range(len(frame_map))):
             raise RuntimeError("SAM2 did not process the full sequence")
+
         return TrackMetadata(video_id, tracks, len(processed))
 
 
@@ -423,6 +443,7 @@ def process_frame(
         mask_logits,
     ):
         track_id = str(int(obj_id))
+
         track = track_metadata.tracks[track_id]
 
         if frame_idx < track.initial_frame:
@@ -435,6 +456,7 @@ def process_frame(
                 f"Warning: mask shape {mask.shape} does not match "
                 f"frame shape {frame.shape[:2]} for frame {frame_idx}."
             )
+
             continue
 
         bbox = bbox_from_mask(mask)
