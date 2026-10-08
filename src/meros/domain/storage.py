@@ -26,9 +26,6 @@ class MediaStore(Protocol):
     def composite_comparison_exists(self, video_id: str, track_id: str, ref_frame_idx: int, *, selection_id: str) -> bool:
         ...
 
-    def composite_matches_exists(self, video_id: str, track_id: str, other_video_id: str, other_track_id: str, enhanced: bool=False) -> bool:
-        ...
-
     def visualization_exists(self, video_id: str, frame_idx: int) -> bool:
         ...
 
@@ -39,12 +36,6 @@ class MediaStore(Protocol):
         ...
 
     def write_frame(self, video_id: str, frame_idx: int, frame: np.ndarray) -> None:
-        ...
-
-    def read_crop(self, video_id: str, track_id: str, frame_idx: int) -> np.ndarray:
-        ...
-
-    def write_crop(self, video_id: str, track_id: str, frame_idx: int, crop: np.ndarray) -> None:
         ...
 
     def read_masked_crop(self, video_id: str, track_id: str, frame_idx: int) -> np.ndarray:
@@ -83,12 +74,6 @@ class MediaStore(Protocol):
     def write_composite_comparison(self, video_id: str, track_id: str, ref_frame_idx: int, composite_comparison: np.ndarray, *, selection_id: str) -> None:
         ...
 
-    def read_composite_matches(self, video_id: str, track_id: str, other_video_id: str, other_track_id: str, enhanced: bool=False) -> np.ndarray:
-        ...
-
-    def write_composite_matches(self, video_id: str, track_id: str, other_video_id: str, other_track_id: str, composite_matches: np.ndarray, enhanced: bool=False) -> None:
-        ...
-
     def read_visualization(self, video_id: str, frame_idx: int) -> np.ndarray:
         ...
 
@@ -110,14 +95,6 @@ class Track:
 class TrackMetadata:
     video_id: str
     tracks: dict[str, Track]
-
-@dataclass(frozen=True)
-class TrackAnnotation:
-    track_id: str
-    start_frame: int
-    end_frame: int
-    viewpoint: str
-    quality: int
 AlignmentStatus = Literal['insufficient_matches', 'estimation_failed', 'candidate', 'rejected_geometry']
 
 @dataclass(frozen=True)

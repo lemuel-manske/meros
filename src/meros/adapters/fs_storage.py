@@ -32,9 +32,6 @@ class MediaPaths:
     def frame(self, video_id: str, frame_idx: int) -> Path:
         return _FRAMES_MEDIA_FOLDER / video_id / f'{frame_idx}.jpg'
 
-    def crop(self, video_id: str, track_id: str, frame_idx: int) -> Path:
-        return _CROPS_MEDIA_FOLDER / video_id / track_id / f'{frame_idx}.jpg'
-
     def masked_crop(self, video_id: str, track_id: str, frame_idx: int) -> Path:
         return _MASKED_CROPS_MEDIA_FOLDER / video_id / track_id / f'{frame_idx}.png'
 
@@ -52,11 +49,6 @@ class MediaPaths:
 
     def composite_comparison(self, video_id: str, track_id: str, ref_frame_idx: int, *, selection_id: str) -> Path:
         return _SELECTION_MEDIA_FOLDER / selection_id / f'{ref_frame_idx}_median_comparison.png'
-
-    def composite_matches(self, video_id: str, track_id: str, other_video_id: str, other_track_id: str, enhanced: bool=False) -> Path:
-        variant = 'enhanced' if enhanced else 'original'
-        pair = f'{video_id}_{track_id}--{other_video_id}_{other_track_id}'
-        return _MATCHES_MEDIA_FOLDER / pair / f'{variant}.png'
 
     def visualization(self, video_id: str, frame_idx: int) -> Path:
         return _VISUALIZATIONS_MEDIA_FOLDER / video_id / f'{frame_idx}.jpg'
@@ -97,9 +89,6 @@ class LocalFsMediaStore(MediaStore):
     def composite_comparison_exists(self, video_id: str, track_id: str, ref_frame_idx: int, *, selection_id: str) -> bool:
         return self.paths.composite_comparison(video_id, track_id, ref_frame_idx, selection_id=selection_id).is_file()
 
-    def composite_matches_exists(self, video_id: str, track_id: str, other_video_id: str, other_track_id: str, enhanced: bool=False) -> bool:
-        return self.paths.composite_matches(video_id, track_id, other_video_id, other_track_id, enhanced).is_file()
-
     def visualization_exists(self, video_id: str, frame_idx: int) -> bool:
         return self.paths.visualization(video_id, frame_idx).is_file()
 
@@ -119,12 +108,6 @@ class LocalFsMediaStore(MediaStore):
 
     def write_frame(self, video_id: str, frame_idx: int, frame: np.ndarray) -> None:
         self._write_image(self.paths.frame(video_id, frame_idx), frame)
-
-    def read_crop(self, video_id: str, track_id: str, frame_idx: int) -> np.ndarray:
-        return self._read_image(self.paths.crop(video_id, track_id, frame_idx))
-
-    def write_crop(self, video_id: str, track_id: str, frame_idx: int, crop: np.ndarray) -> None:
-        self._write_image(self.paths.crop(video_id, track_id, frame_idx), crop)
 
     def read_masked_crop(self, video_id: str, track_id: str, frame_idx: int) -> np.ndarray:
         return self._read_image(self.paths.masked_crop(video_id, track_id, frame_idx), cv.IMREAD_UNCHANGED)
@@ -163,12 +146,6 @@ class LocalFsMediaStore(MediaStore):
     def write_composite_comparison(self, video_id: str, track_id: str, ref_frame_idx: int, composite_comparison: np.ndarray, *, selection_id: str) -> None:
         self._write_image(self.paths.composite_comparison(video_id, track_id, ref_frame_idx, selection_id=selection_id), composite_comparison)
 
-    def read_composite_matches(self, video_id: str, track_id: str, other_video_id: str, other_track_id: str, enhanced: bool=False) -> np.ndarray:
-        return self._read_image(self.paths.composite_matches(video_id, track_id, other_video_id, other_track_id, enhanced))
-
-    def write_composite_matches(self, video_id: str, track_id: str, other_video_id: str, other_track_id: str, composite_matches: np.ndarray, enhanced: bool=False) -> None:
-        self._write_image(self.paths.composite_matches(video_id, track_id, other_video_id, other_track_id, enhanced), composite_matches)
-
     def read_visualization(self, video_id: str, frame_idx: int) -> np.ndarray:
         return self._read_image(self.paths.visualization(video_id, frame_idx))
 
@@ -181,10 +158,7 @@ class MetadataPaths:
     def track(self, video_id: str) -> Path:
         return _TRACKS_METADATA_FOLDER / video_id / 'metadata.json'
 
-    def annotations(self, video_id: str, track_id: str) -> Path:
-        return _ANNOTATIONS_METADATA_FOLDER / video_id / track_id / 'metadata.csv'
-
-    def alignment(self, video_id: str, track_id: str, start_frame: int, end_frame: int, reference_frame: int | None = None) -> Path:
+    def alignment(self, video_id: str, track_id: str, start_frame: int, end_frame: int, reference_frame: int | None=None) -> Path:
         suffix = '' if reference_frame is None else f'_ref_{reference_frame}'
         return _ALIGNMENT_METADATA_FOLDER / video_id / f'{track_id}_{start_frame}_{end_frame}{suffix}.json'
 
@@ -212,6 +186,7 @@ class LocalFsMetadataStore(MetadataStore):
 
     def __init__(self) -> None:
         self.paths = MetadataPaths()
+        self.individuals_path: Path | None = None
 
     def read_video(self, video_id: str) -> Video:
         videos = self.read_videos()
@@ -231,7 +206,7 @@ class LocalFsMetadataStore(MetadataStore):
         return [Video(**video_metadata) for video_metadata in metadata]
 
     def read_individuals(self) -> list[Individual]:
-        with self.paths.individuals().open('r', encoding='utf-8') as f:
+        with (self.individuals_path or self.paths.individuals()).open('r', encoding='utf-8') as f:
             metadata = json.load(f)
         return [Individual(individual_id=item['individual_id'], tracks=[TrackSelection(**track) for track in item['tracks']]) for item in metadata]
 

@@ -17,7 +17,6 @@ from src.meros.cmd import (
     extract_frames,
     extract_masked_crops,
     extract_tracks,
-    match_composites,
 )
 
 from src.meros.cmd.align_masked_crops import alignments_complete
@@ -26,7 +25,6 @@ from src.meros.cmd.enhance_composites import enhanced_composites_complete
 from src.meros.cmd.extract_frames import frames_complete
 from src.meros.cmd.extract_masked_crops import masked_crops_complete
 from src.meros.cmd.extract_tracks import tracks_complete
-from src.meros.cmd.match_composites import matches_complete
 
 
 _STATE_FOLDER = Path("data/.pipeline")
@@ -421,35 +419,6 @@ def enhanced_composites_stage_fingerprint() -> str:
     )
 
 
-def matches_stage_fingerprint() -> str:
-    return fingerprint(
-        "match_composites:v2",
-        composites_stage_fingerprint(),
-        enhanced_composites_stage_fingerprint(),
-        individuals_fingerprint(),
-        {
-            "sift_features":
-                match_composites.SIFT_FEATURES,
-
-            "ratio":
-                match_composites.DEFAULT_RATIO,
-
-            "mask_erosion":
-                match_composites.DEFAULT_ERODE,
-
-            "ransac_min_matches":
-                match_composites.RANSAC_MIN_MATCHES,
-
-            "ransac_error":
-                match_composites.RANSAC_ERROR,
-
-            "ransac_iterations":
-                match_composites.RANSAC_MAX_ITERS,
-
-            "ransac_confidence":
-                match_composites.RANSAC_CONFIDENCE,
-        },
-    )
 
 
 pipeline = Pipeline(
@@ -511,15 +480,6 @@ pipeline = Pipeline(
             ),
         ),
 
-        Stage(
-            name="matches",
-            run=match_composites.run,
-            is_complete=matches_complete,
-            fingerprint=matches_stage_fingerprint,
-            depends_on=(
-                "composites",
-                "enhanced_composites",
-            ),
-        ),
+
     ]
 )
