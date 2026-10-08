@@ -61,7 +61,7 @@ Archive these as original human annotations, with their originating tracking rev
 
 There is no root README or package manifest. `make run` stops at masked crops; it does not run 002. All imports use `src.meros`, tying invocation and data paths to the repository working directory. `requirements.txt` mixes direct libraries with a large environment freeze and an unusual editable SAM2 URL containing `../../../external/sam2`. A clean install was not tested. The checkpoint and CUDA choice are hardcoded and checkpoint acquisition is undocumented.
 
-Preserve the existing freeze as historical environment evidence, then declare direct runtime dependencies and a tested lock/setup workflow. Likely groups: analysis (NumPy, OpenCV, SciPy), segmentation (Torch and pinned SAM2 with its requirements), and data tooling (DVC with the configured backend). Do not remove transitive packages from a lock merely because application code does not import them. Python must support the existing `type` statement syntax (3.12+).
+Declare direct runtime dependencies and a tested setup workflow in `pyproject.toml`; retire the old freeze rather than retaining another dependency file. Likely groups: analysis (NumPy, OpenCV, SciPy), segmentation (Torch and pinned SAM2 with its requirements), and data tooling (DVC with the configured backend). If a lockfile is introduced later, its transitive packages should be resolved by the packaging tool rather than selected from application imports. Python must support the existing `type` statement syntax (3.12+).
 
 ## Keep, remove, or consolidate
 
