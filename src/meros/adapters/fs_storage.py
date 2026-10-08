@@ -1,5 +1,7 @@
 import cv2 as cv
 import json
+import os
+import tempfile
 import numpy as np
 
 from dataclasses import asdict, dataclass
@@ -619,6 +621,18 @@ class MetadataPaths:
         return _INDIVIDUALS_METADATA_FOLDER / "individuals.json"
 
 
+def write_json_atomic(path: Path, payload: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(payload, stream, indent=2)
+            stream.write("\n")
+        os.replace(temporary, path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
 class LocalFsMetadataStore(MetadataStore):
     def __init__(self) -> None:
         self.paths = MetadataPaths()
@@ -706,13 +720,7 @@ class LocalFsMetadataStore(MetadataStore):
         path = self.paths.track(video_id)
         path.parent.mkdir(parents=True, exist_ok=True)
 
-        with path.open("w", encoding="utf-8") as f:
-            json.dump(
-                asdict(metadata),
-                f,
-                indent=2,
-            )
-            f.write("\n")
+        write_json_atomic(path, asdict(metadata))
 
     def write_alignment(
         self,
@@ -738,9 +746,7 @@ class LocalFsMetadataStore(MetadataStore):
             ],
         }
 
-        with path.open("w", encoding="utf-8") as f:
-            json.dump(payload, f, indent=2)
-            f.write("\n")
+        write_json_atomic(path, payload)
 
     def read_alignment(
         self,

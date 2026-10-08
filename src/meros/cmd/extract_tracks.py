@@ -1,13 +1,19 @@
+from __future__ import annotations
+
 import cv2 as cv
 import numpy as np
 import os
 import tempfile
-import torch
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import torch
+    from src.meros.external import SAM2Predictor
 
 from pathlib import Path
+from src.meros.config import options
 
 from src.meros import media, metadata, Track, TrackMetadata, TrackObservation
-from src.meros.external import build_sam2_predictor, SAM2Predictor
 
 
 AUTO = True  # controls whether to automatically select subjects or prompt for manual selection
@@ -17,17 +23,20 @@ _ADD_TRACK_KEY = "a"
 
 
 def run() -> None:
+    import torch
+    from src.meros.external import build_sam2_predictor
+
     predictor = build_sam2_predictor()
 
     for video in metadata.read_videos():
         video_id = video.video_id
 
         tracks = manually_select_subjects(video_id) if not AUTO else auto_select_subjects(video_id)
-        track_metadata = propagate_tracks(
-            video_id,
-            tracks,
-            predictor,
-        )
+        with torch.inference_mode():
+            track_metadata = propagate_tracks(video_id, tracks, predictor)
+
+        if not track_metadata.tracks or any(not t.frames for t in track_metadata.tracks.values()):
+            raise RuntimeError(f"{video_id}: incomplete tracking; saved metadata was not replaced")
 
         metadata.write_track(
             video_id,
@@ -38,14 +47,24 @@ def run() -> None:
 
 
 def tracks_complete() -> bool:
-    for video in metadata.read_videos():
-        for frame_idx in range(video.frame_count):
-            if not media.visualization_exists(
-                video.video_id,
-                frame_idx
-            ):
+    videos = metadata.read_videos()
+    if not videos:
+        return False
+    for video in videos:
+        try:
+            saved = metadata.read_track(video.video_id)
+        except (FileNotFoundError, ValueError, KeyError):
+            return False
+        frame_ids = set(get_frame_ids(video.video_id))
+        if not frame_ids or not saved.tracks:
+            return False
+        seeds = metadata.read_bboxes().get(video.video_id, {})
+        if AUTO and set(saved.tracks) != set(seeds):
+            return False
+        for track in saved.tracks.values():
+            observed = {int(idx) for idx in track.frames}
+            if not observed or not observed <= frame_ids:
                 return False
-
     return True
 
 
@@ -284,11 +303,13 @@ def propagate_tracks(
         tracks=tracks,
     )
 
-    needed_frames = [
-        frame_idx
-        for frame_idx in range(metadata.read_video(video_id).frame_count)
-        if not media.visualization_exists(video_id, frame_idx)
-    ]
+    # SAM2 must see the full ordered sequence on every run. Diagnostic
+    # images are not checkpoints and must never remove frames from inference.
+    needed_frames = get_frame_ids(video_id)
+    if needed_frames != list(range(len(needed_frames))):
+        raise ValueError(f"{video_id}: expected contiguous zero-based frames")
+    if not needed_frames:
+        raise ValueError(f"{video_id}: no frames available")
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
@@ -395,7 +416,7 @@ def process_frame(
         frame_idx,
     )
 
-    visualization = frame.copy()
+    visualization = frame.copy() if options.diagnostics else None
 
     for obj_id, logits in zip(
         obj_ids,
@@ -429,15 +450,13 @@ def process_frame(
             mask_area=int(mask.sum()),
         )
 
-        draw_mask(
-            visualization,
+        if visualization is not None:
+            draw_mask(
+                visualization,
             mask,
             obj_id=int(obj_id),
             bbox=bbox,
         )
 
-    media.write_visualization(
-        video_id,
-        frame_idx,
-        visualization,
-    )
+    if visualization is not None:
+        media.write_visualization(video_id, frame_idx, visualization)
