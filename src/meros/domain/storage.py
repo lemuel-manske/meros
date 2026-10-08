@@ -291,7 +291,7 @@ class Video:
     mirrored: bool
     fname: str
     path: str
-    frame_count: int
+    frame_count: int | None = None
 
 
 type BBox  = dict[str, list[int]]

@@ -1,9 +1,14 @@
+from __future__ import annotations
+
 import cv2 as cv
 import numpy as np
-import torch
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import torch
+    from src.meros.external import SAM2Predictor
 
 from src.meros import media, metadata
-from src.meros.external import build_sam2_predictor, SAM2Predictor
 
 
 def masked_crops_complete() -> bool:
@@ -31,6 +36,9 @@ def masked_crops_complete() -> bool:
 
 
 def run() -> None:
+    import torch
+    from src.meros.external import build_sam2_predictor
+
     predictor = build_sam2_predictor()
 
     with torch.inference_mode():
