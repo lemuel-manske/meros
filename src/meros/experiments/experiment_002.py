@@ -200,8 +200,6 @@ def evaluate(individuals, output: Path, *, cross_video_only=False, preparation_f
                 "alignment": constants(align_masked_crops),
                 "enhancement": constants(enhance_composites),
             },
-            "baseline": json.loads(Path("experiments/002/baseline.json").read_text()),
-            "note": "A new run; historical README numbers were not asserted or relabeled.",
         }
 
         (temporary / "run.json").write_text(json.dumps(provenance, indent=2) + "\n")

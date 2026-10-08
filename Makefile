@@ -26,7 +26,7 @@ BIND ?= 127.0.0.1
 
 .PHONY: help init install install-sam2 sam2-submodule
 .PHONY: data-pull data-save data-push results-save
-.PHONY: run evaluate diagnostics migrate
+.PHONY: run evaluate diagnostics
 .PHONY: test lint format format-check cli-check check serve-media
 
 
@@ -36,7 +36,7 @@ help:
 	@printf '%s\n' \
 		'Setup:       init, install, install-sam2' \
 		'Data:        data-pull, data-save, data-push, results-save RUN_DIR=...' \
-		'Experiment:  run, evaluate, diagnostics, migrate (optional ARGS="...")' \
+		'Experiment:  run, evaluate, diagnostics (optional ARGS="...")' \
 		'Checks:      test, lint, format, format-check, cli-check, check' \
 		'Preview:     serve-media (optional PORT=... BIND=...)'
 
@@ -95,10 +95,6 @@ diagnostics:
 	$(PYTHON) -m meros.experiments.experiment_002 --diagnostics $(ARGS)
 
 
-migrate:
-	$(PYTHON) -m meros.experiments.migrate_002 $(ARGS)
-
-
 # Tests, code style, and CPU CLI checks.
 
 test:
@@ -119,8 +115,6 @@ format-check:
 
 cli-check:
 	$(PYTHON) -m meros.experiments.experiment_002 --help
-
-	$(PYTHON) -m meros.experiments.migrate_002 --help
 
 
 check: test lint format-check cli-check

@@ -18,7 +18,6 @@ dev = ["pytest>=8,<10", "ruff>=0.14"]
 
 [project.scripts]
 meros-002 = "meros.experiments.experiment_002:main"
-meros-migrate-002 = "meros.experiments.migrate_002:main"
 
 
 [tool.setuptools.packages.find]

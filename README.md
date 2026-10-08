@@ -28,18 +28,16 @@ Obtain the official SAM2.1 Hiera Large checkpoint using the pinned submodule's d
 
 ## Run experiment 002
 
-To reuse old composites, first copy them into selection-scoped paths with validation and a checksum receipt. Originals are retained:
-
-```sh
-make migrate
-
-make evaluate
-```
-
-To rebuild all required representations and evaluate:
+Build the required representations and evaluate using the current organization:
 
 ```sh
 make run
+```
+
+To evaluate representations already prepared in the current layout:
+
+```sh
+make evaluate
 ```
 
 Pass CLI options through `ARGS`, for example `make evaluate ARGS="--manifest path/to/selections.json --output results/002/my-run"`. The default is the frozen `experiments/002/selections.json`. `--cross-video-only` excludes same-video comparisons. `--output results/002/my-run` sets an explicit destination; existing run directories cannot be overwritten.
@@ -62,7 +60,7 @@ Each successful run contains `metrics.csv`, `run.json`, and the exact 21 PNG rep
 
 Aligned crops are reconstructed from transforms in memory during composite construction. They do not need to be saved. Original videos remain the source data. Cache fingerprints include source contents, mirroring, seeds, checkpoint contents, implementation identity, and processing settings; changing code conservatively invalidates preparation.
 
-Media remains inside the existing DVC-managed `data/media` tree to avoid a blind migration of unavailable media. After producing new artifacts, explicitly version them with `make data-save` and `make data-push`. Run evidence under `results/` is excluded from Git; preserve it with `make results-save RUN_DIR=results/002/<run-id>` and `make data-push`, then commit the pointer. Pipeline fingerprints under `data/.pipeline` are local disposable state.
+Raw videos and generated media are stored in the DVC-managed `data/media` tree. After producing new artifacts, explicitly version them with `make data-save` and `make data-push`. Run evidence under `results/` is excluded from Git; preserve it with `make results-save RUN_DIR=results/002/<run-id>` and `make data-push`, then commit the pointer. Pipeline fingerprints under `data/.pipeline` are local disposable state.
 
 ## Code and metadata
 
@@ -70,12 +68,12 @@ Media remains inside the existing DVC-managed `data/media` tree to avoid a blind
 - `src/meros/adapters`: filesystem paths and serialization.
 - `src/meros/processing`: image-processing steps and reusable matcher.
 - `src/meros/pipeline`: stage orchestration and invalidation.
-- `src/meros/experiments`: evaluation and reversible legacy migration.
-- `experiments/002`: preserved selections, historical notes, and baseline provenance.
+- `src/meros/experiments`: experiment evaluation.
+- `experiments/002`: the current selection manifest and experiment notes.
 
-An **individual** is a biological identity; a **track** is local to a video; a **TrackSelection** is an inclusive interval plus a reference frame. Derived outputs are keyed by the entire selection. The existing identity JSON format remains readable, and historical alignment `candidate` statuses are translated to `accepted` when read. Source annotation CSVs are retained unchanged because their old track mapping is unresolved.
+An **individual** is a biological identity; a **track** is local to a video; a **TrackSelection** is an inclusive interval plus a reference frame. Derived outputs are keyed by the entire selection. Alignment metadata uses the `accepted` status and includes the reference frame in its path. The current organization is the supported workflow; earlier implementations and layouts are available in Git history.
 
-The broader research objectives remain in `SPEC.md`. See `docs/engineering-review.md` for the review of the pre-refactor revision and `docs/migration.md` for compatibility details.
+The broader research objectives remain in `SPEC.md`. Experiment findings and limitations are documented in `experiments/002/README.md`.
 
 ## Validation
 
