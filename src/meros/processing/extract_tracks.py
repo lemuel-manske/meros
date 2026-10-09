@@ -95,29 +95,53 @@ def tracks_complete(project: Project) -> bool:
 
 
 def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
-    window = f"{video_id}: Enter = save, a = add fish, Esc = cancel"
+    window = f"{video_id}: a = add fish, Enter = confirm box, q = save, Esc = cancel"
 
     boxes: BBox = {}
 
-    def add_fish() -> None:
-        x, y, width, height = cv.selectROI(window, frame, showCrosshair=True, fromCenter=False)
+    height, width = frame.shape[:2]
 
-        if width > 0 and height > 0:
-            boxes[str(len(boxes))] = [int(x), int(y), int(x + width - 1), int(y + height - 1)]
+    adding = False
 
-        elif not boxes:
-            raise ValueError(f"{video_id}: no fish selected; seed boxes were not saved")
+    drag_start: tuple[int, int] | None = None
 
-    print(f"{video_id}: draw a fish box and press Enter/Space to confirm.")
+    pending: list[int] | None = None
 
-    print("Then press Enter to save, a to add another fish, or Esc to cancel without saving.")
+    def on_mouse(event: int, x: int, y: int, flags: int, userdata: object) -> None:
+        nonlocal drag_start, pending
 
-    cv.namedWindow(window, cv.WINDOW_NORMAL)
+        if not adding:
+            return
+
+        x = min(max(x, 0), width - 1)
+
+        y = min(max(y, 0), height - 1)
+
+        if event == cv.EVENT_LBUTTONDOWN:
+            drag_start = (x, y)
+
+            pending = None
+
+        elif drag_start is not None and event in (cv.EVENT_MOUSEMOVE, cv.EVENT_LBUTTONUP):
+            start_x, start_y = drag_start
+
+            pending = [min(start_x, x), min(start_y, y), max(start_x, x), max(start_y, y)]
+
+            if event == cv.EVENT_LBUTTONUP:
+                drag_start = None
+
+    print(f"{video_id}: press a, drag a fish box, then press Enter/Space to confirm.")
+
+    print("Press a for another fish, q to save and continue, or Esc to cancel without saving.")
+
+    cv.namedWindow(window, cv.WINDOW_NORMAL | cv.WINDOW_GUI_NORMAL)
 
     try:
-        add_fish()
+        cv.imshow(window, frame)
 
-        while cv.getWindowProperty(window, cv.WND_PROP_VISIBLE) >= 1:
+        cv.setMouseCallback(window, on_mouse)
+
+        while True:
             preview = frame.copy()
 
             for track_id, (x1, y1, x2, y2) in boxes.items():
@@ -133,27 +157,59 @@ def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
                     2,
                 )
 
+            if pending is not None:
+                x1, y1, x2, y2 = pending
+
+                cv.rectangle(preview, (x1, y1), (x2, y2), (0, 255, 255), 2)
+
             cv.imshow(window, preview)
 
-            key = cv.waitKey(30) & 0xFF
+            key = cv.waitKeyEx(30)
 
-            if key in (10, 13):
-                break
+            try:
+                visible = cv.getWindowProperty(window, cv.WND_PROP_VISIBLE) >= 1
+            except cv.error:
+                visible = False
 
-            if key == 27:
+            if not visible or key in (27, 0x01000000):
                 raise ValueError(f"{video_id}: fish selection cancelled; seed boxes were not saved")
 
             if key == ord("a"):
-                add_fish()
-        else:
-            raise ValueError(f"{video_id}: selection window closed; seed boxes were not saved")
+                adding = True
+
+                drag_start = None
+
+                pending = None
+
+            # waitKeyEx preserves Qt/X11 Return and keypad Enter codes.
+            elif key in (10, 13, 32, 0x01000004, 0x01000005, 0xFF0D, 0xFF8D):
+                if pending is not None and drag_start is None:
+                    x1, y1, x2, y2 = pending
+
+                    if x2 > x1 and y2 > y1:
+                        boxes[str(len(boxes))] = pending
+
+                        pending = None
+
+                        adding = False
+
+            elif key == ord("q"):
+                if pending is not None or drag_start is not None:
+                    print("Confirm the pending fish with Enter, or press a to discard it.")
+
+                    continue
+
+                if not boxes:
+                    raise ValueError(f"{video_id}: no fish selected; seed boxes were not saved")
+
+                return boxes
     finally:
-        cv.destroyWindow(window)
-
-    if not boxes:
-        raise ValueError(f"{video_id}: no fish selected; seed boxes were not saved")
-
-    return boxes
+        # Qt can destroy its GUI receiver when the user closes the last window.
+        # Cleanup must not replace the selection/cancellation error.
+        try:
+            cv.destroyWindow(window)
+        except cv.error:
+            pass
 
 
 def select_track_seeds(
