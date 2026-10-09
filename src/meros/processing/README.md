@@ -1,3 +1,3 @@
 # Processing
 
-Modules expose a `run()` preparation step where applicable and reusable image functions. The matcher is a pure pair operation used by experiment evaluation. Diagnostics are opt-in and never determine stage completeness. Alignment stores transforms; composite construction applies them to masked crops in memory.
+Modules expose a preparation step and reusable image functions. Preparation runs in a fixed order and uses each step's completion check to reuse valid outputs. Rebuilding a step rebuilds the steps after it. Alignment stores transforms; composite construction applies them in memory. The matcher returns comparison statistics.

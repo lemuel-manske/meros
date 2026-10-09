@@ -73,17 +73,15 @@ class ProjectFixture:
     individuals: list[Individual]
 
     def pipeline(self) -> Pipeline:
-        return create_pipeline(self.project, predictor_factory=lambda: self.predictor)
+        return create_pipeline(self.project, predictor_factory=lambda checkpoint: self.predictor)
 
     def prepare(self) -> None:
-        self.pipeline().run("enhanced_composites")
+        self.pipeline().run()
 
     def selections(self) -> list[TrackSelection]:
         return [track for individual in self.individuals for track in individual.tracks]
 
     def empty_selections(self) -> None:
-        assert self.project.metadata.individuals_path is not None
-
         write_json_atomic(self.project.metadata.individuals_path, [])
 
 
@@ -93,8 +91,6 @@ def create_project(root: Path) -> ProjectFixture:
     checkpoint = root / "recorded-segmentation"
 
     root.mkdir(parents=True, exist_ok=True)
-
-    checkpoint.write_text("Deterministic CPU segmentation fixture\n")
 
     project = Project.open(root, manifest=manifest, checkpoint=checkpoint)
 

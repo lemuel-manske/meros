@@ -1,9 +1,9 @@
 import cv2 as cv
 
-from meros.project import Project, default_project
+from meros.project import Project
 
 
-def frames_complete(project: Project = default_project) -> bool:
+def frames_complete(project: Project) -> bool:
     try:
         videos = project.metadata.read_videos()
     except (OSError, ValueError, KeyError, TypeError):
@@ -48,7 +48,7 @@ def frames_complete(project: Project = default_project) -> bool:
     return True
 
 
-def run(project: Project = default_project) -> None:
+def run(project: Project) -> None:
     for video in project.metadata.read_videos():
         capture = cv.VideoCapture(video.path)
 

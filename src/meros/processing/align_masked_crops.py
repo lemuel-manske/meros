@@ -4,9 +4,9 @@ import numpy as np
 from dataclasses import dataclass, replace
 from collections.abc import Sequence
 
-from meros.project import Project, default_project
+from meros.project import Project
 
-from meros.domain import AlignmentMetadata, TrackSelectionKey
+from meros.domain import AlignmentMetadata, TrackSelection
 
 SIFT_FEATURES = 4000
 MATCH_RATIO = 0.75
@@ -29,7 +29,7 @@ class ImageFeatures:
     descriptors: np.ndarray | None
 
 
-def alignments_complete(project: Project = default_project) -> bool:
+def alignments_complete(project: Project) -> bool:
     try:
         individuals = project.metadata.read_individuals()
     except (OSError, ValueError, KeyError, TypeError):
@@ -86,10 +86,10 @@ def alignments_complete(project: Project = default_project) -> bool:
     return True
 
 
-def run(project: Project = default_project) -> None:
+def run(project: Project) -> None:
     for individual in project.metadata.read_individuals():
         for track in individual.tracks:
-            accepted, total = align_sequence(track.id, track.reference_frame, project=project)
+            accepted, total = align_sequence(track, project=project)
 
             print(f"{track.video_id}/{track.track_id}: {accepted}/{total} alignment candidates.")
 
@@ -231,22 +231,10 @@ def estimate_alignment(
     )
 
 
-def align_sequence(
-    _id: TrackSelectionKey, reference_frame: int, *, project: Project = default_project
-) -> tuple[int, int]:
-    video_id, track_id, start_frame, end_frame, selected_reference = _id
-
-    if reference_frame != selected_reference:
-        raise ValueError("Reference differs from selection key")
-
-    selection_id = f"{video_id}--{track_id}--{start_frame}-{end_frame}--ref-{reference_frame}"
-
-    if not start_frame <= reference_frame <= end_frame:
-        raise ValueError("Reference frame must belong to the selected interval.")
+def align_sequence(selection: TrackSelection, *, project: Project) -> tuple[int, int]:
+    video_id, track_id, start_frame, end_frame, reference_frame = selection.id
 
     reference = project.media.read_masked_crop(video_id, track_id, reference_frame)
-
-    height, width = reference.shape[:2]
 
     sift = cv.SIFT.create(nfeatures=SIFT_FEATURES)
 
@@ -264,48 +252,14 @@ def align_sequence(
 
         source_features = extract_features(source, sift)
 
-        matrix, result = estimate_alignment_from_features(source_features, reference_features)
+        _, result = estimate_alignment_from_features(source_features, reference_features)
 
         result = replace(result, frame_idx=frame_idx)
 
         rows.append(result)
 
-        if matrix is None:
-            project.media.remove_alignment(video_id, track_id, frame_idx, selection_id=selection_id)
+        accepted += result.status == "accepted"
 
-            continue
-
-        if project.options.diagnostics:
-            aligned = cv.warpAffine(source, matrix, (width, height))
-
-            aligned_gray = cv.warpAffine(source_features.gray, matrix, (width, height))
-
-            aligned_mask = cv.warpAffine(
-                source_features.mask, matrix, (width, height), flags=cv.INTER_NEAREST
-            )
-
-            overlap = (reference_features.mask > 0) & (aligned_mask > 0)
-
-            overlay = np.zeros((height, width, 3), dtype=np.uint8)
-
-            overlay[:, :, 0] = reference_features.gray
-
-            overlay[:, :, 1] = aligned_gray
-
-            overlay[:, :, 2] = reference_features.gray
-
-            overlay[~overlap] = 0
-
-            project.media.write_aligned_crop(
-                video_id, track_id, frame_idx, aligned, selection_id=selection_id
-            )
-
-            project.media.write_aligned_overlay(
-                video_id, track_id, frame_idx, overlay, selection_id=selection_id
-            )
-
-        accepted += 1
-
-    project.metadata.write_alignment(_id, reference_frame, rows)
+    project.metadata.write_alignment(selection.id, rows)
 
     return (accepted, len(rows))

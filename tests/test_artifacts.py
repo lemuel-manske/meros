@@ -15,10 +15,7 @@ def test_selection_paths_include_interval_and_reference():
         TrackSelection("v", "0", 1, 10, 5),
     ]
 
-    outputs = {
-        paths.composite("v", "0", track.reference_frame, selection_id=track.selection_id)
-        for track in selections
-    }
+    outputs = {paths.composite(track) for track in selections}
 
     assert len(outputs) == 3
 
@@ -39,9 +36,7 @@ def test_preparation_keeps_transforms_without_intermediate_images(prepared_proje
 
         assert all(row.status == "accepted" for row in alignment.frames)
 
-        directory = project.media.paths.composite(
-            track.video_id, track.track_id, track.reference_frame, selection_id=track.selection_id
-        ).parent
+        directory = project.media.paths.composite(track).parent
 
         assert {path.name for path in directory.iterdir()} == {
             "composite.png",

@@ -48,13 +48,13 @@ def artifact_path(fixture: ProjectFixture, stage: str) -> Path:
         return project.metadata.paths.alignment(*track.id)
 
     if stage == "composites":
-        return project.media.paths.composite("a", "0", 0, selection_id=track.selection_id)
+        return project.media.paths.composite(track)
 
-    return project.media.paths.composite_enhanced("a", "0", 0, selection_id=track.selection_id)
+    return project.media.paths.composite_enhanced(track)
 
 
 @pytest.mark.parametrize("stage", CHECKS)
-def test_complete_outputs_need_no_diagnostics(prepared_project: ProjectFixture, stage: str):
+def test_complete_outputs_are_reusable(prepared_project: ProjectFixture, stage: str):
     assert CHECKS[stage](prepared_project.project)
 
 
@@ -319,7 +319,7 @@ def test_single_frame_selection_needs_no_alignment_rows(prepared_project: Projec
         project.metadata.individuals_path, [asdict(Individual("single", [selection]))]
     )
 
-    project.metadata.write_alignment(selection.id, 0, [])
+    project.metadata.write_alignment(selection.id, [])
 
     assert alignments_complete(project)
 
@@ -360,14 +360,3 @@ def test_crop_coverage_must_match_observation(prepared_project: ProjectFixture):
     assert cv.imwrite(str(path), image)
 
     assert not masked_crops_complete(prepared_project.project)
-
-
-@pytest.mark.parametrize(
-    "check", [alignments_complete, composites_complete, enhanced_composites_complete]
-)
-def test_selection_stages_require_explicit_manifest(
-    prepared_project: ProjectFixture, check: Callable[[Project], bool]
-):
-    prepared_project.project.metadata.individuals_path = None
-
-    assert not check(prepared_project.project)

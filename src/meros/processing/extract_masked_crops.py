@@ -4,14 +4,15 @@ import cv2 as cv
 import numpy as np
 
 from collections.abc import Callable
-from meros.project import Project, default_project
+from pathlib import Path
+from meros.project import Project
 
 from meros.domain.prediction import VideoPredictor
 from meros.external import build_sam2_predictor
 from meros.processing.extract_tracks import tracks_complete
 
 
-def masked_crops_complete(project: Project = default_project) -> bool:
+def masked_crops_complete(project: Project) -> bool:
     if not tracks_complete(project):
         return False
 
@@ -33,13 +34,11 @@ def masked_crops_complete(project: Project = default_project) -> bool:
 
 
 def run(
-    project: Project = default_project,
+    project: Project,
     *,
-    predictor_factory: Callable[[], VideoPredictor] | None = None,
+    predictor_factory: Callable[[Path], VideoPredictor] = build_sam2_predictor,
 ) -> None:
-    predictor = (
-        predictor_factory() if predictor_factory else build_sam2_predictor(project.checkpoint)
-    )
+    predictor = predictor_factory(project.checkpoint)
 
     count = sum(
         extract_masked_crops(video.video_id, predictor, project=project)
@@ -82,9 +81,7 @@ def build_masked_crop(
     return crop
 
 
-def extract_masked_crops(
-    video_id: str, predictor: VideoPredictor, *, project: Project = default_project
-) -> int:
+def extract_masked_crops(video_id: str, predictor: VideoPredictor, *, project: Project) -> int:
     track_metadata = project.metadata.read_track(video_id)
 
     tracks = track_metadata.tracks

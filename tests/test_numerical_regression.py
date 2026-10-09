@@ -59,7 +59,7 @@ def test_matching_statistics_preserved(textured_crop: np.ndarray) -> None:
     for a, b in [(textured_crop, textured_crop), (textured_crop, target)]:
         _, expected = original.match_composites(a, b)
 
-        _, actual = match_images(a, b)
+        actual = match_images(a, b)
 
         result = asdict(actual)
 
