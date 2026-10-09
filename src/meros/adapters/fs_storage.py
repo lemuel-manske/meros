@@ -24,6 +24,22 @@ from meros.domain import (
 from meros.domain.storage import validate_bbox
 
 
+def write_json_atomic(path: Path, payload: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    fd, temporary = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(payload, stream, indent=2)
+
+            stream.write("\n")
+
+        os.replace(temporary, path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
 @dataclass(frozen=True)
 class MediaPaths:
     root: Path = Path("data")
@@ -168,22 +184,6 @@ class MetadataPaths:
 
     def bboxes(self) -> Path:
         return (self.root / "metadata/videos") / "bboxes.json"
-
-
-def write_json_atomic(path: Path, payload: object) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    fd, temporary = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
-
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as stream:
-            json.dump(payload, stream, indent=2)
-
-            stream.write("\n")
-
-        os.replace(temporary, path)
-    finally:
-        Path(temporary).unlink(missing_ok=True)
 
 
 class LocalFsMetadataStore:
