@@ -1,5 +1,17 @@
 [
   {
+    "video_id": "25_1",
+    "mirrored": false,
+    "fname": "25_1.mov",
+    "path": "data/media/videos/25_1.mov"
+  },
+  {
+    "video_id": "26_4",
+    "mirrored": false,
+    "fname": "26_4.mov",
+    "path": "data/media/videos/26_4.mov"
+  },
+  {
     "video_id": "65_5",
     "mirrored": false,
     "fname": "65_5.mov",
@@ -18,9 +30,33 @@
     "path": "data/media/videos/65_7.mov"
   },
   {
+    "video_id": "65_8",
+    "mirrored": false,
+    "fname": "65_8.mov",
+    "path": "data/media/videos/65_8.mov"
+  },
+  {
+    "video_id": "66_9",
+    "mirrored": false,
+    "fname": "66_9.mov",
+    "path": "data/media/videos/66_9.mov"
+  },
+  {
     "video_id": "101_11",
     "mirrored": true,
     "fname": "101_11.mov",
     "path": "data/media/videos/101_11.mov"
+  },
+  {
+    "video_id": "101_12",
+    "mirrored": true,
+    "fname": "101_12.mov",
+    "path": "data/media/videos/101_12.mov"
+  },
+    {
+    "video_id": "147_16",
+    "mirrored": true,
+    "fname": "147_16.mov",
+    "path": "data/media/videos/147_16.mov"
   }
 ]

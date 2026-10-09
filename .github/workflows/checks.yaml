@@ -1,4 +1,4 @@
-name: ci - tests
+name: ci - checks
 
 
 on:
@@ -12,7 +12,7 @@ permissions:
 
 
 jobs:
-  test:
+  checks:
     runs-on: ubuntu-latest
 
     steps:

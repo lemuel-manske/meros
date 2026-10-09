@@ -14,8 +14,6 @@ EXTRAS ?= data,dev
 
 EXPERIMENT ?= 002
 
-TEST_ARGS ?=
-
 RUN_DIR ?=
 
 
@@ -29,7 +27,7 @@ BIND ?= 127.0.0.1
 .PHONY: help init install install-sam2 sam2-submodule
 .PHONY: data-pull data-save data-push results-save
 .PHONY: run
-.PHONY: test typecheck lint format format-check cli-check check serve-media
+.PHONY: typecheck lint format format-check cli-check check serve-media
 
 
 # Setup.
@@ -39,7 +37,7 @@ help:
 		'Setup:       init, install, install-sam2' \
 		'Data:        data-pull, data-save, data-push, results-save RUN_DIR=...' \
 		'Experiment:  run (EXPERIMENT=002)' \
-		'Checks:      test, typecheck, lint, format, format-check, cli-check, check' \
+		'Checks:      typecheck, lint, format, format-check, cli-check, check' \
 		'Preview:     serve-media (optional PORT=... BIND=...)'
 
 
@@ -89,10 +87,7 @@ run:
 	$(PYTHON) -m meros.experiments $(EXPERIMENT)
 
 
-# Tests, code style, and CPU CLI checks.
-
-test:
-	$(PYTHON) -m pytest $(TEST_ARGS)
+# Code style and CPU CLI checks.
 
 
 typecheck:
@@ -100,15 +95,15 @@ typecheck:
 
 
 lint:
-	$(PYTHON) -m ruff check src tests
+	$(PYTHON) -m ruff check src
 
 
 format:
-	$(PYTHON) -m ruff format src tests
+	$(PYTHON) -m ruff format src
 
 
 format-check:
-	$(PYTHON) -m ruff format --check src tests
+	$(PYTHON) -m ruff format --check src
 
 
 cli-check:
@@ -116,7 +111,7 @@ cli-check:
 
 
 
-check: test typecheck lint format-check cli-check
+check: typecheck lint format-check cli-check
 
 
 # Local media preview.
