@@ -1,18 +1,15 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from pathlib import Path
+
 import cv2 as cv
 import numpy as np
 
-from collections.abc import Callable
-from meros.project import Project
-
+from meros.domain import BBox, Track, TrackMetadata, TrackObservation
 from meros.domain.prediction import Prediction, VideoPredictor
 from meros.external import build_sam2_predictor
-
-from pathlib import Path
-
-
-from meros import Track, TrackMetadata, TrackObservation
+from meros.project import Project
 
 
 def run(
@@ -25,7 +22,7 @@ def run(
     for video in project.metadata.read_videos():
         video_id = video.video_id
 
-        tracks = select_known_track_seeds(video_id, project=project)
+        tracks = select_track_seeds(video_id, project=project)
 
         track_metadata = propagate_tracks(video_id, tracks, predictor, project=project)
 
@@ -97,11 +94,50 @@ def tracks_complete(project: Project) -> bool:
     return True
 
 
-def select_known_track_seeds(video_id: str, *, project: Project) -> dict[str, Track]:
-    boxes = project.metadata.read_bboxes()[video_id]
+def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
+    window = f"{video_id}: select fish on frame 0"
+
+    print(f"{video_id}: draw each fish box, press Enter/Space to add it, then Esc to finish.")
+
+    cv.namedWindow(window, cv.WINDOW_NORMAL)
+
+    try:
+        regions = cv.selectROIs(window, frame, showCrosshair=True, fromCenter=False)
+    finally:
+        cv.destroyWindow(window)
+
+    boxes: BBox = {}
+
+    for x, y, width, height in regions:
+        if width <= 0 or height <= 0:
+            continue
+
+        boxes[str(len(boxes))] = [int(x), int(y), int(x + width - 1), int(y + height - 1)]
 
     if not boxes:
-        raise ValueError(f"{video_id}: no seed boxes available")
+        raise ValueError(f"{video_id}: no fish selected; seed boxes were not saved")
+
+    return boxes
+
+
+def select_track_seeds(
+    video_id: str,
+    *,
+    project: Project,
+    bbox_selector: Callable[[str, np.ndarray], BBox] = select_fish_bboxes,
+) -> dict[str, Track]:
+    saved_boxes = project.metadata.read_bboxes()
+
+    boxes = saved_boxes.get(video_id)
+
+    if not boxes:
+        frame = project.media.read_frame(video_id, 0)
+
+        boxes = bbox_selector(video_id, frame)
+
+        saved_boxes[video_id] = boxes
+
+        project.metadata.write_bboxes(saved_boxes)
 
     return {
         track_id: Track(initial_frame=0, initial_bbox=bbox, frames={})

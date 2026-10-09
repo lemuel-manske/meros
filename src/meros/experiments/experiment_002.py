@@ -104,7 +104,10 @@ def git_revision() -> str:
 
 def plot(rows: Sequence[ComparisonRow], individuals: Sequence[Individual], output: Path) -> None:
     selections = {
-        track.selection_id: idx for idx, track in enumerate((track for individual in individuals for track in individual.tracks))
+        track.selection_id: idx
+        for idx, track in enumerate(
+            (track for individual in individuals for track in individual.tracks)
+        )
     }
 
     pairs = rows[:: len(REPRESENTATIONS)]
