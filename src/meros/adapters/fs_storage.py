@@ -193,8 +193,11 @@ class LocalFsMetadataStore:
         self.individuals_path = manifest
 
     def read_bboxes(self) -> dict[str, BBox]:
-        with self.paths.bboxes().open("r", encoding="utf-8") as f:
-            metadata = json.load(f)
+        try:
+            with self.paths.bboxes().open("r", encoding="utf-8") as f:
+                metadata = json.load(f)
+        except FileNotFoundError:
+            return {}
 
         if not isinstance(metadata, dict):
             raise ValueError("Seed boxes must be keyed by video and track")
@@ -207,6 +210,9 @@ class LocalFsMetadataStore:
                 validate_bbox(bbox)
 
         return metadata
+
+    def write_bboxes(self, boxes: dict[str, BBox]) -> None:
+        write_json_atomic(self.paths.bboxes(), boxes)
 
     def read_videos(self) -> list[Video]:
         with self.paths.videos().open("r", encoding="utf-8") as f:
