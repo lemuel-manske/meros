@@ -95,24 +95,60 @@ def tracks_complete(project: Project) -> bool:
 
 
 def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
-    window = f"{video_id}: select fish on frame 0"
+    window = f"{video_id}: Enter = save, a = add fish, Esc = cancel"
 
-    print(f"{video_id}: draw each fish box, press Enter/Space to add it, then Esc to finish.")
+    boxes: BBox = {}
+
+    def add_fish() -> None:
+        x, y, width, height = cv.selectROI(window, frame, showCrosshair=True, fromCenter=False)
+
+        if width > 0 and height > 0:
+            boxes[str(len(boxes))] = [int(x), int(y), int(x + width - 1), int(y + height - 1)]
+
+        elif not boxes:
+            raise ValueError(f"{video_id}: no fish selected; seed boxes were not saved")
+
+    print(f"{video_id}: draw a fish box and press Enter/Space to confirm.")
+
+    print("Then press Enter to save, a to add another fish, or Esc to cancel without saving.")
 
     cv.namedWindow(window, cv.WINDOW_NORMAL)
 
     try:
-        regions = cv.selectROIs(window, frame, showCrosshair=True, fromCenter=False)
+        add_fish()
+
+        while cv.getWindowProperty(window, cv.WND_PROP_VISIBLE) >= 1:
+            preview = frame.copy()
+
+            for track_id, (x1, y1, x2, y2) in boxes.items():
+                cv.rectangle(preview, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+                cv.putText(
+                    preview,
+                    track_id,
+                    (x1, max(20, y1)),
+                    cv.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (0, 255, 0),
+                    2,
+                )
+
+            cv.imshow(window, preview)
+
+            key = cv.waitKey(30) & 0xFF
+
+            if key in (10, 13):
+                break
+
+            if key == 27:
+                raise ValueError(f"{video_id}: fish selection cancelled; seed boxes were not saved")
+
+            if key == ord("a"):
+                add_fish()
+        else:
+            raise ValueError(f"{video_id}: selection window closed; seed boxes were not saved")
     finally:
         cv.destroyWindow(window)
-
-    boxes: BBox = {}
-
-    for x, y, width, height in regions:
-        if width <= 0 or height <= 0:
-            continue
-
-        boxes[str(len(boxes))] = [int(x), int(y), int(x + width - 1), int(y + height - 1)]
 
     if not boxes:
         raise ValueError(f"{video_id}: no fish selected; seed boxes were not saved")
