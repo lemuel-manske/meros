@@ -2,7 +2,7 @@ import cv2 as cv
 import numpy as np
 from scipy.ndimage import distance_transform_edt
 
-from meros.project import Project, default_project
+from meros.project import Project
 
 from meros.domain import TrackSelection
 
@@ -10,7 +10,7 @@ CLIP_LIMIT = 1.5
 STRENGTH = 0.5
 
 
-def enhanced_composites_complete(project: Project = default_project) -> bool:
+def enhanced_composites_complete(project: Project) -> bool:
     try:
         individuals = project.metadata.read_individuals()
     except (OSError, ValueError, KeyError, TypeError):
@@ -32,12 +32,7 @@ def enhanced_composites_complete(project: Project = default_project) -> bool:
                 track.video_id, track.track_id, track.reference_frame
             )
 
-            path = project.media.paths.composite_enhanced(
-                track.video_id,
-                track.track_id,
-                track.reference_frame,
-                selection_id=track.selection_id,
-            )
+            path = project.media.paths.composite_enhanced(track)
 
             if not project.media.valid_image(path, 4, reference.shape[:2]):
                 return False
@@ -45,7 +40,7 @@ def enhanced_composites_complete(project: Project = default_project) -> bool:
     return True
 
 
-def run(project: Project = default_project) -> None:
+def run(project: Project) -> None:
     for individual in project.metadata.read_individuals():
         for track in individual.tracks:
             enhance_composite(track, project=project)
@@ -90,22 +85,9 @@ def enhance_contrast(
     return result
 
 
-def enhance_composite(track: TrackSelection, *, project: Project = default_project) -> None:
-    video_id, track_id, reference_frame = (track.video_id, track.track_id, track.reference_frame)
-
-    composite = project.media.read_composite(
-        video_id, track_id, reference_frame, selection_id=track.selection_id
-    )
+def enhance_composite(track: TrackSelection, *, project: Project) -> None:
+    composite = project.media.read_composite(track)
 
     enhanced = enhance_contrast(composite)
 
-    project.media.write_composite_enhanced(
-        video_id, track_id, reference_frame, enhanced, selection_id=track.selection_id
-    )
-
-    if project.options.diagnostics:
-        comparison = np.concatenate((composite, enhanced), axis=1)
-
-        project.media.write_composite_comparison(
-            video_id, track_id, reference_frame, comparison, selection_id=track.selection_id
-        )
+    project.media.write_composite_enhanced(track, enhanced)

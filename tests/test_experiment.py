@@ -25,8 +25,6 @@ def test_current_manifest_has_21_pairs_without_filename_collisions():
 
     assert len({(a.selection_id, b.selection_id) for _, _, a, b in pairs}) == 21
 
-    assert len(list(exp.iter_pairs(individuals, cross_video_only=True))) == 18
-
 
 def test_pipeline_evaluation_persists_real_representations(
     prepared_project: ProjectFixture, tmp_path: Path
@@ -59,9 +57,7 @@ def test_failed_evaluation_leaves_no_partial_run(prepared_project: ProjectFixtur
 
     selection = prepared_project.selections()[0]
 
-    project.media.paths.composite(
-        *selection.id[:2], selection.reference_frame, selection_id=selection.selection_id
-    ).unlink()
+    project.media.paths.composite(selection).unlink()
 
     with pytest.raises(FileNotFoundError):
         exp.evaluate(prepared_project.individuals, tmp_path / "run", project=project)
@@ -84,9 +80,7 @@ def test_matcher_skips_ransac_on_blank_image():
 
     image[:, :, 3] = 255
 
-    canvas, stats = match_images(image, image)
-
-    assert canvas is None
+    stats = match_images(image, image)
 
     assert stats.mutual_matches == 0
 
@@ -95,68 +89,40 @@ def test_matcher_skips_ransac_on_blank_image():
     assert not stats.ransac_attempted
 
 
-def test_runner_forwards_experiment_help(capsys: pytest.CaptureFixture[str]):
+@pytest.mark.parametrize(
+    "argument",
+    ["--manifest", "--force", "--diagnostics", "--evaluate-only", "--output", "--cross-video-only"],
+)
+def test_runner_has_no_execution_modes(argument: str):
     with pytest.raises(SystemExit) as error:
-        run_experiment(["002", "--help"])
+        run_experiment(["002", argument])
 
-    assert error.value.code == 0
-
-    assert "--evaluate-only" in capsys.readouterr().out
+    assert error.value.code == 2
 
 
-def test_evaluate_only_cli_reads_real_files(prepared_project: ProjectFixture, tmp_path: Path):
-    manifest = prepared_project.project.metadata.individuals_path
+def test_one_run_prepares_and_evaluates(project_fixture: ProjectFixture, tmp_path: Path):
+    output = tmp_path / "run"
 
-    assert manifest is not None
-
-    output = tmp_path / "cli-run"
-
-    exp.main(
-        [
-            "--evaluate-only",
-            "--manifest",
-            str(manifest),
-            "--output",
-            str(output),
-        ],
-        project=prepared_project.project,
+    rows = exp.run(
+        project_fixture.project,
+        output,
+        predictor_factory=lambda checkpoint: project_fixture.predictor,
     )
+
+    assert len(rows) == 9
+
+    assert all(row["inliers"] > 0 for row in rows)
 
     assert (output / "metrics.csv").is_file()
 
     assert (output / "run.json").is_file()
 
-
-def test_diagnostics_are_optional_after_real_generation(
-    project_fixture: ProjectFixture, tmp_path: Path
-):
-    project = project_fixture.project
-
-    project.options.diagnostics = True
-
-    project_fixture.prepare()
-
-    output = tmp_path / "diagnostic-run"
-
-    exp.evaluate(project_fixture.individuals, output, project=project)
-
-    assert len(list((output / "diagnostics").rglob("*.png"))) == 9
-
-    assert len(list((project.media.paths.root / "media/visualizations").rglob("*.jpg"))) == 6
-
-    for track in project_fixture.selections():
-        path = project.media.paths.composite(
-            track.video_id, track.track_id, track.reference_frame, selection_id=track.selection_id
-        )
-
-        for diagnostic in path.parent.glob("*.png"):
-            if diagnostic.name not in {"composite.png", "enhanced_composite.png"}:
-                diagnostic.unlink()
-
     states = len(project_fixture.predictor.states)
 
-    project.options.diagnostics = False
-
-    project_fixture.pipeline().run("enhanced_composites")
+    exp.run(
+        project_fixture.project,
+        tmp_path / "second-run",
+        predictor_factory=lambda checkpoint: project_fixture.predictor,
+    )
 
     assert len(project_fixture.predictor.states) == states

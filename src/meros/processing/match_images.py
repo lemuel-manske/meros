@@ -31,9 +31,7 @@ def match_images(
     target: np.ndarray,
     ratio: float = DEFAULT_RATIO,
     erode: int = DEFAULT_ERODE,
-    *,
-    draw: bool = False,
-) -> tuple[np.ndarray | None, MatchStats]:
+) -> MatchStats:
     sift = cv.SIFT.create(nfeatures=SIFT_FEATURES)
 
     features = []
@@ -107,41 +105,6 @@ def match_images(
         if matrix is not None and inliers is not None and (np.linalg.det(matrix[:, :2]) > 0):
             keep = inliers.ravel().astype(bool)
 
-    canvas = None
-
-    if draw:
-        canvas = np.zeros(
-            (max(source.shape[0], target.shape[0]), source.shape[1] + target.shape[1], 3),
-            dtype=np.uint8,
-        )
-
-        canvas = cv.drawMatches(
-            source[:, :, :3],
-            source_keys,
-            target[:, :, :3],
-            target_keys,
-            matches,
-            canvas,
-            matchColor=(100, 100, 100),
-            flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
-        )
-
-        for match, inlier in zip(matches, keep):
-            if not inlier:
-                continue
-
-            left = tuple((int(round(value)) for value in source_keys[match.queryIdx].pt))
-
-            x, y = target_keys[match.trainIdx].pt
-
-            right = (int(round(x)) + source.shape[1], int(round(y)))
-
-            cv.line(canvas, left, right, (0, 255, 0), 1, cv.LINE_AA)
-
-            cv.circle(canvas, left, 3, (0, 255, 0), 1)
-
-            cv.circle(canvas, right, 3, (0, 255, 0), 1)
-
     stats = MatchStats(
         source_keypoints=len(source_keys),
         target_keypoints=len(target_keys),
@@ -152,4 +115,4 @@ def match_images(
         ransac_attempted=len(matches) >= RANSAC_MIN_MATCHES,
     )
 
-    return (canvas, stats)
+    return stats

@@ -1,12 +1,12 @@
 import numpy as np
 import cv2 as cv
 
-from meros.project import Project, default_project
+from meros.project import Project
 
 from meros.domain import TrackSelection
 
 
-def composites_complete(project: Project = default_project) -> bool:
+def composites_complete(project: Project) -> bool:
     try:
         individuals = project.metadata.read_individuals()
     except (OSError, ValueError, KeyError, TypeError):
@@ -28,12 +28,7 @@ def composites_complete(project: Project = default_project) -> bool:
                 track.video_id, track.track_id, track.reference_frame
             )
 
-            path = project.media.paths.composite(
-                track.video_id,
-                track.track_id,
-                track.reference_frame,
-                selection_id=track.selection_id,
-            )
+            path = project.media.paths.composite(track)
 
             if not project.media.valid_image(path, 4, reference.shape[:2]):
                 return False
@@ -41,7 +36,7 @@ def composites_complete(project: Project = default_project) -> bool:
     return True
 
 
-def run(project: Project = default_project) -> None:
+def run(project: Project) -> None:
     for individual in project.metadata.read_individuals():
         for track in individual.tracks:
             count = build_composite(track, project=project)
@@ -77,7 +72,7 @@ def median_composite(crops: list[np.ndarray]) -> np.ndarray:
     return composite
 
 
-def build_composite(track: TrackSelection, *, project: Project = default_project) -> int:
+def build_composite(track: TrackSelection, *, project: Project) -> int:
     alignment = project.metadata.read_alignment(track.id)
 
     if (
@@ -122,12 +117,6 @@ def build_composite(track: TrackSelection, *, project: Project = default_project
 
     composite = median_composite(crops)
 
-    project.media.write_composite(
-        track.video_id,
-        track.track_id,
-        track.reference_frame,
-        composite,
-        selection_id=track.selection_id,
-    )
+    project.media.write_composite(track, composite)
 
     return len(crops)

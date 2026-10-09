@@ -3,13 +3,12 @@
 import argparse
 import importlib
 import re
-import sys
 
 from typing import Protocol, cast
 
 
 class ExperimentModule(Protocol):
-    def main(self, argv: list[str] | None = None) -> None: ...
+    def main(self) -> None: ...
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -17,11 +16,7 @@ def main(argv: list[str] | None = None) -> None:
 
     parser.add_argument("experiment", help="Experiment identifier, for example 002 or pose")
 
-    arguments = sys.argv[1:] if argv is None else argv
-
-    args = parser.parse_args(arguments[:1])
-
-    remaining = arguments[1:]
+    args = parser.parse_args(argv)
 
     if not re.fullmatch(r"[A-Za-z0-9_]+", args.experiment):
         parser.error("Use letters, digits, or underscores in the experiment identifier")
@@ -38,7 +33,7 @@ def main(argv: list[str] | None = None) -> None:
 
     experiment = cast(ExperimentModule, module)
 
-    experiment.main(remaining)
+    experiment.main()
 
 
 if __name__ == "__main__":

@@ -10,11 +10,11 @@ PYTHON ?= $(if $(wildcard $(VENV)/bin/python),$(VENV)/bin/python,python3)
 EXTRAS ?= data,dev
 
 
-# Optional arguments and artifact locations.
+# Experiment selection and artifact locations.
 
 EXPERIMENT ?= 002
 
-ARGS ?=
+TEST_ARGS ?=
 
 RUN_DIR ?=
 
@@ -28,7 +28,7 @@ BIND ?= 127.0.0.1
 
 .PHONY: help init install install-sam2 sam2-submodule
 .PHONY: data-pull data-save data-push results-save
-.PHONY: run evaluate diagnostics
+.PHONY: run
 .PHONY: test typecheck lint format format-check cli-check check serve-media
 
 
@@ -38,7 +38,7 @@ help:
 	@printf '%s\n' \
 		'Setup:       init, install, install-sam2' \
 		'Data:        data-pull, data-save, data-push, results-save RUN_DIR=...' \
-		'Experiment:  run, evaluate, diagnostics (EXPERIMENT=002, optional ARGS="...")' \
+		'Experiment:  run (EXPERIMENT=002)' \
 		'Checks:      test, typecheck, lint, format, format-check, cli-check, check' \
 		'Preview:     serve-media (optional PORT=... BIND=...)'
 
@@ -86,21 +86,13 @@ results-save:
 # Experiments.
 
 run:
-	$(PYTHON) -m meros.experiments $(EXPERIMENT) $(ARGS)
-
-
-evaluate:
-	$(PYTHON) -m meros.experiments $(EXPERIMENT) --evaluate-only $(ARGS)
-
-
-diagnostics:
-	$(PYTHON) -m meros.experiments $(EXPERIMENT) --diagnostics $(ARGS)
+	$(PYTHON) -m meros.experiments $(EXPERIMENT)
 
 
 # Tests, code style, and CPU CLI checks.
 
 test:
-	$(PYTHON) -m pytest $(ARGS)
+	$(PYTHON) -m pytest $(TEST_ARGS)
 
 
 typecheck:
@@ -122,7 +114,6 @@ format-check:
 cli-check:
 	$(PYTHON) -m meros.experiments --help
 
-	$(PYTHON) -m meros.experiments $(EXPERIMENT) --help
 
 
 check: test typecheck lint format-check cli-check
