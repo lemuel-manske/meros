@@ -24,7 +24,7 @@ make install-sam2
 
 Obtain the official SAM2.1 Hiera Large checkpoint using the pinned submodule's documented checkpoint download instructions. Place it at `external/sam2/checkpoints/sam2.1_hiera_large.pt`. The predictor uses CUDA and the saved human-provided seed boxes.
 
-Tracking reuses each video's boxes from `data/metadata/videos/bboxes.json`. When a video has no boxes (or the file is absent), OpenCV opens its first extracted frame for manual fish selection. Draw one box per fish, press Enter or Space to confirm each box, and press Esc when finished. Fish IDs follow selection order: `0`, `1`, and so on.
+Tracking reuses each video's boxes from `data/metadata/videos/bboxes.json`. When a video has no boxes (or the file is absent), OpenCV opens its first extracted frame for manual fish selection. Draw a fish box and press Enter or Space to confirm it. The preview then shows the selected fish: press Enter to save and continue, or `a` to select another fish. Press Esc in the preview to cancel without saving. Fish IDs follow selection order: `0`, `1`, and so on.
 
 Selected boxes are saved immediately to `bboxes.json`, preserving other videos' entries, so subsequent runs reuse them even if inference is interrupted. Finishing without selecting a fish stops the run without saving boxes. Manual selection requires a desktop display and the GUI-enabled `opencv-python` dependency.
 
