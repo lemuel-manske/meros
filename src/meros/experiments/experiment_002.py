@@ -11,7 +11,6 @@ from datetime import datetime, timezone
 from itertools import combinations, product
 from pathlib import Path
 from collections.abc import Callable, Iterator, Sequence
-from typing import Literal, TypedDict
 
 import numpy as np
 from numpy.typing import NDArray
@@ -24,32 +23,12 @@ from meros.domain.prediction import VideoPredictor
 from meros.external import build_sam2_predictor
 from meros.pipeline import create_pipeline
 from meros.processing.match_images import match_images
-
-type Representation = Literal["reference", "composite", "enhanced_composite"]
-
-
-REPRESENTATIONS: tuple[Representation, ...] = ("reference", "composite", "enhanced_composite")
-
-
-class ComparisonRow(TypedDict):
-    source_individual_id: str
-    target_individual_id: str
-
-    source_selection_id: str
-    target_selection_id: str
-
-    same_individual: bool
-    same_video: bool
-
-    representation: Representation
-
-    source_keypoints: int
-    target_keypoints: int
-    forward_good: int
-    backward_good: int
-    mutual_matches: int
-    inliers: int
-    ransac_attempted: bool
+from meros.experiments.experiment_002_report import (
+    REPRESENTATIONS,
+    ComparisonRow,
+    Representation,
+    write_report,
+)
 
 
 def iter_pairs(
@@ -179,6 +158,8 @@ def evaluate(
 
         (temporary / "run.json").write_text(json.dumps(provenance, indent=2) + "\n")
 
+        write_report(rows, temporary / "report.html", source_commit=provenance["source_commit"])
+
         temporary.rename(output)
 
         return rows
@@ -203,6 +184,8 @@ def run(
     rows = evaluate(individuals, output, project=project)
 
     print(f"Wrote {len(rows)} comparisons to {output}")
+
+    print(f"Open {output / 'report.html'} to inspect the comparisons")
 
     return rows
 

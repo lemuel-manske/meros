@@ -32,6 +32,24 @@ The composite is processed with CLAHE-based local contrast enhancement before SI
 
 The objective is to make local body patterns more visible to the feature detector.
 
+### Viewing a run
+
+Run `make run EXPERIMENT=002`, then open `results/002/<run>/report.html` in a browser.
+The report is generated automatically alongside `metrics.csv`; no server or extra
+dependencies are required. Keep it with the run's `representations` directory.
+
+- Three matrices show affine RANSAC inliers on a shared color scale. Outlined cells
+  compare selections of the same individual. Click a cell to inspect that pair.
+- Each pair shows both images for all three representations side by side, with mutual
+  matches, inliers, and inlier ratio. Keypoints and directional matches are in expandable
+  diagnostics.
+- Same-video labels identify pairs that may share encounter conditions. Zero inliers
+  remain visible, with a separate indication of whether RANSAC was attempted. Inlier
+  ratio is undefined when there are no mutual matches.
+
+The CSV remains the raw export for analysis. The report presents the recorded results;
+it does not assign identity confidence or pool correlated pairs into performance estimates.
+
 ### Matching statistics
 
 For each pair, the experiment records:
