@@ -85,6 +85,6 @@ Code follows the spacing used on `main`: separate import groups, setup, calculat
 
 `make typecheck` runs Pyright over production code and tests, including required parameter annotations. SAM2 is isolated behind a typed predictor contract; processing uses ordinary NumPy masks without conditional typing imports.
 
-Tests use temporary project roots, real encoded videos, PNG/JPEG files, metadata serialization, SIFT, transforms, aggregation, enhancement, and pair evaluation. A readable recorded predictor replaces only GPU segmentation through its public API; tests do not patch globals. Every stage's completion check is exercised with valid, missing, corrupt, and inconsistent outputs. Numerical comparisons load the pre-refactor algorithms from Git history.
+The behavior suite runs complete experiments from real encoded videos through the production SAM2 adapter, tracking, image processing, and saved metrics. A small SAM2 backend fake supplies logits in place of CUDA inference; no mocks or patches are used. Scenarios verify actual compared pixels and pair labels, reuse without rewriting preparation, repair through the final result, seed/selection changes, exclusion of unusable frames, and safe retry after failures. A full-run regression compares saved representations and metrics with the original algorithms loaded from Git history.
 
 Real media/GPU reproduction must be performed separately; these checks do not validate biological identification performance.

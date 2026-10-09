@@ -4,13 +4,12 @@ import subprocess
 import sys
 import types
 from dataclasses import asdict
+from pathlib import Path
 
 import cv2 as cv
 import numpy as np
-import pytest
 
-from meros.processing import align_masked_crops, build_composites, enhance_composites
-from meros.processing.match_images import match_images
+from tests.support import Scenario, read_image
 
 BASELINE = "386bdcec3b00ea348c523f1d3904c41210f175ba"
 
@@ -38,67 +37,68 @@ def legacy(name: str) -> types.ModuleType:
     return load_baseline_module(f"_baseline_{name}", f"src/meros/cmd/{name}.py")
 
 
-@pytest.fixture
-def textured_crop():
-    random = np.random.default_rng(42)
+def test_saved_representations_and_metrics_preserve_the_original_algorithms(
+    scenario: Scenario, tmp_path: Path
+) -> None:
+    output = tmp_path / "run"
 
-    image = random.integers(0, 256, (160, 200, 4), dtype=np.uint8)
+    rows = scenario.run(output)
 
-    image[:, :, 3] = 255
+    original_alignment = legacy("align_masked_crops")
 
-    image[:8] = 0
+    original_composite = legacy("build_composites")
 
-    return image
+    original_enhancement = legacy("enhance_composites")
 
+    original_matching = legacy("match_composites")
 
-def test_matching_statistics_preserved(textured_crop: np.ndarray) -> None:
-    original = legacy("match_composites")
+    expected_images: dict[tuple[str, str], np.ndarray] = {}
 
-    target = cv.warpAffine(textured_crop, np.array([[1.0, 0.0, 3.0], [0.0, 1.0, 2.0]]), (200, 160))
+    for selection in scenario.selections():
+        reference = scenario.project.media.read_masked_crop(
+            selection.video_id, selection.track_id, selection.reference_frame
+        )
 
-    for a, b in [(textured_crop, textured_crop), (textured_crop, target)]:
-        _, expected = original.match_composites(a, b)
+        crops = [reference]
 
-        actual = match_images(a, b)
+        for idx in range(selection.start_frame, selection.end_frame + 1):
+            if idx == selection.reference_frame:
+                continue
 
-        result = asdict(actual)
+            source = scenario.project.media.read_masked_crop(
+                selection.video_id, selection.track_id, idx
+            )
 
-        result.pop("ransac_attempted")
+            matrix, _ = original_alignment.estimate_alignment(source, reference)
 
-        assert result == asdict(expected)
+            if matrix is not None:
+                crops.append(
+                    cv.warpAffine(source, matrix, (reference.shape[1], reference.shape[0]))
+                )
 
-        assert actual.inliers > 0
+        composite = original_composite.median_composite(crops)
 
+        enhanced = original_enhancement.enhance_contrast(composite)
 
-def test_enhancement_pixels_preserved(textured_crop: np.ndarray) -> None:
-    expected = legacy("enhance_composites").enhance_contrast(textured_crop)
+        for representation, expected in {
+            "reference": reference,
+            "composite": composite,
+            "enhanced_composite": enhanced,
+        }.items():
+            actual = read_image(
+                output / "representations" / selection.selection_id / f"{representation}.png"
+            )
 
-    assert np.array_equal(expected, enhance_composites.enhance_contrast(textured_crop))
+            assert np.array_equal(actual, expected), (selection.selection_id, representation)
 
+            expected_images[selection.selection_id, representation] = expected
 
-def test_composite_pixels_preserved(textured_crop: np.ndarray) -> None:
-    second = textured_crop.copy()
+    for row in rows:
+        _, expected_stats = original_matching.match_composites(
+            expected_images[row["source_selection_id"], row["representation"]],
+            expected_images[row["target_selection_id"], row["representation"]],
+        )
 
-    second[20:40] = 0
+        assert {key: int(row[key]) for key in asdict(expected_stats)} == asdict(expected_stats)
 
-    expected = legacy("build_composites").median_composite([textured_crop, second])
-
-    assert np.array_equal(expected, build_composites.median_composite([textured_crop, second]))
-
-
-def test_alignment_transforms_and_statistics_preserved(textured_crop: np.ndarray) -> None:
-    expected_matrix, expected = legacy("align_masked_crops").estimate_alignment(
-        textured_crop, textured_crop
-    )
-
-    actual_matrix, actual = align_masked_crops.estimate_alignment(textured_crop, textured_crop)
-
-    assert actual_matrix is not None
-
-    assert np.array_equal(expected_matrix, actual_matrix)
-
-    before = asdict(expected)
-
-    before["status"] = "accepted" if before["status"] == "candidate" else before["status"]
-
-    assert asdict(actual) == before
+        assert (row["ransac_attempted"] == "True") == (expected_stats.mutual_matches >= 8)
