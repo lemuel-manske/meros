@@ -34,21 +34,21 @@ The objective is to make local body patterns more visible to the feature detecto
 
 ### Viewing a run
 
-Run `make run EXPERIMENT=002`, then open `results/002/<run>/report.html` in a browser.
-The report is generated automatically alongside `metrics.csv`; no server or extra
-dependencies are required. Keep it with the run's `representations` directory.
+Run `make run EXPERIMENT=002`, then open `results/002/<run>/comparisons.png`.
+The Matplotlib figure is generated automatically alongside `metrics.csv`.
 
-- Three matrices show affine RANSAC inliers on a shared color scale. Outlined cells
-  compare selections of the same individual. Click a cell to inspect that pair.
-- Each pair shows both images for all three representations side by side, with mutual
-  matches, inliers, and inlier ratio. Keypoints and directional matches are in expandable
-  diagnostics.
-- Same-video labels identify pairs that may share encounter conditions. Zero inliers
-  remain visible, with a separate indication of whether RANSAC was attempted. Inlier
-  ratio is undefined when there are no mutual matches.
+Each row is one observation pair. Three panels show mutual matches, affine RANSAC
+inliers, and inlier ratio, with the three representations in adjacent columns.
+Values are printed in each cell, including zeros. Color scales are shared across
+representations within each metric; inlier ratio uses a fixed 0–100% scale.
 
-The CSV remains the raw export for analysis. The report presents the recorded results;
-it does not assign identity confidence or pool correlated pairs into performance estimates.
+Pair labels indicate same or different annotated individuals; an asterisk marks
+same-video pairs. The selection key below the figure maps short labels to the exact
+inputs. `N/A` means no mutual matches. Zero inliers can include pairs where RANSAC
+was not attempted; the CSV retains that status and all matching diagnostics.
+
+These statistics are not identity probabilities. Same-video pairs may share encounter
+conditions and are not independent cross-encounter evidence.
 
 ### Matching statistics
 

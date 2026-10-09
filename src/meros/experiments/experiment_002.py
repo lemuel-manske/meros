@@ -11,6 +11,8 @@ from datetime import datetime, timezone
 from itertools import combinations, product
 from pathlib import Path
 from collections.abc import Callable, Iterator, Sequence
+from typing import Literal, TypedDict
+from matplotlib.figure import Figure
 
 import numpy as np
 from numpy.typing import NDArray
@@ -23,12 +25,27 @@ from meros.domain.prediction import VideoPredictor
 from meros.external import build_sam2_predictor
 from meros.pipeline import create_pipeline
 from meros.processing.match_images import match_images
-from meros.experiments.experiment_002_report import (
-    REPRESENTATIONS,
-    ComparisonRow,
-    Representation,
-    write_report,
-)
+
+type Representation = Literal["reference", "composite", "enhanced_composite"]
+
+REPRESENTATIONS: tuple[Representation, ...] = ("reference", "composite", "enhanced_composite")
+
+
+class ComparisonRow(TypedDict):
+    source_individual_id: str
+    target_individual_id: str
+    source_selection_id: str
+    target_selection_id: str
+    same_individual: bool
+    same_video: bool
+    representation: Representation
+    source_keypoints: int
+    target_keypoints: int
+    forward_good: int
+    backward_good: int
+    mutual_matches: int
+    inliers: int
+    ransac_attempted: bool
 
 
 def iter_pairs(
@@ -78,6 +95,94 @@ def validate_individuals(individuals: Sequence[Individual]) -> None:
 
 def git_revision() -> str:
     return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+
+
+def plot_comparisons(
+    rows: Sequence[ComparisonRow], individuals: Sequence[Individual], output: Path
+) -> None:
+    """Plot one row per pair, with the three representations in evaluation order."""
+    selections = {
+        track.selection_id: f"S{index}"
+        for index, track in enumerate(
+            (track for individual in individuals for track in individual.tracks), start=1
+        )
+    }
+    pairs = rows[:: len(REPRESENTATIONS)]
+    labels = [
+        f"{selections[row['source_selection_id']]} ↔ {selections[row['target_selection_id']]}"
+        f" · {'same' if row['same_individual'] else 'different'}"
+        f"{' *' if row['same_video'] else ''}"
+        for row in pairs
+    ]
+    mutual = np.array([row["mutual_matches"] for row in rows]).reshape(-1, 3)
+    inliers = np.array([row["inliers"] for row in rows]).reshape(-1, 3)
+    ratios = np.full(mutual.shape, np.nan)
+    np.divide(inliers * 100, mutual, out=ratios, where=mutual > 0)
+
+    plot_height = max(3, len(pairs) * 0.35)
+    key_height = 1 + len(selections) * 0.22
+    height = plot_height + key_height + 1.5
+    figure = Figure(figsize=(15, height))
+    axes = figure.subplots(1, 3, sharey=True)
+    figure.subplots_adjust(
+        left=0.18,
+        right=0.97,
+        top=1 - 1.2 / height,
+        bottom=key_height / height,
+        wspace=0.3,
+    )
+    figure.suptitle("Experiment 002 · Pair comparisons", fontsize=16)
+    figure.text(
+        0.18,
+        1 - 0.8 / height,
+        "same / different = annotated individual identity; * = same video",
+        fontsize=10,
+    )
+    for axis, values, title in zip(
+        axes,
+        (mutual, inliers, ratios),
+        ("Mutual matches", "Affine RANSAC inliers", "Inlier ratio (%)"),
+        strict=True,
+    ):
+        maximum = 100 if title == "Inlier ratio (%)" else max(1, int(values.max()))
+        image = axis.imshow(values, cmap="Blues", vmin=0, vmax=maximum, aspect="auto")
+        axis.set_title(title)
+        axis.set_xticks(range(3), ("Reference", "Composite", "Enhanced"))
+        axis.set_yticks(range(len(pairs)), labels)
+        axis.tick_params(length=0, labelsize=9)
+        for (y, x), value in np.ndenumerate(values):
+            text = (
+                "N/A"
+                if np.isnan(value)
+                else format(value, ".1f" if title == "Inlier ratio (%)" else ".0f")
+            )
+            axis.text(
+                x,
+                y,
+                text,
+                ha="center",
+                va="center",
+                fontsize=9,
+                color="white" if value > maximum / 2 else "black",
+            )
+        figure.colorbar(image, ax=axis, fraction=0.04, pad=0.04)
+
+    key = "\n".join(
+        f"{selections[track.selection_id]} · Individual {individual.individual_id} · "
+        f"{track.selection_id}"
+        for individual in individuals
+        for track in individual.tracks
+    )
+    figure.text(0.04, 0.04, key, fontsize=9, va="bottom")
+    figure.text(
+        0.18,
+        (key_height - 0.4) / height,
+        "N/A = no mutual matches. Zero inliers can include pairs where RANSAC was not attempted."
+        "\nSame-video pairs may share encounter conditions. These are not identity probabilities.",
+        fontsize=9,
+        va="top",
+    )
+    figure.savefig(output, dpi=160)
 
 
 def evaluate(
@@ -158,7 +263,7 @@ def evaluate(
 
         (temporary / "run.json").write_text(json.dumps(provenance, indent=2) + "\n")
 
-        write_report(rows, temporary / "report.html", source_commit=provenance["source_commit"])
+        plot_comparisons(rows, individuals, temporary / "comparisons.png")
 
         temporary.rename(output)
 
@@ -185,7 +290,7 @@ def run(
 
     print(f"Wrote {len(rows)} comparisons to {output}")
 
-    print(f"Open {output / 'report.html'} to inspect the comparisons")
+    print(f"Open {output / 'comparisons.png'} to inspect the comparisons")
 
     return rows
 

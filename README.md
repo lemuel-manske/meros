@@ -14,7 +14,7 @@ make init
 make data-pull
 ```
 
-DVC access requires credentials for the configured Backblaze S3 remote. No credentials are stored here. Evaluation of existing artifacts needs NumPy, OpenCV, and SciPy; it does not import Torch or SAM2.
+DVC access requires credentials for the configured Backblaze S3 remote. No credentials are stored here. Evaluation of existing artifacts needs NumPy, OpenCV, SciPy, and Matplotlib; it does not import Torch or SAM2.
 
 For rebuilding tracking/masked crops, initialize the pinned SAM2 submodule, install Torch/Torchvision for your CUDA environment, and install SAM2:
 
@@ -28,7 +28,7 @@ Obtain the official SAM2.1 Hiera Large checkpoint using the pinned submodule's d
 
 ## Validation
 
-> `make test`, `make typecheck`, `make lint`, `make format-check`, and `make cli-check` can also run separately. `make format` applies the formatting rules.
+> `make typecheck`, `make lint`, `make format-check`, and `make cli-check` can also run separately. `make format` applies the formatting rules.
 
 ```sh
 make check
