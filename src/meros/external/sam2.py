@@ -9,16 +9,19 @@ from typing import Protocol, cast
 from meros.domain.prediction import BinaryMask, Prediction, SeedBox
 
 
+# just for type checking
 class BooleanTensor(Protocol):
     def cpu(self) -> "BooleanTensor": ...
 
     def numpy(self) -> BinaryMask: ...
 
 
+# just for type checking
 class MaskLogits(Protocol):
     def gt(self, threshold: float) -> BooleanTensor: ...
 
 
+# just for type checking
 class Sam2Backend(Protocol):
     def init_state(
         self,
@@ -42,6 +45,7 @@ class Sam2Backend(Protocol):
     ) -> Iterator[tuple[int, Sequence[int], Sequence[MaskLogits]]]: ...
 
 
+# just for type checking
 class Sam2Builder(Protocol):
     def __call__(
         self,
@@ -52,6 +56,7 @@ class Sam2Builder(Protocol):
     ) -> Sam2Backend: ...
 
 
+# just for type checking
 class SAM2Predictor:
     def __init__(self, backend: Sam2Backend) -> None:
         self.backend = backend
@@ -78,7 +83,6 @@ class SAM2Predictor:
         )
 
     def propagate_in_video(self, state: object) -> Iterator[Prediction]:
-        # These SAM2 methods are already decorated with torch.inference_mode.
         for frame_idx, object_ids, logits in self.backend.propagate_in_video(state):
             masks: dict[str, BinaryMask] = {}
 

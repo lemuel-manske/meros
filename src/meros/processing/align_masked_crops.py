@@ -9,7 +9,7 @@ from meros.project import Project
 from meros.domain import AlignmentMetadata, TrackSelection
 
 SIFT_FEATURES = 4000
-MATCH_RATIO = 0.75
+MATCH_RATIO = 0.75  # best candidate is clearly the best
 
 MIN_INLIERS = 12
 MAX_ERROR = 3.0
@@ -93,17 +93,23 @@ def run(project: Project) -> None:
 
             print(f"{track.video_id}/{track.track_id}: {accepted}/{total} alignment candidates.")
 
+def extract_mask(image: np.ndarray) -> np.ndarray:
+    return (image[:, :, 3] == 255).astype(np.uint8) * 255
+
 
 def gray_it(
     image: np.ndarray, apply_erode: bool = True, erode_size: int = 21
 ) -> tuple[np.ndarray, np.ndarray]:
+    # convert to grayscale, but ignore the alpha channel
     gray = cv.cvtColor(image[:, :, :3], cv.COLOR_BGR2GRAY)
 
-    mask = (image[:, :, 3] == 255).astype(np.uint8) * 255
+    mask = extract_mask(image)
 
+    # erode the mask to remove small artifacts and noise
     if apply_erode:
         mask = cv.erode(mask, np.ones((erode_size, erode_size), dtype=np.uint8))
 
+    # improve image contrast using CLAHE algorithm
     gray = cv.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
 
     return (gray, mask)
@@ -262,4 +268,6 @@ def align_sequence(selection: TrackSelection, *, project: Project) -> tuple[int,
 
     project.metadata.write_alignment(selection.id, rows)
 
-    return (accepted, len(rows))
+    total = len(rows)
+
+    return (accepted, total)

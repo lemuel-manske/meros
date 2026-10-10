@@ -55,9 +55,11 @@ def run(project: Project) -> None:
         if not capture.isOpened():
             raise RuntimeError(f"Could not open video: {video.path}")
 
-        # Remove obsolete frames from an earlier extraction only after opening.
-        for path in project.media.frames_path(video.video_id).glob("*.jpg"):
-            path.unlink()
+        existing_frames_ids = [
+            f.stem for f in project.media \
+            .frames_path(video.video_id) \
+            .glob("*.jpg")
+        ]
 
         frame_idx = 0
 
@@ -70,6 +72,11 @@ def run(project: Project) -> None:
 
                 if video.mirrored:
                     frame = cv.flip(frame, 1)
+
+                # video sources never change, so we can skip frames that already exist
+                if str(frame_idx) in existing_frames_ids:
+                    frame_idx += 1
+                    continue
 
                 project.media.write_frame(
                     video.video_id,

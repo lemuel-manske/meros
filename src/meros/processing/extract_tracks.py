@@ -12,28 +12,6 @@ from meros.external import build_sam2_predictor
 from meros.project import Project
 
 
-def run(
-    project: Project,
-    *,
-    predictor_factory: Callable[[Path], VideoPredictor] = build_sam2_predictor,
-) -> None:
-    predictor = predictor_factory(project.checkpoint)
-
-    for video in project.metadata.read_videos():
-        video_id = video.video_id
-
-        tracks = select_track_seeds(video_id, project=project)
-
-        track_metadata = propagate_tracks(video_id, tracks, predictor, project=project)
-
-        if not track_metadata.tracks or any(not t.frames for t in track_metadata.tracks.values()):
-            raise RuntimeError(f"{video_id}: incomplete tracking; saved metadata was not replaced")
-
-        project.metadata.write_track(video_id, track_metadata)
-
-        print(f"Saved {len(tracks)} tracks for {video_id}.")
-
-
 def tracks_complete(project: Project) -> bool:
     try:
         videos = project.metadata.read_videos()
@@ -94,6 +72,29 @@ def tracks_complete(project: Project) -> bool:
     return True
 
 
+def run(
+    project: Project,
+    *,
+    predictor_factory: Callable[[Path], VideoPredictor] = build_sam2_predictor,
+) -> None:
+    predictor = predictor_factory(project.checkpoint)
+
+    for video in project.metadata.read_videos():
+        video_id = video.video_id
+
+        tracks = select_track_seeds(video_id, project=project)
+
+        track_metadata = propagate_tracks(video_id, tracks, predictor, project=project)
+
+        if not track_metadata.tracks or any(not t.frames for t in track_metadata.tracks.values()):
+            raise RuntimeError(f"{video_id}: incomplete tracking; saved metadata was not replaced")
+
+        project.metadata.write_track(video_id, track_metadata)
+
+        print(f"Saved {len(tracks)} tracks for {video_id}.")
+
+
+# for manual selection
 def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
     window = f"{video_id}: a = add fish, Enter = confirm box, q = save, Esc = cancel"
 
@@ -107,7 +108,7 @@ def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
 
     pending: list[int] | None = None
 
-    def on_mouse(event: int, x: int, y: int, flags: int, userdata: object) -> None:
+    def on_mouse(event: int, x: int, y: int, _flags: int, _userdata: object) -> None:
         nonlocal drag_start, pending
 
         if not adding:
@@ -157,11 +158,6 @@ def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
                     2,
                 )
 
-            if pending is not None:
-                x1, y1, x2, y2 = pending
-
-                cv.rectangle(preview, (x1, y1), (x2, y2), (0, 255, 255), 2)
-
             cv.imshow(window, preview)
 
             key = cv.waitKeyEx(30)
@@ -181,31 +177,12 @@ def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
 
                 pending = None
 
-            # waitKeyEx preserves Qt/X11 Return and keypad Enter codes.
-            elif key in (10, 13, 32, 0x01000004, 0x01000005, 0xFF0D, 0xFF8D):
-                if pending is not None and drag_start is None:
-                    x1, y1, x2, y2 = pending
-
-                    if x2 > x1 and y2 > y1:
-                        boxes[str(len(boxes))] = pending
-
-                        pending = None
-
-                        adding = False
-
             elif key == ord("q"):
-                if pending is not None or drag_start is not None:
-                    print("Confirm the pending fish with Enter, or press a to discard it.")
-
-                    continue
-
                 if not boxes:
                     raise ValueError(f"{video_id}: no fish selected; seed boxes were not saved")
 
                 return boxes
     finally:
-        # Qt can destroy its GUI receiver when the user closes the last window.
-        # Cleanup must not replace the selection/cancellation error.
         try:
             cv.destroyWindow(window)
         except cv.error:

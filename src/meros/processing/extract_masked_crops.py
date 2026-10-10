@@ -62,9 +62,8 @@ def build_masked_crop(
     if len(xs) == 0:
         return None
 
-    # Slice endpoints are exclusive; retain the final row and column.
+    # slice endpoints are exclusive; retain the final row and column.
     x1, x2 = int(xs.min()), int(xs.max()) + 1
-
     y1, y2 = int(ys.min()), int(ys.max()) + 1
 
     crop_mask = mask[y1:y2, x1:x2]
