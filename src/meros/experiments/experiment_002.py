@@ -87,7 +87,7 @@ def validate_individuals(individuals: Sequence[Individual]) -> None:
 
     for individual in individuals:
         if individual.individual_id in identities:
-            raise ValueError("Duplicate individual identity")
+            raise ValueError("Duplicate individual identity. Needs fix")
 
         identities.add(individual.individual_id)
 
