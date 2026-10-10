@@ -1,4 +1,2 @@
 track_id,start_frame,end_frame,viewpoint,quality
-0,0,45,right,2
-0,46,98,right,3
-1,0,33,right,1
+0,2,80,right,1
