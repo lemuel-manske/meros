@@ -4,12 +4,13 @@
 
 > With a comparable body pose, can the method distinguish the same individual from different individuals?
 
-This experiment compares three representations of each track:
+This experiment compares four representations of each track:
 
 ```text
 reference
 composite
-enhanced composite
+enhanced composite (CLAHE)
+Mantiuk composite
 ```
 
 ### Representations
@@ -120,3 +121,34 @@ inlier ratio
 With a larger dataset, these values can be evaluated to determine which signal best separates same-individual from different-individual pairs.
 
 Definitely, we need a broader dataset.
+
+
+### Mantiuk comparison
+
+The run also applies OpenCV's Mantiuk tone mapper to the original composite and
+compares it with the reference, original composite, and CLAHE representation using
+the same SIFT matching and affine RANSAC settings. The CLAHE pipeline output is
+preserved; the Mantiuk representation is generated and saved inside each run.
+
+Open `enhancements.png` for original/CLAHE/Mantiuk images side by side and
+`plot.png` for matching statistics. Inlier ratio is 100 × inliers / mutual matches;
+it is undefined when there are no mutual matches.
+
+This is an adaptation of Mantiuk tone mapping, not an exact reproduction of ALFRE-ID.
+The authors use `pfstmo_mantiuk06` on images before segmentation. Here we use
+`cv.createTonemapMantiuk(gamma=2.2, scale=0.7, saturation=1.0)` on composites.
+Input sRGB values are decoded before processing; gamma 2.2 encodes the output
+approximately for display. These are initial parameters, not paper-reported settings.
+
+Transparent padding is filled with nearest valid fish colors during processing,
+then the original alpha mask is restored. Empty masks and constant-luminance inputs
+are left unchanged, since they contain no spatial contrast to process.
+
+Compare visible body markings and genuine matching correspondences, rather than
+assuming a more attractive image or more keypoints means better identification.
+Tone mapping adjusts existing contrast; it does not recover detail absent from the capture.
+
+References:
+- https://doi.org/10.1007/s11263-024-02071-1
+- https://github.com/kwadraterry/NORPPA/blob/main/tonemapping/tonemapping.py
+- https://docs.opencv.org/4.x/d6/df5/group__photo__hdr.html
