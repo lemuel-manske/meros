@@ -1,4 +1,4 @@
-"""Prepare and compare the three representations used in experiment 002."""
+"""Prepare and compare the representations used in experiment 002."""
 
 from __future__ import annotations
 
@@ -25,11 +25,17 @@ from meros.domain.prediction import VideoPredictor
 from meros.external import build_sam2_predictor
 from meros.pipeline import create_pipeline
 from meros.processing.match_images import match_images
+from meros.processing.enhance_composites import tone_map_mantiuk
 
-type Representation = Literal["reference", "composite", "enhanced_composite"]
+type Representation = Literal["reference", "composite", "enhanced_composite", "mantiuk_composite"]
 
 
-REPRESENTATIONS: tuple[Representation, ...] = ("reference", "composite", "enhanced_composite")
+REPRESENTATIONS: tuple[Representation, ...] = (
+    "reference",
+    "composite",
+    "enhanced_composite",
+    "mantiuk_composite",
+)
 
 
 class ComparisonRow(TypedDict):
@@ -68,12 +74,15 @@ def iter_pairs(
 def read_representations(
     track: TrackSelection, *, project: Project
 ) -> dict[Representation, NDArray[np.uint8]]:
+    composite = project.media.read_composite(track)
+
     return {
         "reference": project.media.read_masked_crop(
             track.video_id, track.track_id, track.reference_frame
         ),
-        "composite": project.media.read_composite(track),
+        "composite": composite,
         "enhanced_composite": project.media.read_composite_enhanced(track),
+        "mantiuk_composite": tone_map_mantiuk(composite),
     }
 
 
@@ -119,11 +128,11 @@ def plot(rows: Sequence[ComparisonRow], individuals: Sequence[Individual], outpu
         for row in pairs
     ]
 
-    mutual = np.array([row["mutual_matches"] for row in rows]).reshape(-1, 3)
-    inliers = np.array([row["inliers"] for row in rows]).reshape(-1, 3)
+    mutual = np.array([row["mutual_matches"] for row in rows]).reshape(-1, len(REPRESENTATIONS))
+    inliers = np.array([row["inliers"] for row in rows]).reshape(-1, len(REPRESENTATIONS))
 
     ratios = np.full(mutual.shape, np.nan, dtype=float)
-    np.divide(mutual, inliers, out=ratios, where=inliers > 0)
+    np.divide(inliers * 100, mutual, out=ratios, where=mutual > 0)
 
     plot_height = max(3, len(pairs) * 0.35)
     key_height = 1 + len(selections) * 0.22
@@ -167,7 +176,9 @@ def plot(rows: Sequence[ComparisonRow], individuals: Sequence[Individual], outpu
         )
 
         axis.set_title(title)
-        axis.set_xticks(range(3), ("Reference", "Composite", "Enhanced"))
+        axis.set_xticks(
+            range(len(REPRESENTATIONS)), ("Reference", "Composite", "CLAHE", "Mantiuk")
+        )
         axis.set_yticks(range(len(pairs)), labels)
         axis.tick_params(length=0, labelsize=9)
 
@@ -203,6 +214,30 @@ def plot(rows: Sequence[ComparisonRow], individuals: Sequence[Individual], outpu
         fontsize=9,
         va="top",
     )
+
+    figure.savefig(output, dpi=160)
+
+
+def plot_enhancements(
+    images: dict[tuple[str, Representation], NDArray[np.uint8]],
+    individuals: Sequence[Individual],
+    output: Path,
+) -> None:
+    tracks = [track for individual in individuals for track in individual.tracks]
+    figure = Figure(figsize=(15, 3 * len(tracks)), layout="constrained")
+    axes = figure.subplots(len(tracks), 3, squeeze=False)
+    representations = REPRESENTATIONS[1:]
+
+    for track, row in zip(tracks, axes, strict=True):
+        for axis, representation, title in zip(
+            row,
+            representations,
+            ("Original composite", "CLAHE", "Mantiuk"),
+            strict=True,
+        ):
+            axis.imshow(cv.cvtColor(images[track.selection_id, representation], cv.COLOR_BGRA2RGBA))
+            axis.set_title(f"{track.selection_id}\n{title}", fontsize=9)
+            axis.set_axis_off()
 
     figure.savefig(output, dpi=160)
 
@@ -286,6 +321,7 @@ def evaluate(
         (temporary / "run.json").write_text(json.dumps(provenance, indent=2) + "\n")
 
         plot(rows, individuals, temporary / "plot.png")
+        plot_enhancements(images, individuals, temporary / "enhancements.png")
 
         temporary.rename(output)
 
@@ -313,6 +349,7 @@ def run(
     print(f"Wrote {len(rows)} comparisons to {output}")
 
     print(f"Plot saved to {output / 'plot.png'}")
+    print(f"Enhancement comparison saved to {output / 'enhancements.png'}")
 
     return rows
 
