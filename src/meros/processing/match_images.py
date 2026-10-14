@@ -14,16 +14,32 @@ RANSAC_CONFIDENCE = 0.999
 
 
 @dataclass(frozen=True)
+class MatchDetails:
+    source_keypoints: list[cv.KeyPoint]
+    target_keypoints: list[cv.KeyPoint]
+
+    matches: list[cv.DMatch]
+    inlier_mask: np.ndarray
+
+
+@dataclass(frozen=True)
 class MatchStats:
+    # how many points of interest?
     source_keypoints: int
     target_keypoints: int
 
+    # A -> B
     forward_good: int
+    # B -> A
     backward_good: int
+
+    # forward and backward :: A -> B, B -> A
     mutual_matches: int
 
     inliers: int
     ransac_attempted: bool
+
+    details: MatchDetails
 
 
 def match_images(
@@ -54,7 +70,6 @@ def match_images(
     matches = []
 
     forward_good = []
-
     backward_good = []
 
     if source_descriptors is not None and target_descriptors is not None:
@@ -105,7 +120,15 @@ def match_images(
         if matrix is not None and inliers is not None and (np.linalg.det(matrix[:, :2]) > 0):
             keep = inliers.ravel().astype(bool)
 
+    details = MatchDetails(
+        source_keypoints=source_keys,
+        target_keypoints=target_keys,
+        matches=matches,
+        inlier_mask=keep,
+    )
+
     stats = MatchStats(
+        details=details,
         source_keypoints=len(source_keys),
         target_keypoints=len(target_keys),
         forward_good=len(forward_good),

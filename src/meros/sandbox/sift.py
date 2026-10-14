@@ -13,7 +13,7 @@ sift = cv.SIFT.create()
 
 keypoints, descriptors = sift.detectAndCompute(gray, None)
 
-resultado = cv.drawKeypoints(
+r = cv.drawKeypoints(
     gray,
     keypoints,
     gray,
@@ -22,6 +22,6 @@ resultado = cv.drawKeypoints(
 )
 
 plt.figure(figsize=(10, 6))
-plt.imshow(cv.cvtColor(resultado, cv.COLOR_BGR2RGB))
+plt.imshow(cv.cvtColor(r, cv.COLOR_BGR2RGB))
 plt.axis("off")
 plt.show()
