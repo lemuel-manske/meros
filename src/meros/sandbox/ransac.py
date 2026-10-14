@@ -18,7 +18,7 @@ paths = {
     False: (
         "data/media/masked_crops/65_7/0/210.png",
         "data/media/masked_crops/101_11/0/250.png",
-    )
+    ),
 }
 
 
@@ -49,7 +49,6 @@ def read_pairs() -> list[Pair]:
         )
 
     return r
-
 
 
 def draw_matches(
@@ -132,7 +131,6 @@ for pair in pairs:
 
     print(f"Inlier ratio: {inlier_ratio:.2%}")
 
-
     fig, axes = plt.subplots(2, 1, figsize=(16, 12))
 
     draw_matches(
@@ -142,11 +140,7 @@ for pair in pairs:
         result,
     )
 
-    axes[0].set_title(
-        f"All Mutual Matches: {mutual} | "
-        f"Inliers: {inliers} | "
-        f"Outliers: {outliers}"
-    )
+    axes[0].set_title(f"All Mutual Matches: {mutual} | Inliers: {inliers} | Outliers: {outliers}")
 
     draw_matches(
         axes[1],
@@ -156,10 +150,7 @@ for pair in pairs:
         inliers_only=True,
     )
 
-    axes[1].set_title(
-        f"RANSAC Inliers: {inliers} | "
-        f"Inlier Ratio: {inlier_ratio:.2%}"
-    )
+    axes[1].set_title(f"RANSAC Inliers: {inliers} | Inlier Ratio: {inlier_ratio:.2%}")
 
     plt.tight_layout()
 

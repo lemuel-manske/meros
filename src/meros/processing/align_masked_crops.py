@@ -93,6 +93,7 @@ def run(project: Project) -> None:
 
             print(f"{track.video_id}/{track.track_id}: {accepted}/{total} alignment candidates.")
 
+
 def extract_mask(image: np.ndarray) -> np.ndarray:
     return (image[:, :, 3] == 255).astype(np.uint8) * 255
 

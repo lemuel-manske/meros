@@ -14,11 +14,7 @@ sift = cv.SIFT.create()
 keypoints, descriptors = sift.detectAndCompute(gray, None)
 
 r = cv.drawKeypoints(
-    gray,
-    keypoints,
-    gray,
-    color=(0, 255, 0),
-    flags=cv.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS
+    gray, keypoints, gray, color=(0, 255, 0), flags=cv.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS
 )
 
 plt.figure(figsize=(10, 6))

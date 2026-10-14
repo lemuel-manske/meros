@@ -56,9 +56,7 @@ def run(project: Project) -> None:
             raise RuntimeError(f"Could not open video: {video.path}")
 
         existing_frames_ids = [
-            f.stem for f in project.media \
-            .frames_path(video.video_id) \
-            .glob("*.jpg")
+            f.stem for f in project.media.frames_path(video.video_id).glob("*.jpg")
         ]
 
         frame_idx = 0
