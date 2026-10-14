@@ -176,9 +176,7 @@ def plot(rows: Sequence[ComparisonRow], individuals: Sequence[Individual], outpu
         )
 
         axis.set_title(title)
-        axis.set_xticks(
-            range(len(REPRESENTATIONS)), ("Reference", "Composite", "CLAHE", "Mantiuk")
-        )
+        axis.set_xticks(range(len(REPRESENTATIONS)), ("Reference", "Composite", "CLAHE", "Mantiuk"))
         axis.set_yticks(range(len(pairs)), labels)
         axis.tick_params(length=0, labelsize=9)
 
