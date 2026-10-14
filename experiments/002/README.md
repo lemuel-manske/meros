@@ -92,6 +92,8 @@ With the current small dataset, the answer appears promising: same-individual en
 
 However, the current sample size is too small for conclusions about general performance.
 
+The selected observations demonstrate that SIFT with affine RANSAC can recover geometrically consistent correspondences under favorable capture conditions and comparable viewpoints. The dataset does not establish that these correspondences persist across independently recorded encounters.
+
 ### Next steps
 
 The next experiments should increase the number of known individuals and explicitly record viewpoint or body pose.
@@ -116,3 +118,5 @@ inlier ratio
 ```
 
 With a larger dataset, these values can be evaluated to determine which signal best separates same-individual from different-individual pairs.
+
+Definitely, we need a broader dataset.
