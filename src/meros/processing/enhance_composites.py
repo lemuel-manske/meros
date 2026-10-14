@@ -111,16 +111,21 @@ def tone_map_mantiuk(composite: np.ndarray) -> np.ndarray:
     if np.ptp(cv.cvtColor(rgb, cv.COLOR_RGB2GRAY)) == 0:
         return composite.copy()
 
-    # decode sRGB before processing; gamma encodes the tone-mapped output for display.
+    # Decode sRGB before processing; apply display gamma after clipping roundoff below zero.
     linear = np.where(rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4)
-    mapper = cv.createTonemapMantiuk(gamma=2.2, scale=0.7, saturation=1.0)
+    black = np.all(linear == linear.min(), axis=2)
+    mapper = cv.createTonemapMantiuk(gamma=1.0, scale=0.7, saturation=1.0)
     mapped = mapper.process(linear.astype(np.float32))
+
+    # OpenCV normalizes the input, then divides RGB by luminance. At normalized
+    # black pixels this is 0/0; their output remains black.
+    mapped[black] = 0
 
     if not np.isfinite(mapped).all():
         raise ValueError("Mantiuk tone mapping produced non-finite pixels.")
 
     result = composite.copy()
-    rgb8 = np.rint(np.clip(mapped, 0, 1) * 255).astype(np.uint8)
+    rgb8 = np.rint(np.clip(mapped, 0, 1) ** (1 / 2.2) * 255).astype(np.uint8)
     result[:, :, :3] = cv.cvtColor(rgb8, cv.COLOR_RGB2BGR)
     result[~valid, :3] = 0
 
