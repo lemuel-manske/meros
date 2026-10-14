@@ -94,7 +94,6 @@ def enhance_composite(track: TrackSelection, *, project: Project) -> None:
 
 
 def tone_map_mantiuk(composite: np.ndarray) -> np.ndarray:
-    """Apply OpenCV Mantiuk tone mapping while preserving the composite mask."""
     if composite.dtype != np.uint8 or composite.ndim != 3 or composite.shape[2] != 4:
         raise ValueError("Expected a uint8 BGRA composite.")
 
@@ -103,15 +102,16 @@ def tone_map_mantiuk(composite: np.ndarray) -> np.ndarray:
     if not valid.any():
         return composite.copy()
 
-    # Extend the fish colors outside the mask so black padding does not add gradients.
     indices = distance_transform_edt(~valid, return_distances=False, return_indices=True)
+    assert indices is not None
+
     filled = composite[:, :, :3][tuple(indices)]
     rgb = cv.cvtColor(filled, cv.COLOR_BGR2RGB).astype(np.float32) / 255
 
     if np.ptp(cv.cvtColor(rgb, cv.COLOR_RGB2GRAY)) == 0:
         return composite.copy()
 
-    # Decode sRGB before processing; gamma encodes the tone-mapped output for display.
+    # decode sRGB before processing; gamma encodes the tone-mapped output for display.
     linear = np.where(rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4)
     mapper = cv.createTonemapMantiuk(gamma=2.2, scale=0.7, saturation=1.0)
     mapped = mapper.process(linear.astype(np.float32))
