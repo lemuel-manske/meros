@@ -136,9 +136,11 @@ it is undefined when there are no mutual matches.
 
 This is an adaptation of Mantiuk tone mapping, not an exact reproduction of ALFRE-ID.
 The authors use `pfstmo_mantiuk06` on images before segmentation. Here we use
-`cv.createTonemapMantiuk(gamma=2.2, scale=0.7, saturation=1.0)` on composites.
-Input sRGB values are decoded before processing; gamma 2.2 encodes the output
-approximately for display. These are initial parameters, not paper-reported settings.
+`cv.createTonemapMantiuk(gamma=1.0, scale=0.7, saturation=1.0)` on composites.
+Input sRGB values are decoded before processing. Normalized black pixels are restored
+to zero to handle OpenCV's zero-luminance division. The output is clipped to [0, 1]
+before applying display gamma 2.2, preventing roundoff below zero from producing NaNs.
+These are initial parameters, not paper-reported settings.
 
 Transparent padding is filled with nearest valid fish colors during processing,
 then the original alpha mask is restored. Empty masks and constant-luminance inputs
