@@ -124,3 +124,5 @@ inlier ratio
 With a larger dataset, these values can be evaluated to determine which signal best separates same-individual from different-individual pairs.
 
 Definitely, we need a broader dataset.
+
+Also, since Goliath Grouper can change their body patterns over time, it would be useful to have multiple encounters of the same individual across different seasons and years. This will help assess the robustness of the matching method to temporal changes in appearance. But, since the current dataset is very small, we can try to run onto another approach: facial recognition using the dots on the face of the Goliath Grouper. This could be a more reliable method for identification, as the facial patterns are less likely to change over time compared to body patterns.
