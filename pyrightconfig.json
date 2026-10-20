@@ -1,0 +1,11 @@
+{
+  "include": ["src"],
+
+  "extraPaths": ["src"],
+
+  "pythonVersion": "3.12",
+
+  "typeCheckingMode": "standard",
+
+  "reportMissingParameterType": "error"
+}

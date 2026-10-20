@@ -1,0 +1,25 @@
+.gitkeep
+
+.env
+.venv
+
+# media belongs to DVC; Git tracks source metadata and DVC pointer files.
+/data/*
+
+# ignore * except for metadata and dvc pointer files
+!/data/*.dvc
+!/data/.gitignore
+!/data/metadata/
+
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+__pycache__
+
+/build/
+/dist/
+/results/
+
+# disposable derived metadata is rebuilt by the pipeline.
+/data/metadata/alignment/
+/data/metadata/tracks/
