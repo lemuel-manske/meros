@@ -18,10 +18,9 @@ class Project:
         cls,
         root: Path = Path("data"),
         *,
-        manifest: Path,
         checkpoint: Path = Path("external/sam2/checkpoints/sam2.1_hiera_large.pt"),
     ) -> "Project":
-        metadata = LocalFsMetadataStore(root, manifest)
+        metadata = LocalFsMetadataStore(root)
         media = LocalFsMediaStore(root)
 
         return cls(media, metadata, checkpoint=checkpoint)

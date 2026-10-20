@@ -10,6 +10,7 @@ from meros.project import Project
 from meros.domain.prediction import VideoPredictor
 from meros.external import build_sam2_predictor
 from meros.processing.extract_tracks import tracks_complete
+from meros.processing.frame_sequence import frame_batches, sam2_frame_sequence
 
 
 def masked_crops_complete(project: Project) -> bool:
@@ -88,43 +89,61 @@ def extract_masked_crops(video_id: str, predictor: VideoPredictor, *, project: P
     if not tracks:
         raise ValueError(f"{video_id}: no saved tracks available.")
 
-    state = predictor.init_state(
-        video_path=str(project.media.frames_path(video_id)),
-    )
-
-    for track_id, track in tracks.items():
-        predictor.add_new_points_or_box(
-            inference_state=state,
-            frame_idx=track.initial_frame,
-            obj_id=int(track_id),
-            box=np.asarray(track.initial_bbox, dtype=np.float32),
-        )
-
     count = 0
 
-    for prediction in predictor.propagate_in_video(state):
-        frame_idx = prediction.frame_idx
+    frame_ids = tuple(project.media.frame_ids(video_id))
 
-        frame = project.media.read_frame(video_id, frame_idx)
+    written_frames: set[int] = set()
 
-        for track_id, mask in prediction.masks.items():
-            track = tracks[track_id]
+    for batch in frame_batches(frame_ids):
+        with sam2_frame_sequence(project, video_id, batch) as sequence:
+            state = predictor.init_state(video_path=str(sequence.path))
 
-            if frame_idx < track.initial_frame or str(frame_idx) not in track.frames:
-                continue
+            for track_id, track in tracks.items():
+                first_observation = track.frames.get(str(batch[0]))
 
-            crop = build_masked_crop(frame, mask)
+                if first_observation is None:
+                    continue
 
-            if crop is None:
-                continue
+                predictor.add_new_points_or_box(
+                    inference_state=state,
+                    frame_idx=0,
+                    obj_id=int(track_id),
+                    box=np.asarray(first_observation.bbox, dtype=np.float32),
+                )
 
-            project.media.write_masked_crop(
-                video_id,
-                track_id,
-                frame_idx,
-                crop,
-            )
+            for prediction in predictor.propagate_in_video(state):
+                frame_idx = sequence.original(prediction.frame_idx)
 
-            count += 1
+                if frame_idx in written_frames:
+                    continue
+
+                written_frames.add(frame_idx)
+
+                frame = project.media.read_frame(video_id, frame_idx)
+
+                for track_id, mask in prediction.masks.items():
+                    track = tracks[track_id]
+
+                    if str(frame_idx) not in track.frames:
+                        continue
+
+                    crop = build_masked_crop(frame, mask)
+
+                    if crop is None:
+                        continue
+
+                    project.media.write_masked_crop(
+                        video_id,
+                        track_id,
+                        frame_idx,
+                        crop,
+                    )
+
+                    count += 1
+
+            del state
+
+        print(f"{video_id}: saved {count} crops.", flush=True)
 
     return count

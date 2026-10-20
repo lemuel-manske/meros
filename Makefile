@@ -12,7 +12,7 @@ EXTRAS ?= data,dev
 
 # Experiment selection and artifact locations.
 
-EXPERIMENT ?= 002
+EXPERIMENT ?=
 
 RUN_DIR ?=
 
@@ -79,6 +79,12 @@ results-save:
 	@test -n "$(RUN_DIR)" || { printf '%s\n' 'Set RUN_DIR to a completed experiment run.'; exit 2; }
 
 	$(PYTHON) -m dvc add "$(RUN_DIR)"
+
+
+# Pipeline.
+
+pipeline:
+	$(PYTHON) -m meros.pipeline.engine
 
 
 # Experiments.

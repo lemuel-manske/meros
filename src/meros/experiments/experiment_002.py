@@ -5,9 +5,7 @@ from __future__ import annotations
 import csv
 import json
 import shutil
-import subprocess
 import uuid
-from datetime import datetime, timezone
 from itertools import combinations, product
 from pathlib import Path
 from collections.abc import Callable, Iterator, Sequence
@@ -19,6 +17,7 @@ from numpy.typing import NDArray
 
 import cv2 as cv
 
+from meros.experiments.common import experiment_output, git_revision
 from meros.project import Project
 from meros.domain import Individual, TrackSelection
 from meros.domain.prediction import VideoPredictor
@@ -105,10 +104,6 @@ def validate_individuals(individuals: Sequence[Individual]) -> None:
                 raise ValueError("Selection assigned more than once")
 
             seen.add(track.selection_id)
-
-
-def git_revision() -> str:
-    return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 
 
 def plot(rows: Sequence[ComparisonRow], individuals: Sequence[Individual], output: Path) -> None:
@@ -353,11 +348,9 @@ def run(
 
 
 def main() -> None:
-    project = Project.open(manifest=Path("experiments/002/selections.json"))
+    project = Project.open()
 
-    output = Path("results/002") / (
-        datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
-    )
+    output = experiment_output("002")
 
     run(project, output)
 

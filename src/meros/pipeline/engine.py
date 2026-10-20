@@ -89,3 +89,11 @@ def create_pipeline(
             ),
         ]
     )
+
+
+if __name__ == "__main__":
+    project = Project.open()
+
+    pipeline = create_pipeline(project)
+
+    pipeline.run()

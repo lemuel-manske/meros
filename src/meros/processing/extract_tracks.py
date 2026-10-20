@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from pathlib import Path
-
 import cv2 as cv
 import numpy as np
+
+from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
 
 from meros.domain import BBox, Track, TrackMetadata, TrackObservation
 from meros.domain.prediction import Prediction, VideoPredictor
 from meros.external import build_sam2_predictor
+from meros.processing.frame_sequence import frame_batches, sam2_frame_sequence
 from meros.project import Project
 
 
@@ -33,7 +35,6 @@ def tracks_complete(project: Project) -> bool:
 
         if (
             not frame_ids
-            or frame_ids != list(range(len(frame_ids)))
             or not saved.tracks
             or saved.video_id != video.video_id
             or saved.processed_frame_count != len(frame_ids)
@@ -41,7 +42,7 @@ def tracks_complete(project: Project) -> bool:
             return False
 
         try:
-            height, width = project.media.read_frame(video.video_id, 0).shape[:2]
+            height, width = project.media.read_frame(video.video_id, frame_ids[0]).shape[:2]
         except (OSError, ValueError, cv.error):
             return False
 
@@ -54,12 +55,12 @@ def tracks_complete(project: Project) -> bool:
             if not track.frames:
                 return False
 
-            if track.initial_frame != 0 or track.initial_bbox != video_seeds[track_id]:
+            if track.initial_frame != frame_ids[0] or track.initial_bbox != video_seeds[track_id]:
                 return False
 
             try:
                 for idx, observation in track.frames.items():
-                    if str(int(idx)) != idx or not track.initial_frame <= int(idx) < len(frame_ids):
+                    if str(int(idx)) != idx or int(idx) not in frame_ids:
                         return False
 
                     x1, y1, x2, y2 = observation.bbox
@@ -94,6 +95,15 @@ def run(
         print(f"Saved {len(tracks)} tracks for {video_id}.")
 
 
+@dataclass
+class BoxSelectionState:
+    adding: bool = False
+
+    drag_start: tuple[int, int] | None = None
+
+    pending: list[int] | None = None
+
+
 # for manual selection
 def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
     window = f"{video_id}: a = add fish, Enter = confirm box, q = save, Esc = cancel"
@@ -102,16 +112,10 @@ def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
 
     height, width = frame.shape[:2]
 
-    adding = False
-
-    drag_start: tuple[int, int] | None = None
-
-    pending: list[int] | None = None
+    state = BoxSelectionState()
 
     def on_mouse(event: int, x: int, y: int, _flags: int, _userdata: object) -> None:
-        nonlocal drag_start, pending
-
-        if not adding:
+        if not state.adding:
             return
 
         x = min(max(x, 0), width - 1)
@@ -119,17 +123,17 @@ def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
         y = min(max(y, 0), height - 1)
 
         if event == cv.EVENT_LBUTTONDOWN:
-            drag_start = (x, y)
+            state.drag_start = (x, y)
 
-            pending = None
+            state.pending = None
 
-        elif drag_start is not None and event in (cv.EVENT_MOUSEMOVE, cv.EVENT_LBUTTONUP):
-            start_x, start_y = drag_start
+        elif state.drag_start is not None and event in (cv.EVENT_MOUSEMOVE, cv.EVENT_LBUTTONUP):
+            start_x, start_y = state.drag_start
 
-            pending = [min(start_x, x), min(start_y, y), max(start_x, x), max(start_y, y)]
+            state.pending = [min(start_x, x), min(start_y, y), max(start_x, x), max(start_y, y)]
 
             if event == cv.EVENT_LBUTTONUP:
-                drag_start = None
+                state.drag_start = None
 
     print(f"{video_id}: press a, drag a fish box, then press Enter/Space to confirm.")
 
@@ -158,6 +162,11 @@ def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
                     2,
                 )
 
+            if state.pending is not None:
+                x1, y1, x2, y2 = state.pending
+
+                cv.rectangle(preview, (x1, y1), (x2, y2), (0, 255, 255), 2)
+
             cv.imshow(window, preview)
 
             key = cv.waitKeyEx(30)
@@ -171,11 +180,30 @@ def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
                 raise ValueError(f"{video_id}: fish selection cancelled; seed boxes were not saved")
 
             if key == ord("a"):
-                adding = True
+                state.adding = True
 
-                drag_start = None
+                state.drag_start = None
 
-                pending = None
+                state.pending = None
+
+            elif key in (13, 10, 32, 0x0D):
+                if state.adding and state.pending is not None:
+                    x1, y1, x2, y2 = state.pending
+
+                    if x1 == x2 or y1 == y2:
+                        print(f"{video_id}: box must have nonzero width and height.")
+
+                        continue
+
+                    track_id = str(len(boxes))
+
+                    boxes[track_id] = state.pending.copy()
+
+                    state.adding = False
+
+                    state.drag_start = None
+
+                    state.pending = None
 
             elif key == ord("q"):
                 if not boxes:
@@ -199,8 +227,10 @@ def select_track_seeds(
 
     boxes = saved_boxes.get(video_id)
 
+    first_frame = project.media.frame_ids(video_id)[0]
+
     if not boxes:
-        frame = project.media.read_frame(video_id, 0)
+        frame = project.media.read_frame(video_id, first_frame)
 
         boxes = bbox_selector(video_id, frame)
 
@@ -209,7 +239,7 @@ def select_track_seeds(
         project.metadata.write_bboxes(saved_boxes)
 
     return {
-        track_id: Track(initial_frame=0, initial_bbox=bbox, frames={})
+        track_id: Track(initial_frame=first_frame, initial_bbox=bbox, frames={})
         for track_id, bbox in boxes.items()
     }
 
@@ -222,32 +252,60 @@ def propagate_tracks(
     project: Project,
 ) -> TrackMetadata:
 
-    frame_ids = project.media.frame_ids(video_id)
-
-    if not frame_ids or frame_ids != list(range(len(frame_ids))):
-        raise ValueError(f"{video_id}: expected contiguous zero-based frames")
+    frame_ids = tuple(project.media.frame_ids(video_id))
 
     track_metadata = TrackMetadata(video_id, tracks, len(frame_ids))
 
-    state = predictor.init_state(str(project.media.frames_path(video_id)))
-
-    for track_id, track in tracks.items():
-        predictor.add_new_points_or_box(
-            inference_state=state,
-            frame_idx=track.initial_frame,
-            obj_id=int(track_id),
-            box=np.asarray(track.initial_bbox, dtype=np.float32),
-        )
-
     processed: set[int] = set()
 
-    for prediction in predictor.propagate_in_video(state):
-        if prediction.frame_idx in processed or not 0 <= prediction.frame_idx < len(frame_ids):
-            raise RuntimeError("Invalid predictor frame index")
+    for batch in frame_batches(frame_ids):
+        with sam2_frame_sequence(project, video_id, batch) as sequence:
+            state = predictor.init_state(str(sequence.path))
 
-        processed.add(prediction.frame_idx)
+            first_frame = batch[0]
 
-        process_frame(video_id, prediction, track_metadata, project=project)
+            for track_id, track in tracks.items():
+                if first_frame == track.initial_frame:
+                    bbox = track.initial_bbox
+                else:
+                    previous = track.frames.get(str(first_frame))
+
+                    if previous is None:
+                        previous = track.frames.get(
+                            str(frame_ids[frame_ids.index(first_frame) - 1])
+                        )
+
+                    if previous is None:
+                        bbox = track.initial_bbox
+                    else:
+                        bbox = previous.bbox
+
+                predictor.add_new_points_or_box(
+                    inference_state=state,
+                    frame_idx=0,
+                    obj_id=int(track_id),
+                    box=np.asarray(bbox, dtype=np.float32),
+                )
+
+            for prediction in predictor.propagate_in_video(state):
+                frame_idx = sequence.original(prediction.frame_idx)
+
+                if frame_idx in processed:
+                    continue
+
+                processed.add(frame_idx)
+
+                process_frame(
+                    video_id,
+                    prediction,
+                    track_metadata,
+                    project=project,
+                    original_frame=frame_idx,
+                )
+
+            del state
+
+        print(f"{video_id}: tracked {len(processed)}/{len(frame_ids)} frames.", flush=True)
 
     if processed != set(frame_ids):
         raise RuntimeError("SAM2 did not process the full sequence")
@@ -261,8 +319,9 @@ def process_frame(
     track_metadata: TrackMetadata,
     *,
     project: Project,
+    original_frame: int | None = None,
 ) -> None:
-    frame_idx = prediction.frame_idx
+    frame_idx = prediction.frame_idx if original_frame is None else original_frame
 
     frame = project.media.read_frame(
         video_id,
