@@ -4,11 +4,12 @@ from .storage import (
     AlignmentStatus,
     BBox,
     Individual,
-    TrackSelectionKey,
-    TrackSelection,
+    Interval,
     Track,
     TrackMetadata,
     TrackObservation,
+    TrackSelection,
+    TrackSelectionKey,
     Video,
 )
 
@@ -18,10 +19,11 @@ __all__ = [
     "AlignmentStatus",
     "BBox",
     "Individual",
-    "TrackSelectionKey",
-    "TrackSelection",
+    "Interval",
     "Track",
     "TrackMetadata",
     "TrackObservation",
+    "TrackSelection",
+    "TrackSelectionKey",
     "Video",
 ]

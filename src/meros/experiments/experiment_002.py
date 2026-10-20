@@ -353,7 +353,7 @@ def run(
 
 
 def main() -> None:
-    project = Project.open(manifest=Path("experiments/002/selections.json"))
+    project = Project.open()
 
     output = Path("results/002") / (
         datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]

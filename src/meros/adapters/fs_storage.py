@@ -14,11 +14,12 @@ from meros.domain import (
     AlignmentRunMetadata,
     BBox,
     Individual,
-    TrackSelectionKey,
-    TrackSelection,
+    Interval,
     Track,
     TrackMetadata,
     TrackObservation,
+    TrackSelection,
+    TrackSelectionKey,
     Video,
 )
 from meros.domain.storage import validate_bbox
@@ -179,6 +180,9 @@ class MetadataPaths:
             / f"{track_id}_{start_frame}_{end_frame}_ref_{reference_frame}.json"
         )
 
+    def individuals(self) -> Path:
+        return (self.root / "metadata/individuals") / "individuals.json"
+
     def videos(self) -> Path:
         return (self.root / "metadata/videos") / "videos.json"
 
@@ -187,10 +191,8 @@ class MetadataPaths:
 
 
 class LocalFsMetadataStore:
-    def __init__(self, root: Path, manifest: Path) -> None:
+    def __init__(self, root: Path) -> None:
         self.paths = MetadataPaths(root)
-
-        self.individuals_path = manifest
 
     def read_bboxes(self) -> dict[str, BBox]:
         try:
@@ -218,10 +220,20 @@ class LocalFsMetadataStore:
         with self.paths.videos().open("r", encoding="utf-8") as f:
             metadata = json.load(f)
 
-        return [Video(**video_metadata) for video_metadata in metadata]
+        return [
+            Video(
+                **{
+                    **video_metadata,
+                    "intervals": [
+                        Interval(**interval)
+                        for interval in video_metadata.get("intervals", [])
+                    ]
+                }
+            ) for video_metadata in metadata
+        ]
 
     def read_individuals(self) -> list[Individual]:
-        with self.individuals_path.open("r", encoding="utf-8") as f:
+        with self.paths.individuals().open("r", encoding="utf-8") as f:
             metadata = json.load(f)
 
         return [

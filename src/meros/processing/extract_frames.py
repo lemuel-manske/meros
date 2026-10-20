@@ -19,7 +19,19 @@ def frames_complete(project: Project) -> bool:
             if not capture.isOpened():
                 return False
 
-            expected = video.frame_count or int(capture.get(cv.CAP_PROP_FRAME_COUNT))
+            intervals = video.intervals
+
+            capture_len = int(capture.get(cv.CAP_PROP_FRAME_COUNT))
+
+            expected = 0
+            if len(intervals) > 0:
+                for interval in intervals:
+                    if interval.start < 0 or interval.end >= capture_len:
+                        return False
+
+                    expected += interval.end - interval.start + 1
+            else:
+                expected = capture_len
 
             shape = (
                 int(capture.get(cv.CAP_PROP_FRAME_HEIGHT)),
@@ -62,6 +74,15 @@ def run(project: Project) -> None:
         frame_idx = 0
 
         try:
+            frames_to_extract = []
+
+            intervals = video.intervals
+            if len(intervals) > 0:
+                for interval in intervals:
+                    frames_to_extract.extend(range(interval.start, interval.end + 1))
+            else:
+                frames_to_extract = list(range(int(capture.get(cv.CAP_PROP_FRAME_COUNT))))
+
             while True:
                 ok, frame = capture.read()
 
@@ -72,22 +93,21 @@ def run(project: Project) -> None:
                     frame = cv.flip(frame, 1)
 
                 # video sources never change, so we can skip frames that already exist
-                if str(frame_idx) in existing_frames_ids:
-                    frame_idx += 1
-                    continue
-
-                project.media.write_frame(
-                    video.video_id,
-                    frame_idx,
-                    frame,
-                )
+                if frame_idx in frames_to_extract and str(frame_idx) not in existing_frames_ids:
+                    project.media.write_frame(
+                        video.video_id,
+                        frame_idx,
+                        frame,
+                    )
 
                 frame_idx += 1
 
         finally:
             capture.release()
 
-        if frame_idx == 0:
+        count = len(frames_to_extract)
+
+        if count == 0:
             raise RuntimeError(f"{video.video_id}: no frames extracted.")
 
-        print(f"{video.video_id}: extracted {frame_idx} frames.")
+        print(f"{video.video_id}: extracted {count} frames.")

@@ -114,12 +114,18 @@ class AlignmentRunMetadata:
 
 
 @dataclass(frozen=True)
+class Interval:
+    start: int
+    end: int
+
+
+@dataclass(frozen=True)
 class Video:
     video_id: str
-    mirrored: bool
     fname: str
     path: str
-    frame_count: int | None = None
+    intervals: list[Interval]
+    mirrored: bool = False
 
     def __post_init__(self) -> None:
         for value in (self.video_id, self.fname, self.path):
@@ -128,11 +134,6 @@ class Video:
 
         if type(self.mirrored) is not bool:
             raise ValueError("Video mirroring must be a boolean")
-
-        if self.frame_count is not None and (
-            type(self.frame_count) is not int or self.frame_count <= 0
-        ):
-            raise ValueError("Video frame count must be a positive integer")
 
 
 type BBox = dict[str, list[int]]

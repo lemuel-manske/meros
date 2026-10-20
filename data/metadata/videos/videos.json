@@ -1,5 +1,21 @@
 [
   {
+    "video_id": "h01",
+    "mirrored": false,
+    "fname": "h01.mp4",
+    "path": "data/media/videos/h01.mp4",
+    "intervals": [
+      {
+        "start": 170,
+        "end": 510
+      },
+      {
+        "start": 1320,
+        "end": 2090
+      }
+    ]
+  },
+  {
     "video_id": "25_1",
     "mirrored": false,
     "fname": "25_1.mov",
@@ -55,7 +71,7 @@
   },
     {
     "video_id": "147_16",
-    "mirrored": true,
+    "mirrored": false,
     "fname": "147_16.mov",
     "path": "data/media/videos/147_16.mov"
   }
