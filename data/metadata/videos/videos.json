@@ -7,10 +7,6 @@
       {
         "start": 170,
         "end": 510
-      },
-      {
-        "start": 1320,
-        "end": 2090
       }
     ],
     "annotations": [
@@ -18,13 +14,6 @@
         "track_id": "0",
         "start_frame": 170,
         "end_frame": 510,
-        "viewpoint": "frontal",
-        "quality": 3
-      },
-      {
-        "track_id": "0",
-        "start_frame": 1320,
-        "end_frame": 2090,
         "viewpoint": "frontal",
         "quality": 3
       }
@@ -38,14 +27,14 @@
     "intervals": [
       {
         "start": 1000,
-        "end": 1750
+        "end": 1340
       }
     ],
     "annotations": [
       {
         "track_id": "0",
         "start_frame": 1000,
-        "end_frame": 1750,
+        "end_frame": 1340,
         "viewpoint": "frontal",
         "quality": 3
       }

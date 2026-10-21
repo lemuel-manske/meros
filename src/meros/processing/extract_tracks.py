@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import cv2 as cv
+import numpy as np
+
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-
-import cv2 as cv
-import numpy as np
 
 from meros.domain import BBox, Track, TrackMetadata, TrackObservation
 from meros.domain.prediction import Prediction, VideoPredictor
