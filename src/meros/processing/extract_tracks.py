@@ -33,7 +33,7 @@ def tracks_complete(project: Project) -> bool:
 
         if (
             not frame_ids
-            or frame_ids != list(range(frame_ids[0], frame_ids[-1] + 1))
+            or frame_ids != list(range(len(frame_ids)))
             or not saved.tracks
             or saved.video_id != video.video_id
             or saved.processed_frame_count != len(frame_ids)
@@ -41,7 +41,7 @@ def tracks_complete(project: Project) -> bool:
             return False
 
         try:
-            height, width = project.media.read_frame(video.video_id, frame_ids[0]).shape[:2]
+            height, width = project.media.read_frame(video.video_id, 0).shape[:2]
         except (OSError, ValueError, cv.error):
             return False
 
@@ -54,12 +54,12 @@ def tracks_complete(project: Project) -> bool:
             if not track.frames:
                 return False
 
-            if track.initial_frame != frame_ids[0] or track.initial_bbox != video_seeds[track_id]:
+            if track.initial_frame != 0 or track.initial_bbox != video_seeds[track_id]:
                 return False
 
             try:
                 for idx, observation in track.frames.items():
-                    if str(int(idx)) != idx or not track.initial_frame <= int(idx) <= frame_ids[-1]:
+                    if str(int(idx)) != idx or not track.initial_frame <= int(idx) < len(frame_ids):
                         return False
 
                     x1, y1, x2, y2 = observation.bbox
@@ -235,7 +235,7 @@ def select_track_seeds(
         project.metadata.write_bboxes(saved_boxes)
 
     return {
-        track_id: Track(initial_frame=project.media.frame_ids(video_id)[0], initial_bbox=bbox, frames={})
+        track_id: Track(initial_frame=0, initial_bbox=bbox, frames={})
         for track_id, bbox in boxes.items()
     }
 
@@ -251,7 +251,7 @@ def propagate_tracks(
     frame_ids = project.media.frame_ids(video_id)
 
     if not frame_ids or frame_ids != list(range(len(frame_ids))):
-        raise ValueError(f"{video_id}: expected contiguous frame indices")
+        raise ValueError(f"{video_id}: expected contiguous zero-based frames")
 
     track_metadata = TrackMetadata(video_id, tracks, len(frame_ids))
 
@@ -268,7 +268,7 @@ def propagate_tracks(
     processed: set[int] = set()
 
     for prediction in predictor.propagate_in_video(state):
-        if prediction.frame_idx in processed or prediction.frame_idx not in frame_ids:
+        if prediction.frame_idx in processed or not 0 <= prediction.frame_idx < len(frame_ids):
             raise RuntimeError("Invalid predictor frame index")
 
         processed.add(prediction.frame_idx)
