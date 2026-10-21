@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 import cv2 as cv
@@ -94,6 +95,15 @@ def run(
         print(f"Saved {len(tracks)} tracks for {video_id}.")
 
 
+@dataclass
+class BoxSelectionState:
+    adding: bool = False
+
+    drag_start: tuple[int, int] | None = None
+
+    pending: list[int] | None = None
+
+
 # for manual selection
 def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
     window = f"{video_id}: a = add fish, Enter = confirm box, q = save, Esc = cancel"
@@ -102,16 +112,10 @@ def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
 
     height, width = frame.shape[:2]
 
-    adding = False
-
-    drag_start: tuple[int, int] | None = None
-
-    pending: list[int] | None = None
+    state = BoxSelectionState()
 
     def on_mouse(event: int, x: int, y: int, _flags: int, _userdata: object) -> None:
-        nonlocal drag_start, pending
-
-        if not adding:
+        if not state.adding:
             return
 
         x = min(max(x, 0), width - 1)
@@ -119,17 +123,17 @@ def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
         y = min(max(y, 0), height - 1)
 
         if event == cv.EVENT_LBUTTONDOWN:
-            drag_start = (x, y)
+            state.drag_start = (x, y)
 
-            pending = None
+            state.pending = None
 
-        elif drag_start is not None and event in (cv.EVENT_MOUSEMOVE, cv.EVENT_LBUTTONUP):
-            start_x, start_y = drag_start
+        elif state.drag_start is not None and event in (cv.EVENT_MOUSEMOVE, cv.EVENT_LBUTTONUP):
+            start_x, start_y = state.drag_start
 
-            pending = [min(start_x, x), min(start_y, y), max(start_x, x), max(start_y, y)]
+            state.pending = [min(start_x, x), min(start_y, y), max(start_x, x), max(start_y, y)]
 
             if event == cv.EVENT_LBUTTONUP:
-                drag_start = None
+                state.drag_start = None
 
     print(f"{video_id}: press a, drag a fish box, then press Enter/Space to confirm.")
 
@@ -158,8 +162,8 @@ def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
                     2,
                 )
 
-            if pending is not None:
-                x1, y1, x2, y2 = pending
+            if state.pending is not None:
+                x1, y1, x2, y2 = state.pending
 
                 cv.rectangle(preview, (x1, y1), (x2, y2), (0, 255, 255), 2)
 
@@ -176,15 +180,15 @@ def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
                 raise ValueError(f"{video_id}: fish selection cancelled; seed boxes were not saved")
 
             if key == ord("a"):
-                adding = True
+                state.adding = True
 
                 drag_start = None
 
-                pending = None
+                state.pending = None
 
             elif key in (13, 10, 32, 0x0D):
-                if adding and pending is not None:
-                    x1, y1, x2, y2 = pending
+                if state.adding and state.pending is not None:
+                    x1, y1, x2, y2 = state.pending
 
                     if x1 == x2 or y1 == y2:
                         print(f"{video_id}: box must have nonzero width and height.")
@@ -193,9 +197,9 @@ def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
 
                     track_id = str(len(boxes))
 
-                    boxes[track_id] = pending.copy()
+                    boxes[track_id] = state.pending.copy()
 
-                    adding = False
+                    state.adding = False
 
                     drag_start = None
 
