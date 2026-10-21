@@ -2,36 +2,33 @@
 
 from __future__ import annotations
 
-import argparse
 import csv
 import json
-import uuid
 
 import cv2 as cv
 import numpy as np
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from numpy.typing import NDArray
 from pathlib import Path
+from itertools import combinations
 from scipy.spatial import KDTree
 
-from meros.domain import TrackSelection
+from meros.domain import TrackSelection, VideoAnnotation
+from meros.experiments.common import experiment_output, git_revision
 from meros.project import Project
 from typing import Literal, TypedDict, cast
 
 
-type VideoId = Literal["h01", "h02"]
 type FrameLabel = Literal["reference", "offset"]
 
 type Image = NDArray[np.uint8]
 type Points = NDArray[np.float32]
 
-type Roi = tuple[int, int, int, int]
+type SampleKey = tuple[str, FrameLabel]
 
-type SampleKey = tuple[VideoId, FrameLabel]
-
-VIDEO_IDS: tuple[VideoId, ...] = ("h01", "h02")
+MIN_QUALITY = 3
+FRAME_DELTA = 30
 NEIGHBORS = 6
 MAX_SPOTS = 180
 MIN_RANSAC_MATCHES = 8
@@ -59,77 +56,50 @@ class Sample:
 
 
 @dataclass(frozen=True)
+class EligibleSelection:
+    individual_id: str
+    track: TrackSelection
+    annotation: VideoAnnotation
+    reference_frame: int
+
+    @property
+    def sample_id(self) -> str:
+        return f"{self.track.selection_id}--frontal-{self.annotation.start_frame}-{self.annotation.end_frame}"
+
+
+@dataclass(frozen=True)
 class MatchResult:
     statistics: ComparisonRow
     pairs: list[tuple[int, int]]
     inlier_mask: list[bool]
 
 
-def validate_exclusions(
-    exclusions: list[Roi],
-    width: int,
-    height: int,
-) -> None:
-    for x, y, w, h in exclusions:
-        if not (0 <= x < width and 0 <= y < height and w > 0 and h > 0):
-            raise ValueError(f"Invalid watermark exclusion: {(x, y, w, h)}")
-
-        if x + w > width or y + h > height:
-            raise ValueError(f"Watermark exclusion outside frame: {(x, y, w, h)}")
-
-
-def detect_spots(
-    image: Image,
-    exclusions: list[Roi] | None = None,
-    origin: tuple[int, int] = (0, 0),
-) -> tuple[Points, Image]:
-    height, width = image.shape[:2]
-
-    if image.ndim != 3 or image.shape[2] != 4:
+def detect_spots(image: Image) -> tuple[Points, Image]:
+    if image.ndim != 3 or image.shape[2] != 4 or image.dtype != np.uint8:
         raise ValueError("Expected a uint8 BGRA masked crop")
 
-    if image.dtype != np.uint8:
-        raise ValueError("Expected uint8 masked crop")
-
-    exclusion_boxes = exclusions or []
-
-    # Exclusion boxes are specified in original full-frame coordinates.
-    full_x, full_y = origin
-
-    valid = image[:, :, 3] == 255
-
-    for ex, ey, ew, eh in exclusion_boxes:
-        local_x1 = max(0, ex - full_x)
-        local_y1 = max(0, ey - full_y)
-        local_x2 = min(width, ex + ew - full_x)
-        local_y2 = min(height, ey + eh - full_y)
-
-        if local_x1 < local_x2 and local_y1 < local_y2:
-            valid[local_y1:local_y2, local_x1:local_x2] = False
+    height, width = image.shape[:2]
 
     valid = cv.erode(
-        valid.astype(np.uint8),
+        (image[:, :, 3] == 255).astype(np.uint8),
         np.ones((5, 5), dtype=np.uint8),
         iterations=1,
     ).astype(bool)
 
     gray = cv.cvtColor(image[:, :, :3], cv.COLOR_BGR2GRAY)
 
-    # A neutral fill avoids black transparent pixels polluting CLAHE and thresholding.
     active = gray[valid]
 
+    annotated = cv.cvtColor(image, cv.COLOR_BGRA2BGR)
+
     if active.size == 0:
-        return np.empty((0, 2), dtype=np.float32), cv.cvtColor(
-            image, cv.COLOR_BGRA2BGR
-        )
+        return np.empty((0, 2), dtype=np.float32), annotated
 
     filled = gray.copy()
 
     filled[~valid] = int(np.median(active))
 
-    gray = filled
-
-    enhanced = cv.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
+    enhanced = cv.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(filled)
 
     binary = cv.adaptiveThreshold(
         enhanced,
@@ -139,6 +109,9 @@ def detect_spots(
         35,
         8,
     )
+
+    # Never let invalid or transparent pixels become candidate spots.
+    binary[~valid] = 0
 
     count, _, stats, centers = cv.connectedComponentsWithStats(binary, connectivity=8)
 
@@ -153,7 +126,12 @@ def detect_spots(
         if component_width < 2 or component_height < 2:
             continue
 
-        if left == 0 or top == 0 or left + component_width >= width or top + component_height >= height:
+        if (
+            left == 0
+            or top == 0
+            or left + component_width >= width
+            or top + component_height >= height
+        ):
             continue
 
         aspect = component_width / component_height
@@ -175,8 +153,6 @@ def detect_spots(
         [(center_x, center_y) for center_x, center_y, _ in found[:MAX_SPOTS]],
         dtype=np.float32,
     ).reshape(-1, 2)
-
-    annotated = cv.cvtColor(image, cv.COLOR_BGRA2BGR)
 
     for center_x, center_y in points:
         center = (round(float(center_x)), round(float(center_y)))
@@ -323,42 +299,63 @@ def draw_matches(source: Sample, target: Sample, result: MatchResult) -> Image:
     return output
 
 
-def selected_tracks(project: Project) -> dict[VideoId, TrackSelection]:
-    selections: dict[VideoId, tuple[str, TrackSelection]] = {}
+def eligible_selections(project: Project) -> list[EligibleSelection]:
+    videos = {video.video_id: video for video in project.metadata.read_videos()}
+
+    eligible: list[EligibleSelection] = []
 
     for individual in project.metadata.read_individuals():
         for track in individual.tracks:
-            if track.video_id not in VIDEO_IDS:
-                continue
+            video = videos.get(track.video_id)
 
-            video_id = cast(VideoId, track.video_id)
+            if video is None:
+                raise ValueError(f"Video metadata missing for {track.video_id}")
 
-            if video_id in selections:
-                raise ValueError(f"Multiple selections assigned to {video_id}")
+            annotations = video.matching_annotations(
+                viewpoint="frontal",
+                min_quality=MIN_QUALITY,
+                track_id=track.track_id,
+            )
 
-            selections[video_id] = (individual.individual_id, track)
+            for annotation in annotations:
+                start = max(track.start_frame, annotation.start_frame)
+                end = min(track.end_frame, annotation.end_frame)
 
-    if set(selections) != set(VIDEO_IDS):
-        raise ValueError("Need both h01 and h02 in individuals.json")
+                if start > end:
+                    continue
 
-    if selections["h01"][0] == selections["h02"][0]:
-        raise ValueError("h01 and h02 must be different individuals")
+                reference = track.reference_frame
 
-    return {video_id: selection for video_id, (_, selection) in selections.items()}
+                if not start <= reference <= end:
+                    reference = (start + end) // 2
+
+                eligible.append(
+                    EligibleSelection(
+                        individual_id=individual.individual_id,
+                        track=track,
+                        annotation=annotation,
+                        reference_frame=reference,
+                    )
+                )
+
+    return eligible
 
 
-def offset_frame(track: TrackSelection, delta: int) -> int:
-    reference = track.reference_frame
+def offset_frame(selection: EligibleSelection) -> int | None:
+    start = max(selection.track.start_frame, selection.annotation.start_frame)
+    end = min(selection.track.end_frame, selection.annotation.end_frame)
 
-    alternative = reference + delta
+    forward = selection.reference_frame + FRAME_DELTA
 
-    if alternative > track.end_frame:
-        alternative = reference - delta
+    if forward <= end:
+        return forward
 
-    if alternative < track.start_frame:
-        raise ValueError(f"No valid offset frame for {track.video_id}")
+    backward = selection.reference_frame - FRAME_DELTA
 
-    return alternative
+    if backward >= start:
+        return backward
+
+    return None
 
 
 def save_image(path: Path, image: Image) -> None:
@@ -366,15 +363,13 @@ def save_image(path: Path, image: Image) -> None:
         raise OSError(f"Could not write {path}")
 
 
-def run(
-    project: Project,
-    output: Path,
-    delta: int,
-    exclusions: dict[VideoId, list[Roi]],
-) -> list[ComparisonRow]:
-    selections = selected_tracks(project)
+def run(project: Project, output: Path) -> list[ComparisonRow]:
+    selections = eligible_selections(project)
 
-    videos = {video.video_id: video for video in project.metadata.read_videos()}
+    if not selections:
+        raise ValueError(
+            "No individual selections have frontal annotations with quality >= 3"
+        )
 
     if output.exists():
         raise FileExistsError(f"Refusing to overwrite run: {output}")
@@ -383,48 +378,52 @@ def run(
 
     samples: dict[SampleKey, Sample] = {}
 
-    for video_id in VIDEO_IDS:
-        track = selections[video_id]
+    for selection in selections:
+        frames: list[tuple[FrameLabel, int]] = [
+            ("reference", selection.reference_frame)
+        ]
 
-        frames: tuple[tuple[FrameLabel, int], ...] = (
-            ("reference", track.reference_frame),
-            ("offset", offset_frame(track, delta)),
-        )
+        offset = offset_frame(selection)
+
+        if offset is not None:
+            frames.append(("offset", offset))
 
         for label, frame_index in frames:
             frame = cast(
                 Image,
                 project.media.read_masked_crop(
-                    video_id,
-                    track.track_id,
+                    selection.track.video_id,
+                    selection.track.track_id,
                     frame_index,
                 ),
             )
 
-            # Crops are bounding-box-relative; recover their position from track metadata.
-            track_metadata = project.metadata.read_track(video_id)
-            observation = track_metadata.tracks[track.track_id].frames[str(frame_index)]
-            x1, y1, _, _ = observation.bbox
+            points, annotated = detect_spots(frame)
 
-            points, annotated = detect_spots(
-                frame,
-                exclusions[video_id],
-                origin=(x1, y1),
-            )
+            name = f"{selection.sample_id}--{label}--spots.png"
 
-            save_image(output / f"{video_id}_{label}_spots.png", annotated)
+            save_image(output / name, annotated)
 
-            samples[video_id, label] = Sample(annotated, points)
+            samples[selection.sample_id, label] = Sample(annotated, points)
 
-    comparisons: tuple[tuple[SampleKey, SampleKey, bool], ...] = (
-        (("h01", "reference"), ("h01", "offset"), True),
-        (("h02", "reference"), ("h02", "offset"), True),
-        (("h01", "reference"), ("h02", "reference"), False),
-    )
+    comparisons: list[tuple[EligibleSelection, FrameLabel, EligibleSelection, FrameLabel]] = []
+
+    for selection in selections:
+        if (selection.sample_id, "offset") in samples:
+            comparisons.append((selection, "reference", selection, "offset"))
+
+    for source, target in combinations(selections, 2):
+        comparisons.append((source, "reference", target, "reference"))
+
+    if not comparisons:
+        raise ValueError("No eligible comparisons; need two selections or an offset frame")
 
     rows: list[ComparisonRow] = []
 
-    for source_key, target_key, same_individual in comparisons:
+    for source_selection, source_label, target_selection, target_label in comparisons:
+        source_key = (source_selection.sample_id, source_label)
+        target_key = (target_selection.sample_id, target_label)
+
         source = samples[source_key]
         target = samples[target_key]
 
@@ -432,11 +431,16 @@ def run(
 
         result.statistics["source"] = "/".join(source_key)
         result.statistics["target"] = "/".join(target_key)
-        result.statistics["same_individual"] = same_individual
+        result.statistics["same_individual"] = (
+            source_selection.individual_id == target_selection.individual_id
+        )
 
         figure = draw_matches(source, target, result)
 
-        name = f"{source_key[0]}_{source_key[1]}_vs_{target_key[0]}_{target_key[1]}.png"
+        name = (
+            f"{source_selection.sample_id}--{source_label}--vs--"
+            f"{target_selection.sample_id}--{target_label}.png"
+        )
 
         save_image(output / name, figure)
 
@@ -450,47 +454,35 @@ def run(
         writer.writerows(rows)
 
     provenance: dict[str, object] = {
-        "delta": delta,
-        "exclusions": exclusions,
-        "video_metadata": {
-            video_id: {"mirrored": videos[video_id].mirrored}
-            for video_id in VIDEO_IDS
-        },
+        "source_commit": git_revision(),
+        "viewpoint": "frontal",
+        "minimum_quality": MIN_QUALITY,
+        "frame_delta": FRAME_DELTA,
+        "selections": [
+            {
+                "individual_id": selection.individual_id,
+                "selection_id": selection.track.selection_id,
+                "annotation_start": selection.annotation.start_frame,
+                "annotation_end": selection.annotation.end_frame,
+                "reference_frame": selection.reference_frame,
+            }
+            for selection in selections
+        ],
     }
 
-    (output / "run.json").write_text(json.dumps(provenance, indent=2))
+    (output / "run.json").write_text(json.dumps(provenance, indent=2) + "\n")
+
+    print(f"Wrote {len(rows)} comparisons to {output}")
 
     return rows
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-
-    parser.add_argument("--exclude-h01", nargs=4, type=int, action="append",
-                        metavar=("X", "Y", "W", "H"), default=[])
-    parser.add_argument("--exclude-h02", nargs=4, type=int, action="append",
-                        metavar=("X", "Y", "W", "H"), default=[])
-    parser.add_argument("--delta", type=int, default=30)
-
-    args = parser.parse_args()
-
-    if args.delta <= 0:
-        parser.error("--delta must be positive")
-
     project = Project.open()
 
-    output = Path("results/003") / (
-        datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
-    )
+    output = experiment_output("003")
 
-    exclusions: dict[VideoId, list[Roi]] = {
-        "h01": [cast(Roi, tuple(box)) for box in args.exclude_h01],
-        "h02": [cast(Roi, tuple(box)) for box in args.exclude_h02],
-    }
-
-    rows = run(project, output, args.delta, exclusions)
-
-    print(f"Exp-003: wrote {len(rows)} comparisons to {output}")
+    run(project, output)
 
 
 if __name__ == "__main__":
