@@ -93,6 +93,8 @@ def extract_masked_crops(video_id: str, predictor: VideoPredictor, *, project: P
 
     frame_ids = tuple(project.media.frame_ids(video_id))
 
+    written_frames: set[int] = set()
+
     for batch in frame_batches(frame_ids):
         with sam2_frame_sequence(project, video_id, batch) as sequence:
             state = predictor.init_state(video_path=str(sequence.path))
@@ -113,8 +115,10 @@ def extract_masked_crops(video_id: str, predictor: VideoPredictor, *, project: P
             for prediction in predictor.propagate_in_video(state):
                 frame_idx = sequence.original(prediction.frame_idx)
 
-                if frame_idx not in batch or (frame_idx == batch[0] and count > 0):
+                if frame_idx in written_frames:
                     continue
+
+                written_frames.add(frame_idx)
 
                 frame = project.media.read_frame(video_id, frame_idx)
 
@@ -137,6 +141,8 @@ def extract_masked_crops(video_id: str, predictor: VideoPredictor, *, project: P
                     )
 
                     count += 1
+
+            del state
 
         print(f"{video_id}: saved {count} crops.", flush=True)
 
