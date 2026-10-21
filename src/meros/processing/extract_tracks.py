@@ -274,11 +274,9 @@ def propagate_tracks(
                         previous = track.frames.get(str(frame_ids[frame_ids.index(first_frame) - 1]))
 
                     if previous is None:
-                        raise ValueError(
-                            f"{video_id}/{track_id}: no prior box for batch {first_frame}"
-                        )
-
-                    bbox = previous.bbox
+                        bbox = track.initial_bbox
+                    else:
+                        bbox = previous.bbox
 
                 predictor.add_new_points_or_box(
                     inference_state=state,
@@ -302,6 +300,8 @@ def propagate_tracks(
                     project=project,
                     original_frame=frame_idx,
                 )
+
+            del state
 
         print(f"{video_id}: tracked {len(processed)}/{len(frame_ids)} frames.", flush=True)
 
