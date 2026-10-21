@@ -381,6 +381,18 @@ def draw_matches(source: Sample, target: Sample, result: MatchResult) -> Image:
     output[: source_image.shape[0], : source_image.shape[1]] = source_image
     output[: target_image.shape[0], source_image.shape[1] :] = target_image
 
+    for point in source.points:
+        cv.circle(output, (round(float(point[0])), round(float(point[1]))), 3, (0, 255, 255), 1)
+
+    for point in target.points:
+        cv.circle(
+            output,
+            (round(float(point[0])) + source_image.shape[1], round(float(point[1]))),
+            3,
+            (0, 255, 255),
+            1,
+        )
+
     for (source_index, target_index), accepted in zip(
         result.pairs, result.inlier_mask, strict=True
     ):
