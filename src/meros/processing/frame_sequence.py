@@ -1,6 +1,6 @@
 """Map original video frame IDs to contiguous sequence indices for SAM2."""
 
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,7 +30,7 @@ class FrameSequence:
 
 
 @contextmanager
-def sam2_frame_sequence(project: Project, video_id: str) -> Iterator[FrameSequence]:
+def sam2_frame_sequence(project: Project, video_id: str) -> Generator[FrameSequence]:
     frame_ids = tuple(project.media.frame_ids(video_id))
 
     if not frame_ids:
