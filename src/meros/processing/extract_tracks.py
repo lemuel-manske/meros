@@ -227,18 +227,16 @@ def select_track_seeds(
 
     boxes = saved_boxes.get(video_id)
 
-    if not boxes:
-        fst = project.media.frame_ids(video_id)[0]  # 1st it not always 0. See videos.json
+    first_frame = project.media.frame_ids(video_id)[0]
 
-        frame = project.media.read_frame(video_id, fst)
+    if not boxes:
+        frame = project.media.read_frame(video_id, first_frame)
 
         boxes = bbox_selector(video_id, frame)
 
         saved_boxes[video_id] = boxes
 
         project.metadata.write_bboxes(saved_boxes)
-
-    first_frame = project.media.frame_ids(video_id)[0]
 
     return {
         track_id: Track(initial_frame=first_frame, initial_bbox=bbox, frames={})

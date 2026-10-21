@@ -24,7 +24,9 @@ class FrameSequence:
         try:
             return self.frame_ids.index(original_frame)
         except ValueError as error:
-            raise ValueError(f"Original frame {original_frame} not in extracted sequence") from error
+            raise ValueError(
+                f"Original frame {original_frame} not in extracted sequence"
+            ) from error
 
 
 @contextmanager
