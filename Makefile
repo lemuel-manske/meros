@@ -12,7 +12,7 @@ EXTRAS ?= data,dev
 
 # Experiment selection and artifact locations.
 
-EXPERIMENT ?= 002
+EXPERIMENT ?=
 
 RUN_DIR ?=
 

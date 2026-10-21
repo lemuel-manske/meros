@@ -6,22 +6,26 @@ import argparse
 import csv
 import json
 import uuid
-from dataclasses import dataclass
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Literal, NotRequired, TypedDict, cast
 
 import cv2 as cv
 import numpy as np
-from numpy.typing import NDArray
-from scipy.spatial import cKDTree
 
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from numpy.typing import NDArray
+from pathlib import Path
+from scipy.spatial import KDTree
+from typing import Literal, NotRequired, TypedDict, cast
+
+
+type VideoId = Literal["h01", "h02"]
+type FrameLabel = Literal["reference", "offset"]
 
 type Image = NDArray[np.uint8]
 type Points = NDArray[np.float32]
+
 type Roi = tuple[int, int, int, int]
-type VideoId = Literal["h01", "h02"]
-type FrameLabel = Literal["reference", "offset"]
+
 type SampleKey = tuple[VideoId, FrameLabel]
 
 VIDEO_IDS: tuple[VideoId, ...] = ("h01", "h02")
@@ -133,12 +137,7 @@ def detect_spots(image: Image, roi: Roi | None) -> tuple[Points, Image]:
         if component_width < 2 or component_height < 2:
             continue
 
-        if (
-            left == 0
-            or top == 0
-            or left + component_width >= w
-            or top + component_height >= h
-        ):
+        if left == 0 or top == 0 or left + component_width >= w or top + component_height >= h:
             continue
 
         aspect = component_width / component_height
@@ -171,15 +170,16 @@ def detect_spots(image: Image, roi: Roi | None) -> tuple[Points, Image]:
 
 
 def descriptors(points: Points, neighbors: int = NEIGHBORS) -> Points:
-    """Return scale-normalized neighbor distances (not affine invariant)."""
     if len(points) < neighbors + 1:
         return np.empty((0, neighbors), dtype=np.float32)
 
-    distances, _ = cKDTree(points).query(points, k=neighbors + 1)
+    distances, _ = KDTree(points).query(points, k=neighbors + 1)
 
     neighbor_distances = np.asarray(distances[:, 1:], dtype=np.float32)
 
-    return neighbor_distances / np.maximum(neighbor_distances[:, -1:], 1e-5)
+    r = neighbor_distances / np.maximum(neighbor_distances[:, -1:], 1e-5)
+
+    return np.asarray(r, dtype=np.float32)
 
 
 def candidate_matches(source: Points, target: Points) -> list[tuple[int, int]]:
@@ -189,9 +189,13 @@ def candidate_matches(source: Points, target: Points) -> list[tuple[int, int]]:
     if len(source_descriptors) < 2 or len(target_descriptors) < 2:
         return []
 
-    distances, indices = cKDTree(target_descriptors).query(source_descriptors, k=2)
+    distances_raw, indices_raw = KDTree(target_descriptors).query(source_descriptors, k=2)
 
-    _, reverse = cKDTree(source_descriptors).query(target_descriptors, k=1)
+    _, reverse_raw = KDTree(source_descriptors).query(target_descriptors, k=1)
+
+    distances = cast(NDArray[np.float32], distances_raw)
+    indices = cast(NDArray[np.int64], indices_raw)
+    reverse = cast(NDArray[np.int64], reverse_raw)
 
     candidates: list[tuple[int, int]] = []
 
@@ -423,8 +427,7 @@ def run(
         },
     }
 
-    (output / "run.json").write_text(json.dumps(provenance, indent=2) + "
-")
+    (output / "run.json").write_text(json.dumps(provenance, indent=2))
 
     return rows
 
