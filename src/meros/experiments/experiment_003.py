@@ -9,7 +9,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal, TypedDict, cast
+from typing import Literal, NotRequired, TypedDict, cast
 
 import cv2 as cv
 import numpy as np
@@ -46,6 +46,7 @@ class IndividualData(TypedDict):
 class VideoData(TypedDict):
     video_id: str
     path: str
+    mirrored: NotRequired[bool]
 
 
 class ComparisonRow(TypedDict):
@@ -443,8 +444,8 @@ def main() -> None:
         parser.error("--delta must be positive")
 
     rois: dict[VideoId, Roi | None] = {
-        "h01": tuple(args.roi_h01) if args.roi_h01 is not None else None,
-        "h02": tuple(args.roi_h02) if args.roi_h02 is not None else None,
+        "h01": cast(Roi, tuple(args.roi_h01)) if args.roi_h01 is not None else None,
+        "h02": cast(Roi, tuple(args.roi_h02)) if args.roi_h02 is not None else None,
     }
 
     output = args.output or Path("results/003") / (
