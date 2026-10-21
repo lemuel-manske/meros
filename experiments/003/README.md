@@ -1,73 +1,64 @@
-# Experiment 003 — Head-spot graphs with affine RANSAC
+# Experiment 003 — Spot geometry with affine RANSAC
 
 ## Goal
 
-Test whether local geometric configurations of pigmentation spots on the head of *Epinephelus itajara* can produce candidate correspondences, subsequently verified with affine RANSAC.
+Explore whether geometric configurations of pigmentation spots on segmented *Epinephelus itajara* can support candidate correspondences verified with affine RANSAC.
 
-This is an **exploratory prototype**, not a validated identification system. The method does not prove that head spots persist across years or independent encounters.
+This experiment is not a validated identity classifier. In its present form, spot detection covers the entire segmented fish, not only the head.
 
-## Dataset
+## Selection criteria
 
-The current metadata identifies:
+Exp-003 uses the existing `Project` metadata API. It no longer hard-codes video IDs or individual IDs.
 
-| Video | Individual | Track | Reference frame | Notes |
-|---|---|---|---|---|
-| h01 | 11 | 0 | 340 | quality 3; annotated `frontal` |
-| h02 | 12 | 0 | 1375 | quality 3; annotated `frontal`; `mirrored: true` |
+Eligible observations must:
 
-Although described as left-half head footage, the metadata marks both as `frontal`. Confirm the visible *anatomical* side before interpreting results. The `mirrored` flag is recorded, not automatically re-applied to pixels.
+- Belong to a track selection in `individuals.json`.
+- Have an overlapping annotation with `viewpoint="frontal"`.
+- Have annotation `quality >= 3`.
+- Match the annotated `track_id`.
 
-Initial comparisons:
+**Why `>= 3` rather than `> 3`?** The highest quality recorded in the current `videos.json` is 3. A strict threshold greater than 3 would select no data.
 
-- h01 reference vs h01 offset: same-video **positive control**
-- h02 reference vs h02 offset: same-video **positive control**
-- h01 reference vs h02 reference: different-individual **negative control**
+Every eligible annotation segment creates a reference sample. The selection's reference frame is used when it lies inside the qualifying segment; otherwise, the segment midpoint is used. An offset frame (30 frames later, or 30 earlier when needed) is included only if it belongs to that segment.
 
-No cross-video same-individual positive pair is currently available from these two videos.
+An individual selection may contribute multiple qualifying annotation segments. Each segment gets a distinct sample ID.
 
-## Method
+## Comparisons
 
-1. Read precomputed BGRA masked crops for the annotated reference frame and one frame offset by `--delta`. The upstream pipeline extracts frames, applies the `mirrored` flag, tracks fish, and produces masked crops.
-2. Use the fish alpha channel to exclude background pixels, with a small erosion to suppress silhouette edges. Optional watermark rectangles are excluded in **original full-frame coordinates**. No manual head ROI is used.
-3. Apply CLAHE and adaptive thresholding; filter dark connected components by area and shape.
-4. Encode each spot using sorted normalized distances to its six nearest neighbors.
-5. Generate tentative correspondences with a descriptor ratio test and mutual nearest-neighbor verification.
-6. Verify tentative correspondences with OpenCV `estimateAffine2D` and RANSAC.
-7. Save spot visualizations, correspondence visualizations, `metrics.csv`, and `run.json`.
+The experiment compares:
 
-The local descriptors are invariant to translation, in-plane rotation, and uniform scaling, **not** to affine deformation or head curvature. RANSAC is a geometric verification stage, not a solution for arbitrary 3D changes.
+1. Reference and offset frames of each eligible annotation segment (same-video positive controls).
+2. Reference frames of every pair of eligible segments, including segments belonging to the same or different individuals.
+
+The `same_individual` column is derived from `individuals.json`, never inferred by the matcher. Same-video comparisons are not independent-encounter evidence.
+
+## Processing
+
+1. Load already prepared BGRA masked crops with `project.media.read_masked_crop()`.
+2. Restrict spot detection to the segmented fish via its alpha mask; erode the mask to suppress silhouette edges.
+3. Apply CLAHE and adaptive thresholding.
+4. Detect spot centroids and filter connected components by size and shape.
+5. Encode each candidate spot using its six nearest-neighbor distances, normalized by the farthest of those neighbors.
+6. Generate mutual descriptor matches with a ratio test.
+7. Verify correspondences with affine RANSAC.
+8. Write overlays, matched-pair images, `metrics.csv`, and `run.json`.
+
+**Limitations:** These descriptors capture sorted neighbor distances rather than explicit graph connectivity. They are not affine-invariant and can be confused by distinct constellations. Watermarks overlapping fish pixels are not explicitly removed; visually inspect detections.
 
 ## Run
 
-From the repository root after preparing the project's masked crops (same default `Project.open()` storage as Exp-002):
+Prepare the project media and masked crops using the existing Meros pipeline first.
 
 ```bash
 make run EXPERIMENT=003
 ```
 
-To exclude watermark regions overlapping a fish:
+Exp-003 takes no custom CLI arguments. It uses `Project.open()` and the shared experiment-output helper, like Exp-002.
 
-```bash
-python -m meros.experiments.experiment_003 \
-  --exclude-h01 FRAME_X FRAME_Y WIDTH HEIGHT \
-  --exclude-h02 FRAME_X FRAME_Y WIDTH HEIGHT \
-  --delta 30
-```
+Results are written to a unique directory under `results/003/`.
 
-Watermark exclusion coordinates use the original frame and are translated using track bounding-box metadata. Prepared masked crops must be present under `data/media/masked_crops/`. Generate them with the existing processing pipeline before running Exp-003. The experiment does not decode videos or execute SAM2. It reads selections and videos through `project.metadata` and crops through `project.media`. There are no `--data` or `--output` arguments; each run creates a timestamped directory under `results/003/`, following Exp-002.
+## Interpretation
 
-Each run writes a new directory under `results/003/`. Spot detection covers the entire segmented fish, potentially including body spots rather than only head spots. **Inspect the diagnostic images before interpreting metrics**.
+Inlier count, inlier ratio, and residual error are geometry diagnostics, not identity probabilities. Reference/offset pairs from the same video share acquisition conditions and do not establish long-term re-identification.
 
-## Metrics and limitations
-
-Reported diagnostics: detected spots per image, tentative matches, RANSAC attempted, inlier count and ratio, median inlier residual (pixels), and inlier coverage relative to detections. Coverage is **not** spatial head coverage, and these statistics are **not** identity probabilities.
-
-Do not interpret a minimal three-point affine consensus as individual recognition. Within-video positive controls share recording conditions, so they cannot establish independent-encounter reidentification.
-
-## Next steps
-
-- Visually validate dot localization and tune detection on the two head images.
-- If head-only identification becomes necessary, investigate an automatic head mask or anatomical landmarks; ensure consistent left-side semantics.
-- Test robustness to pose, partial visibility, and lighting changes.
-- Add independently recorded positive pairs and more negative individuals.
-- Compare graph-based proposals with Exp-002 SIFT + affine RANSAC under matched evaluation conditions.
+The next priority is checking whether detections actually correspond to pigmentation spots, and whether whole-fish matching should be narrowed to the head automatically in a future experiment.
