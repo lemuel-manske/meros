@@ -21,6 +21,7 @@ from meros.domain import (
     TrackSelection,
     TrackSelectionKey,
     Video,
+    VideoAnnotation,
 )
 from meros.domain.storage import validate_bbox
 
@@ -45,12 +46,6 @@ def write_json_atomic(path: Path, payload: object) -> None:
 class MediaPaths:
     root: Path = Path("data")
 
-    def frame(self, video_id: str, frame_idx: int) -> Path:
-        return (self.root / "media/frames") / video_id / f"{frame_idx}.jpg"
-
-    def masked_crop(self, video_id: str, track_id: str, frame_idx: int) -> Path:
-        return (self.root / "media/masked_crops") / video_id / track_id / f"{frame_idx}.png"
-
     def composite(self, selection: TrackSelection) -> Path:
         return self.root / "media/alignment/selections" / selection.selection_id / "composite.png"
 
@@ -61,6 +56,12 @@ class MediaPaths:
             / selection.selection_id
             / "enhanced_composite.png"
         )
+
+    def frame(self, video_id: str, frame_idx: int) -> Path:
+        return (self.root / "media/frames") / video_id / f"{frame_idx}.jpg"
+
+    def masked_crop(self, video_id: str, track_id: str, frame_idx: int) -> Path:
+        return (self.root / "media/masked_crops") / video_id / track_id / f"{frame_idx}.png"
 
 
 class LocalFsMediaStore:
@@ -163,9 +164,6 @@ class LocalFsMediaStore:
 class MetadataPaths:
     root: Path = Path("data")
 
-    def track(self, video_id: str) -> Path:
-        return (self.root / "metadata/tracks") / video_id / "metadata.json"
-
     def alignment(
         self,
         video_id: str,
@@ -174,20 +172,21 @@ class MetadataPaths:
         end_frame: int,
         reference_frame: int,
     ) -> Path:
-        return (
-            (self.root / "metadata/alignment")
-            / video_id
-            / f"{track_id}_{start_frame}_{end_frame}_ref_{reference_frame}.json"
-        )
+        fname = f"{track_id}_{start_frame}_{end_frame}_ref_{reference_frame}.json"
+
+        return (self.root / "metadata/alignment") / video_id / fname
+
+    def bboxes(self) -> Path:
+        return (self.root / "metadata/videos") / "bboxes.json"
 
     def individuals(self) -> Path:
         return (self.root / "metadata/individuals") / "individuals.json"
 
+    def track(self, video_id: str) -> Path:
+        return (self.root / "metadata/tracks") / video_id / "metadata.json"
+
     def videos(self) -> Path:
         return (self.root / "metadata/videos") / "videos.json"
-
-    def bboxes(self) -> Path:
-        return (self.root / "metadata/videos") / "bboxes.json"
 
 
 class LocalFsMetadataStore:
@@ -225,11 +224,15 @@ class LocalFsMetadataStore:
                 **{
                     **video_metadata,
                     "intervals": [
-                        Interval(**interval)
-                        for interval in video_metadata.get("intervals", [])
-                    ]
+                        Interval(**interval) for interval in video_metadata.get("intervals", [])
+                    ],
+                    "annotations": [
+                        VideoAnnotation(**annotation)
+                        for annotation in video_metadata.get("annotations", [])
+                    ],
                 }
-            ) for video_metadata in metadata
+            )
+            for video_metadata in metadata
         ]
 
     def read_individuals(self) -> list[Individual]:

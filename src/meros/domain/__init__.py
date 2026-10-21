@@ -11,6 +11,8 @@ from .storage import (
     TrackSelection,
     TrackSelectionKey,
     Video,
+    VideoAnnotation,
+    Viewpoint,
 )
 
 __all__ = [
@@ -26,4 +28,6 @@ __all__ = [
     "TrackSelection",
     "TrackSelectionKey",
     "Video",
+    "VideoAnnotation",
+    "Viewpoint",
 ]

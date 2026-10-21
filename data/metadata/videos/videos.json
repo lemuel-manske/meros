@@ -1,7 +1,6 @@
 [
   {
     "video_id": "h01",
-    "mirrored": false,
     "fname": "h01.mp4",
     "path": "data/media/videos/h01.mp4",
     "intervals": [
@@ -13,65 +12,362 @@
         "start": 1320,
         "end": 2090
       }
+    ],
+    "annotations": [
+      {
+        "track_id": "0",
+        "start_frame": 170,
+        "end_frame": 510,
+        "viewpoint": "frontal",
+        "quality": 3
+      },
+      {
+        "track_id": "0",
+        "start_frame": 1320,
+        "end_frame": 2090,
+        "viewpoint": "frontal",
+        "quality": 3
+      }
     ]
   },
   {
     "video_id": "25_1",
-    "mirrored": false,
     "fname": "25_1.mov",
     "path": "data/media/videos/25_1.mov"
   },
   {
     "video_id": "26_4",
-    "mirrored": false,
     "fname": "26_4.mov",
-    "path": "data/media/videos/26_4.mov"
+    "path": "data/media/videos/26_4.mov",
+    "annotations": [
+      {
+        "track_id": "0",
+        "start_frame": 0,
+        "end_frame": 90,
+        "viewpoint": "left",
+        "quality": 1
+      },
+      {
+        "track_id": "0",
+        "start_frame": 91,
+        "end_frame": 132,
+        "viewpoint": "left",
+        "quality": 2
+      },
+      {
+        "track_id": "0",
+        "start_frame": 133,
+        "end_frame": 240,
+        "viewpoint": "left",
+        "quality": 1
+      },
+      {
+        "track_id": "0",
+        "start_frame": 241,
+        "end_frame": 291,
+        "viewpoint": "frontal",
+        "quality": 1
+      },
+      {
+        "track_id": "0",
+        "start_frame": 292,
+        "end_frame": 380,
+        "viewpoint": "left",
+        "quality": 2
+      },
+      {
+        "track_id": "0",
+        "start_frame": 381,
+        "end_frame": 415,
+        "viewpoint": "left",
+        "quality": 1
+      }
+    ]
   },
   {
     "video_id": "65_5",
-    "mirrored": false,
     "fname": "65_5.mov",
-    "path": "data/media/videos/65_5.mov"
+    "path": "data/media/videos/65_5.mov",
+    "annotations": [
+      {
+        "track_id": "0",
+        "start_frame": 0,
+        "end_frame": 32,
+        "viewpoint": "frontal",
+        "quality": 1
+      },
+      {
+        "track_id": "0",
+        "start_frame": 33,
+        "end_frame": 82,
+        "viewpoint": "right",
+        "quality": 1
+      },
+      {
+        "track_id": "1",
+        "start_frame": 0,
+        "end_frame": 3,
+        "viewpoint": "frontal",
+        "quality": 3
+      },
+      {
+        "track_id": "1",
+        "start_frame": 4,
+        "end_frame": 6,
+        "viewpoint": "frontal",
+        "quality": 2
+      },
+      {
+        "track_id": "1",
+        "start_frame": 7,
+        "end_frame": 19,
+        "viewpoint": "right",
+        "quality": 1
+      },
+      {
+        "track_id": "1",
+        "start_frame": 20,
+        "end_frame": 38,
+        "viewpoint": "right",
+        "quality": 2
+      },
+      {
+        "track_id": "1",
+        "start_frame": 39,
+        "end_frame": 82,
+        "viewpoint": "right",
+        "quality": 1
+      }
+    ]
   },
   {
     "video_id": "65_6",
-    "mirrored": false,
     "fname": "65_6.mov",
-    "path": "data/media/videos/65_6.mov"
+    "path": "data/media/videos/65_6.mov",
+    "annotations": [
+      {
+        "track_id": "0",
+        "start_frame": 0,
+        "end_frame": 45,
+        "viewpoint": "right",
+        "quality": 2
+      },
+      {
+        "track_id": "0",
+        "start_frame": 46,
+        "end_frame": 98,
+        "viewpoint": "right",
+        "quality": 3
+      },
+      {
+        "track_id": "1",
+        "start_frame": 0,
+        "end_frame": 33,
+        "viewpoint": "right",
+        "quality": 1
+      }
+    ]
   },
   {
     "video_id": "65_7",
-    "mirrored": false,
     "fname": "65_7.mov",
-    "path": "data/media/videos/65_7.mov"
+    "path": "data/media/videos/65_7.mov",
+    "annotations": [
+      {
+        "track_id": "0",
+        "start_frame": 0,
+        "end_frame": 88,
+        "viewpoint": "frontal",
+        "quality": 0
+      },
+      {
+        "track_id": "0",
+        "start_frame": 89,
+        "end_frame": 100,
+        "viewpoint": "frontal",
+        "quality": 1
+      },
+      {
+        "track_id": "0",
+        "start_frame": 101,
+        "end_frame": 110,
+        "viewpoint": "frontal",
+        "quality": 2
+      },
+      {
+        "track_id": "0",
+        "start_frame": 111,
+        "end_frame": 185,
+        "viewpoint": "right",
+        "quality": 2
+      },
+      {
+        "track_id": "0",
+        "start_frame": 186,
+        "end_frame": 218,
+        "viewpoint": "right",
+        "quality": 3
+      },
+      {
+        "track_id": "0",
+        "start_frame": 219,
+        "end_frame": 235,
+        "viewpoint": "right",
+        "quality": 2
+      }
+    ]
   },
   {
     "video_id": "65_8",
-    "mirrored": false,
     "fname": "65_8.mov",
-    "path": "data/media/videos/65_8.mov"
+    "path": "data/media/videos/65_8.mov",
+    "annotations": [
+      {
+        "track_id": "0",
+        "start_frame": 2,
+        "end_frame": 80,
+        "viewpoint": "right",
+        "quality": 1
+      }
+    ]
   },
   {
     "video_id": "66_9",
-    "mirrored": false,
     "fname": "66_9.mov",
-    "path": "data/media/videos/66_9.mov"
+    "path": "data/media/videos/66_9.mov",
+    "annotations": [
+      {
+        "track_id": "0",
+        "start_frame": 0,
+        "end_frame": 43,
+        "viewpoint": "frontal",
+        "quality": 1
+      },
+      {
+        "track_id": "0",
+        "start_frame": 44,
+        "end_frame": 70,
+        "viewpoint": "left",
+        "quality": 1
+      },
+      {
+        "track_id": "0",
+        "start_frame": 71,
+        "end_frame": 81,
+        "viewpoint": "left",
+        "quality": 2
+      },
+      {
+        "track_id": "0",
+        "start_frame": 82,
+        "end_frame": 135,
+        "viewpoint": "left",
+        "quality": 3
+      }
+    ]
   },
   {
     "video_id": "101_11",
     "mirrored": true,
     "fname": "101_11.mov",
-    "path": "data/media/videos/101_11.mov"
+    "path": "data/media/videos/101_11.mov",
+    "annotations": [
+      {
+        "track_id": "0",
+        "start_frame": 0,
+        "end_frame": 8,
+        "viewpoint": "frontal",
+        "quality": 3
+      },
+      {
+        "track_id": "0",
+        "start_frame": 9,
+        "end_frame": 34,
+        "viewpoint": "right",
+        "quality": 1
+      },
+      {
+        "track_id": "0",
+        "start_frame": 35,
+        "end_frame": 95,
+        "viewpoint": "back",
+        "quality": 1
+      },
+      {
+        "track_id": "0",
+        "start_frame": 96,
+        "end_frame": 130,
+        "viewpoint": "left",
+        "quality": 1
+      },
+      {
+        "track_id": "0",
+        "start_frame": 131,
+        "end_frame": 180,
+        "viewpoint": "left",
+        "quality": 2
+      },
+      {
+        "track_id": "0",
+        "start_frame": 181,
+        "end_frame": 300,
+        "viewpoint": "left",
+        "quality": 3
+      },
+      {
+        "track_id": "0",
+        "start_frame": 301,
+        "end_frame": 336,
+        "viewpoint": "back",
+        "quality": 1
+      }
+    ]
   },
   {
     "video_id": "101_12",
     "mirrored": true,
     "fname": "101_12.mov",
-    "path": "data/media/videos/101_12.mov"
+    "path": "data/media/videos/101_12.mov",
+    "annotations": [
+      {
+        "track_id": "0",
+        "start_frame": 0,
+        "end_frame": 12,
+        "viewpoint": "right",
+        "quality": 2
+      },
+      {
+        "track_id": "0",
+        "start_frame": 13,
+        "end_frame": 95,
+        "viewpoint": "right",
+        "quality": 3
+      },
+      {
+        "track_id": "0",
+        "start_frame": 96,
+        "end_frame": 108,
+        "viewpoint": "right",
+        "quality": 2
+      },
+      {
+        "track_id": "0",
+        "start_frame": 109,
+        "end_frame": 125,
+        "viewpoint": "right",
+        "quality": 3
+      },
+      {
+        "track_id": "0",
+        "start_frame": 125,
+        "end_frame": 153,
+        "viewpoint": "right",
+        "quality": 1
+      }
+    ]
   },
-    {
+  {
     "video_id": "147_16",
-    "mirrored": false,
     "fname": "147_16.mov",
     "path": "data/media/videos/147_16.mov"
   }

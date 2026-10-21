@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from math import isfinite
 from typing import Literal
 
@@ -119,21 +119,65 @@ class Interval:
     end: int
 
 
+Viewpoint = Literal["frontal", "left", "right", "back"]
+
+
+@dataclass(frozen=True)
+class VideoAnnotation:
+    track_id: str
+    start_frame: int
+    end_frame: int
+    viewpoint: Viewpoint
+    quality: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.track_id, str) or not self.track_id:
+            raise ValueError("Annotation track ID must be a nonempty string")
+
+        if (
+            type(self.start_frame) is not int
+            or type(self.end_frame) is not int
+            or not 0 <= self.start_frame <= self.end_frame
+        ):
+            raise ValueError("Annotation frames must describe a nonnegative inclusive interval")
+
+        if self.viewpoint not in ("frontal", "left", "right", "back"):
+            raise ValueError("Unknown annotation viewpoint")
+
+        if type(self.quality) is not int or self.quality < 0:
+            raise ValueError("Annotation quality must be a nonnegative integer")
+
+
 @dataclass(frozen=True)
 class Video:
     video_id: str
     fname: str
     path: str
-    intervals: list[Interval]
+
     mirrored: bool = False
+
+    intervals: list[Interval] = field(default_factory=list)
+    annotations: list[VideoAnnotation] = field(default_factory=list)
+
+    def matching_annotations(
+        self,
+        *,
+        viewpoint: Viewpoint | None = None,
+        min_quality: int | None = None,
+        track_id: str | None = None,
+    ) -> list[VideoAnnotation]:
+        return [
+            annotation
+            for annotation in self.annotations
+            if (viewpoint is None or annotation.viewpoint == viewpoint)
+            and (min_quality is None or annotation.quality >= min_quality)
+            and (track_id is None or annotation.track_id == track_id)
+        ]
 
     def __post_init__(self) -> None:
         for value in (self.video_id, self.fname, self.path):
             if not isinstance(value, str) or not value:
                 raise ValueError("Video identity and path must be nonempty strings")
-
-        if type(self.mirrored) is not bool:
-            raise ValueError("Video mirroring must be a boolean")
 
 
 type BBox = dict[str, list[int]]
