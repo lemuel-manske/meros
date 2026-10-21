@@ -343,7 +343,9 @@ def compare(source: Sample, target: Sample) -> MatchResult:
         spatial_pairs, spatial_median = spatial_matches(aligned, target.points)
         spatial_source_recall = len(spatial_pairs) / max(1, len(source.points))
         spatial_target_recall = len(spatial_pairs) / max(1, len(target.points))
-        spatial_repeatability = len(spatial_pairs) / max(1, min(len(source.points), len(target.points)))
+        spatial_repeatability = len(spatial_pairs) / max(
+            1, min(len(source.points), len(target.points))
+        )
     else:
         spatial_pairs = []
         spatial_median = None
@@ -449,9 +451,7 @@ def draw_matches(
         display_pairs = result.pairs
         accepted_flags = result.inlier_mask
 
-    for (source_index, target_index), accepted in zip(
-        display_pairs, accepted_flags, strict=True
-    ):
+    for (source_index, target_index), accepted in zip(display_pairs, accepted_flags, strict=True):
         source_point = (
             int(round(float(source.points[source_index, 0]))),
             int(round(float(source.points[source_index, 1]))),
@@ -616,7 +616,7 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
 
         spatial_figure = draw_matches(source, target, result, spatial=True)
 
-        save_image(output / name.replace('.png', '--spatial.png'), spatial_figure)
+        save_image(output / name.replace(".png", "--spatial.png"), spatial_figure)
 
         rows.append(result.statistics)
 
