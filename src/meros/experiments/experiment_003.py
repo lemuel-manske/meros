@@ -90,7 +90,7 @@ def detect_spots(image: Image) -> tuple[Points, Image]:
 
     active = gray[valid]
 
-    annotated = cv.cvtColor(image, cv.COLOR_BGRA2BGR)
+    annotated = cast(Image, cv.cvtColor(image, cv.COLOR_BGRA2BGR))
 
     if active.size == 0:
         return np.empty((0, 2), dtype=np.float32), annotated
