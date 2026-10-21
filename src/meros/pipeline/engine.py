@@ -90,6 +90,7 @@ def create_pipeline(
         ]
     )
 
+
 if __name__ == "__main__":
     project = Project.open()
 
