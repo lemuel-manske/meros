@@ -115,5 +115,29 @@
         "reference_frame": 100
       }
     ]
+  },
+  {
+    "individual_id": "11",
+    "tracks": [
+      {
+        "video_id": "h01",
+        "track_id": "0",
+        "start_frame": 170,
+        "end_frame": 510,
+        "reference_frame": 340
+      }
+    ]
+  },
+  {
+    "individual_id": "12",
+    "tracks": [
+      {
+        "video_id": "h02",
+        "track_id": "0",
+        "start_frame": 1000,
+        "end_frame": 1750,
+        "reference_frame": 1375
+      }
+    ]
   }
 ]

@@ -31,6 +31,27 @@
     ]
   },
   {
+    "video_id": "h02",
+    "fname": "h02.mp4",
+    "mirrored": true,
+    "path": "data/media/videos/h02.mp4",
+    "intervals": [
+      {
+        "start": 1000,
+        "end": 1750
+      }
+    ],
+    "annotations": [
+      {
+        "track_id": "0",
+        "start_frame": 1000,
+        "end_frame": 1750,
+        "viewpoint": "frontal",
+        "quality": 3
+      }
+    ]
+  },
+  {
     "video_id": "25_1",
     "fname": "25_1.mov",
     "path": "data/media/videos/25_1.mov"
