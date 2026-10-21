@@ -1,182 +1,458 @@
-"""Exp-003: exploratory head-spot graphs with affine RANSAC."""
+"""Experiment 003: head-spot geometry with affine RANSAC verification."""
+
 from __future__ import annotations
 
 import argparse
 import csv
 import json
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal, TypedDict, cast
 
 import cv2 as cv
 import numpy as np
+from numpy.typing import NDArray
 from scipy.spatial import cKDTree
 
 
-def load_frame(path: Path, index: int) -> np.ndarray:
+type Image = NDArray[np.uint8]
+type Points = NDArray[np.float32]
+type Roi = tuple[int, int, int, int]
+type VideoId = Literal["h01", "h02"]
+type FrameLabel = Literal["reference", "offset"]
+type SampleKey = tuple[VideoId, FrameLabel]
+
+VIDEO_IDS: tuple[VideoId, ...] = ("h01", "h02")
+NEIGHBORS = 6
+MAX_SPOTS = 180
+MIN_RANSAC_MATCHES = 8
+
+
+class TrackData(TypedDict):
+    video_id: str
+    track_id: str
+    start_frame: int
+    end_frame: int
+    reference_frame: int
+
+
+class IndividualData(TypedDict):
+    individual_id: str
+    tracks: list[TrackData]
+
+
+class VideoData(TypedDict):
+    video_id: str
+    path: str
+
+
+class ComparisonRow(TypedDict):
+    source: str
+    target: str
+    same_individual: bool
+    source_spots: int
+    target_spots: int
+    tentative_matches: int
+    ransac_attempted: bool
+    inliers: int
+    inlier_ratio: float | None
+    median_residual_px: float | None
+    source_coverage: float
+    target_coverage: float
+
+
+@dataclass(frozen=True)
+class Sample:
+    image: Image
+    points: Points
+
+
+@dataclass(frozen=True)
+class MatchResult:
+    statistics: ComparisonRow
+    pairs: list[tuple[int, int]]
+    inlier_mask: list[bool]
+
+
+def load_frame(path: Path, frame_index: int) -> Image:
     capture = cv.VideoCapture(str(path))
+
     try:
         if not capture.isOpened():
             raise FileNotFoundError(path)
-        capture.set(cv.CAP_PROP_POS_FRAMES, index)
-        ok, image = capture.read()
-        if not ok or image is None:
-            raise ValueError(f"Cannot decode frame {index}: {path}")
-        return image
+
+        capture.set(cv.CAP_PROP_POS_FRAMES, frame_index)
+
+        decoded, image = capture.read()
+
+        if not decoded or image is None:
+            raise ValueError(f"Cannot decode frame {frame_index}: {path}")
+
+        return cast(Image, image)
     finally:
         capture.release()
 
 
-def detect_spots(image: np.ndarray, roi: tuple[int, int, int, int] | None) -> tuple[np.ndarray, np.ndarray]:
+def detect_spots(image: Image, roi: Roi | None) -> tuple[Points, Image]:
     height, width = image.shape[:2]
+
     x, y, w, h = roi if roi is not None else (0, 0, width, height)
-    if not (0 <= x < width and 0 <= y < height and w > 0 and h > 0
-            and x + w <= width and y + h <= height):
+
+    if not (0 <= x < width and 0 <= y < height and w > 0 and h > 0):
+        raise ValueError(f"Invalid ROI: {roi}")
+
+    if x + w > width or y + h > height:
         raise ValueError(f"ROI outside image: {roi}")
-    gray = cv.cvtColor(image[y:y+h, x:x+w], cv.COLOR_BGR2GRAY)
-    gray = cv.createCLAHE(clipLimit=2, tileGridSize=(8, 8)).apply(gray)
-    binary = cv.adaptiveThreshold(gray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                  cv.THRESH_BINARY_INV, 35, 8)
-    count, _, stats, centers = cv.connectedComponentsWithStats(binary, 8)
-    found = []
-    for i in range(1, count):
-        left, top, bw, bh, area = map(int, stats[i])
-        if not (5 <= area <= max(10, int(w*h*.001)) and bw >= 2 and bh >= 2):
+
+    gray = cv.cvtColor(image[y : y + h, x : x + w], cv.COLOR_BGR2GRAY)
+
+    enhanced = cv.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
+
+    binary = cv.adaptiveThreshold(
+        enhanced,
+        255,
+        cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv.THRESH_BINARY_INV,
+        35,
+        8,
+    )
+
+    count, _, stats, centers = cv.connectedComponentsWithStats(binary, connectivity=8)
+
+    found: list[tuple[float, float, int]] = []
+
+    for index in range(1, count):
+        left, top, component_width, component_height, area = map(int, stats[index])
+
+        if not (5 <= area <= max(10, int(w * h * 0.001))):
             continue
-        if left == 0 or top == 0 or left+bw >= w or top+bh >= h:
+
+        if component_width < 2 or component_height < 2:
             continue
-        if not (.35 <= bw/bh <= 2.8 and .25 <= area/(bw*bh) <= .94):
+
+        if (
+            left == 0
+            or top == 0
+            or left + component_width >= w
+            or top + component_height >= h
+        ):
             continue
-        cx, cy = centers[i]
-        found.append((float(cx+x), float(cy+y), area))
+
+        aspect = component_width / component_height
+        density = area / (component_width * component_height)
+
+        if not (0.35 <= aspect <= 2.8 and 0.25 <= density <= 0.94):
+            continue
+
+        center_x, center_y = centers[index]
+
+        found.append((float(center_x + x), float(center_y + y), area))
+
     found.sort(key=lambda item: (-item[2], item[1], item[0]))
-    points = np.asarray([(a,b) for a,b,_ in found[:180]], np.float32).reshape(-1,2)
+
+    points = np.asarray(
+        [(center_x, center_y) for center_x, center_y, _ in found[:MAX_SPOTS]],
+        dtype=np.float32,
+    ).reshape(-1, 2)
+
     annotated = image.copy()
-    cv.rectangle(annotated, (x,y), (x+w,y+h), (255,180,0), 2)
-    for px,py in points:
-        cv.circle(annotated, (round(float(px)),round(float(py))),4,(0,255,255),1)
+
+    cv.rectangle(annotated, (x, y), (x + w - 1, y + h - 1), (255, 180, 0), 2)
+
+    for center_x, center_y in points:
+        center = (round(float(center_x)), round(float(center_y)))
+
+        cv.circle(annotated, center, 4, (0, 255, 255), 1)
+
     return points, annotated
 
 
-def descriptors(points: np.ndarray, k: int = 6) -> np.ndarray:
-    """Relative neighbor distances: rotation/translation/scale, not affine invariant."""
-    if len(points) < k+1:
-        return np.empty((0,k), np.float32)
-    distances, _ = cKDTree(points).query(points,k=k+1)
-    neighbor = distances[:,1:].astype(np.float32)
-    return neighbor/np.maximum(neighbor[:,-1:],1e-5)
+def descriptors(points: Points, neighbors: int = NEIGHBORS) -> Points:
+    """Return scale-normalized neighbor distances (not affine invariant)."""
+    if len(points) < neighbors + 1:
+        return np.empty((0, neighbors), dtype=np.float32)
+
+    distances, _ = cKDTree(points).query(points, k=neighbors + 1)
+
+    neighbor_distances = np.asarray(distances[:, 1:], dtype=np.float32)
+
+    return neighbor_distances / np.maximum(neighbor_distances[:, -1:], 1e-5)
 
 
-def matches(a: np.ndarray, b: np.ndarray) -> list[tuple[int,int]]:
-    da,db = descriptors(a),descriptors(b)
-    if len(da) < 2 or len(db) < 2:
+def candidate_matches(source: Points, target: Points) -> list[tuple[int, int]]:
+    source_descriptors = descriptors(source)
+    target_descriptors = descriptors(target)
+
+    if len(source_descriptors) < 2 or len(target_descriptors) < 2:
         return []
-    distance,index = cKDTree(db).query(da,k=2)
-    _,reverse = cKDTree(da).query(db,k=1)
-    return [(i,int(index[i,0])) for i in range(len(da))
-            if distance[i,0] < .88*max(distance[i,1],1e-10)
-            and reverse[int(index[i,0])] == i]
+
+    distances, indices = cKDTree(target_descriptors).query(source_descriptors, k=2)
+
+    _, reverse = cKDTree(source_descriptors).query(target_descriptors, k=1)
+
+    candidates: list[tuple[int, int]] = []
+
+    for source_index in range(len(source_descriptors)):
+        target_index = int(indices[source_index, 0])
+
+        if distances[source_index, 0] >= 0.88 * max(distances[source_index, 1], 1e-10):
+            continue
+
+        if int(reverse[target_index]) != source_index:
+            continue
+
+        candidates.append((source_index, target_index))
+
+    return candidates
 
 
-def compare(a: np.ndarray, b: np.ndarray) -> dict:
-    pairs = matches(a,b)
-    result = dict(source_spots=len(a),target_spots=len(b),tentative_matches=len(pairs),
-                  ransac_attempted=False,inliers=0,inlier_ratio=None,
-                  median_residual_px=None,source_coverage=0.,target_coverage=0.,
-                  pairs=pairs,inlier_mask=[False]*len(pairs))
-    if len(pairs) < 3:
-        return result
-    src = np.asarray([a[i] for i,j in pairs],np.float32)
-    dst = np.asarray([b[j] for i,j in pairs],np.float32)
-    matrix, mask = cv.estimateAffine2D(src,dst,method=cv.RANSAC,
-                                        ransacReprojThreshold=5,maxIters=3000,
-                                        confidence=.99,refineIters=10)
-    result["ransac_attempted"] = True
-    if matrix is None or mask is None:
-        return result
-    good = mask.ravel().astype(bool)
-    residual = np.linalg.norm(src@matrix[:,:2].T + matrix[:,2] - dst,axis=1)
-    n = int(good.sum())
-    result.update(inliers=n,inlier_ratio=n/len(pairs),
-                  median_residual_px=float(np.median(residual[good])) if n else None,
-                  source_coverage=n/max(1,len(a)),target_coverage=n/max(1,len(b)),
-                  inlier_mask=good.tolist())
-    return result
+def compare(source: Points, target: Points) -> MatchResult:
+    pairs = candidate_matches(source, target)
+
+    statistics: ComparisonRow = {
+        "source": "",
+        "target": "",
+        "same_individual": False,
+        "source_spots": len(source),
+        "target_spots": len(target),
+        "tentative_matches": len(pairs),
+        "ransac_attempted": False,
+        "inliers": 0,
+        "inlier_ratio": None,
+        "median_residual_px": None,
+        "source_coverage": 0.0,
+        "target_coverage": 0.0,
+    }
+
+    inlier_mask = [False] * len(pairs)
+
+    if len(pairs) < MIN_RANSAC_MATCHES:
+        return MatchResult(statistics, pairs, inlier_mask)
+
+    source_points = np.asarray([source[i] for i, _ in pairs], dtype=np.float32)
+    target_points = np.asarray([target[j] for _, j in pairs], dtype=np.float32)
+
+    cv.setRNGSeed(0)
+
+    matrix, mask = cv.estimateAffine2D(
+        source_points,
+        target_points,
+        method=cv.RANSAC,
+        ransacReprojThreshold=5.0,
+        maxIters=3000,
+        confidence=0.99,
+        refineIters=10,
+    )
+
+    statistics["ransac_attempted"] = True
+
+    if matrix is None or mask is None or np.linalg.det(matrix[:, :2]) <= 0:
+        return MatchResult(statistics, pairs, inlier_mask)
+
+    accepted = mask.ravel().astype(bool)
+
+    residuals = np.linalg.norm(
+        source_points @ matrix[:, :2].T + matrix[:, 2] - target_points,
+        axis=1,
+    )
+
+    count = int(accepted.sum())
+
+    statistics["inliers"] = count
+    statistics["inlier_ratio"] = count / len(pairs)
+    statistics["median_residual_px"] = float(np.median(residuals[accepted])) if count else None
+    statistics["source_coverage"] = count / max(1, len(source))
+    statistics["target_coverage"] = count / max(1, len(target))
+
+    return MatchResult(statistics, pairs, accepted.tolist())
 
 
-def draw_matches(a: np.ndarray,b: np.ndarray,pa: np.ndarray,pb: np.ndarray,m: dict) -> np.ndarray:
-    height = max(a.shape[0],b.shape[0])
-    output = np.zeros((height,a.shape[1]+b.shape[1],3),dtype=np.uint8)
-    output[:a.shape[0],:a.shape[1]] = a
-    output[:b.shape[0],a.shape[1]:] = b
-    for (i,j),valid in zip(m["pairs"],m["inlier_mask"],strict=True):
-        p = tuple(np.rint(pa[i]).astype(int))
-        q = tuple(np.rint(pb[j]).astype(int)+[a.shape[1],0])
-        cv.line(output,p,q,(0,220,0) if valid else (40,80,220),1)
+def draw_matches(source: Sample, target: Sample, result: MatchResult) -> Image:
+    source_image = source.image
+    target_image = target.image
+
+    height = max(source_image.shape[0], target_image.shape[0])
+    width = source_image.shape[1] + target_image.shape[1]
+
+    output = np.zeros((height, width, 3), dtype=np.uint8)
+
+    output[: source_image.shape[0], : source_image.shape[1]] = source_image
+    output[: target_image.shape[0], source_image.shape[1] :] = target_image
+
+    for (source_index, target_index), accepted in zip(
+        result.pairs, result.inlier_mask, strict=True
+    ):
+        source_point = (
+            int(round(float(source.points[source_index, 0]))),
+            int(round(float(source.points[source_index, 1]))),
+        )
+
+        target_point = (
+            int(round(float(target.points[target_index, 0]))) + source_image.shape[1],
+            int(round(float(target.points[target_index, 1]))),
+        )
+
+        color = (0, 220, 0) if accepted else (40, 80, 220)
+
+        cv.line(output, source_point, target_point, color, 1)
+
     return output
+
+
+def read_metadata(
+    root: Path,
+) -> tuple[dict[str, VideoData], dict[VideoId, tuple[str, TrackData]]]:
+    raw_videos = json.loads((root / "metadata/videos/videos.json").read_text())
+    raw_individuals = json.loads((root / "metadata/individuals/individuals.json").read_text())
+
+    videos = {video["video_id"]: video for video in cast(list[VideoData], raw_videos)}
+
+    selections: dict[VideoId, tuple[str, TrackData]] = {}
+
+    for individual in cast(list[IndividualData], raw_individuals):
+        for track in individual["tracks"]:
+            if track["video_id"] not in VIDEO_IDS:
+                continue
+
+            video_id = cast(VideoId, track["video_id"])
+
+            selections[video_id] = (individual["individual_id"], track)
+
+    if set(selections) != set(VIDEO_IDS):
+        raise ValueError("Need both h01 and h02 in individuals.json")
+
+    if selections["h01"][0] == selections["h02"][0]:
+        raise ValueError("h01 and h02 must be different individuals")
+
+    return videos, selections
+
+
+def offset_frame(track: TrackData, delta: int) -> int:
+    reference = track["reference_frame"]
+
+    alternative = reference + delta
+
+    if alternative > track["end_frame"]:
+        alternative = reference - delta
+
+    if alternative < track["start_frame"]:
+        raise ValueError(f"No valid offset frame for {track['video_id']}")
+
+    return alternative
+
+
+def save_image(path: Path, image: Image) -> None:
+    if not cv.imwrite(str(path), image):
+        raise OSError(f"Could not write {path}")
+
+
+def run(
+    data: Path,
+    output: Path,
+    delta: int,
+    rois: dict[VideoId, Roi | None],
+) -> list[ComparisonRow]:
+    videos, selections = read_metadata(data)
+
+    if output.exists():
+        raise FileExistsError(f"Refusing to overwrite run: {output}")
+
+    output.mkdir(parents=True)
+
+    samples: dict[SampleKey, Sample] = {}
+
+    for video_id in VIDEO_IDS:
+        track = selections[video_id][1]
+
+        frames: tuple[tuple[FrameLabel, int], ...] = (
+            ("reference", track["reference_frame"]),
+            ("offset", offset_frame(track, delta)),
+        )
+
+        for label, frame_index in frames:
+            frame = load_frame(data.parent / videos[video_id]["path"], frame_index)
+
+            points, annotated = detect_spots(frame, rois[video_id])
+
+            save_image(output / f"{video_id}_{label}_spots.png", annotated)
+
+            samples[video_id, label] = Sample(frame, points)
+
+    comparisons: tuple[tuple[SampleKey, SampleKey, bool], ...] = (
+        (("h01", "reference"), ("h01", "offset"), True),
+        (("h02", "reference"), ("h02", "offset"), True),
+        (("h01", "reference"), ("h02", "reference"), False),
+    )
+
+    rows: list[ComparisonRow] = []
+
+    for source_key, target_key, same_individual in comparisons:
+        source = samples[source_key]
+        target = samples[target_key]
+
+        result = compare(source.points, target.points)
+
+        result.statistics["source"] = "/".join(source_key)
+        result.statistics["target"] = "/".join(target_key)
+        result.statistics["same_individual"] = same_individual
+
+        figure = draw_matches(source, target, result)
+
+        name = f"{source_key[0]}_{source_key[1]}_vs_{target_key[0]}_{target_key[1]}.png"
+
+        save_image(output / name, figure)
+
+        rows.append(result.statistics)
+
+    with (output / "metrics.csv").open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=list(ComparisonRow.__annotations__))
+
+        writer.writeheader()
+
+        writer.writerows(rows)
+
+    provenance: dict[str, object] = {
+        "delta": delta,
+        "rois": rois,
+        "video_metadata": {
+            video_id: {"mirrored": videos[video_id].get("mirrored", False)}
+            for video_id in VIDEO_IDS
+        },
+    }
+
+    (output / "run.json").write_text(json.dumps(provenance, indent=2) + "
+")
+
+    return rows
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--data",type=Path,default=Path("data"))
-    parser.add_argument("--output",type=Path)
-    parser.add_argument("--roi-h01",nargs=4,type=int,metavar=("X","Y","W","H"))
-    parser.add_argument("--roi-h02",nargs=4,type=int,metavar=("X","Y","W","H"))
-    parser.add_argument("--delta",type=int,default=30)
+
+    parser.add_argument("--data", type=Path, default=Path("data"))
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--roi-h01", nargs=4, type=int, metavar=("X", "Y", "W", "H"))
+    parser.add_argument("--roi-h02", nargs=4, type=int, metavar=("X", "Y", "W", "H"))
+    parser.add_argument("--delta", type=int, default=30)
+
     args = parser.parse_args()
+
     if args.delta <= 0:
         parser.error("--delta must be positive")
-    videos = {v["video_id"]:v for v in json.loads(
-        (args.data/"metadata/videos/videos.json").read_text())}
-    people = json.loads((args.data/"metadata/individuals/individuals.json").read_text())
-    selections = {t["video_id"]:(str(p["individual_id"]),t)
-                  for p in people for t in p["tracks"] if t["video_id"] in ("h01","h02")}
-    if set(selections) != {"h01","h02"}:
-        raise ValueError("Need both h01 and h02 in individuals.json")
-    if selections["h01"][0] == selections["h02"][0]:
-        raise ValueError("h01 and h02 expected to be different individuals")
-    output = args.output or Path("results/003")/(datetime.now(timezone.utc).strftime(
-        "%Y%m%dT%H%M%SZ")+"-"+uuid.uuid4().hex[:8])
-    output.mkdir(parents=True,exist_ok=False)
-    samples = {}
-    for video_id in ("h01","h02"):
-        track = selections[video_id][1]
-        ref = int(track["reference_frame"])
-        offset = ref+args.delta
-        if offset > int(track["end_frame"]):
-            offset = ref-args.delta
-        if offset < int(track["start_frame"]):
-            raise ValueError(f"No offset frame for {video_id}")
-        roi = getattr(args,"roi_"+video_id)
-        for label,index in (("reference",ref),("offset",offset)):
-            frame = load_frame(args.data.parent/videos[video_id]["path"],index)
-            # Mirrored metadata is documented but not automatically re-applied.
-            points,annotated = detect_spots(frame,tuple(roi) if roi else None)
-            if not cv.imwrite(str(output/f"{video_id}_{label}_spots.png"),annotated):
-                raise IOError("Failed to write spot visualization")
-            samples[video_id,label] = (frame,points)
-    comparisons = [("h01","reference","h01","offset",True),
-                   ("h02","reference","h02","offset",True),
-                   ("h01","reference","h02","reference",False)]
-    rows = []
-    for va,fa,vb,fb,same in comparisons:
-        a,pa = samples[va,fa]
-        b,pb = samples[vb,fb]
-        metrics = compare(pa,pb)
-        image = draw_matches(a,b,pa,pb,metrics)
-        if not cv.imwrite(str(output/f"{va}_{fa}_vs_{vb}_{fb}.png"),image):
-            raise IOError("Failed to write matching visualization")
-        rows.append(dict(source=f"{va}/{fa}",target=f"{vb}/{fb}",
-                         same_individual=same,**{k:v for k,v in metrics.items()
-                         if k not in ("pairs","inlier_mask")}))
-    with (output/"metrics.csv").open("w",newline="",encoding="utf-8") as stream:
-        writer = csv.DictWriter(stream,fieldnames=list(rows[0]))
-        writer.writeheader()
-        writer.writerows(rows)
-    provenance = {"delta":args.delta,"roi_h01":args.roi_h01,"roi_h02":args.roi_h02,
-                  "video_metadata":{k:{"mirrored":videos[k].get("mirrored",False)}
-                                    for k in ("h01","h02")}}
-    (output/"run.json").write_text(json.dumps(provenance,indent=2)+"\n")
+
+    rois: dict[VideoId, Roi | None] = {
+        "h01": tuple(args.roi_h01) if args.roi_h01 is not None else None,
+        "h02": tuple(args.roi_h02) if args.roi_h02 is not None else None,
+    }
+
+    output = args.output or Path("results/003") / (
+        datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
+    )
+
+    rows = run(args.data, output, args.delta, rois)
+
     print(f"Exp-003: wrote {len(rows)} comparisons to {output}")
 
 
