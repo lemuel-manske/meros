@@ -10,6 +10,7 @@ import numpy as np
 from meros.domain import BBox, Track, TrackMetadata, TrackObservation
 from meros.domain.prediction import Prediction, VideoPredictor
 from meros.external import build_sam2_predictor
+from meros.processing.frame_sequence import sam2_frame_sequence
 from meros.project import Project
 
 
@@ -34,7 +35,6 @@ def tracks_complete(project: Project) -> bool:
 
         if (
             not frame_ids
-            or frame_ids != list(range(len(frame_ids)))
             or not saved.tracks
             or saved.video_id != video.video_id
             or saved.processed_frame_count != len(frame_ids)
@@ -42,7 +42,7 @@ def tracks_complete(project: Project) -> bool:
             return False
 
         try:
-            height, width = project.media.read_frame(video.video_id, 0).shape[:2]
+            height, width = project.media.read_frame(video.video_id, frame_ids[0]).shape[:2]
         except (OSError, ValueError, cv.error):
             return False
 
@@ -55,12 +55,12 @@ def tracks_complete(project: Project) -> bool:
             if not track.frames:
                 return False
 
-            if track.initial_frame != 0 or track.initial_bbox != video_seeds[track_id]:
+            if track.initial_frame != frame_ids[0] or track.initial_bbox != video_seeds[track_id]:
                 return False
 
             try:
                 for idx, observation in track.frames.items():
-                    if str(int(idx)) != idx or not track.initial_frame <= int(idx) < len(frame_ids):
+                    if str(int(idx)) != idx or int(idx) not in frame_ids:
                         return False
 
                     x1, y1, x2, y2 = observation.bbox
@@ -238,8 +238,10 @@ def select_track_seeds(
 
         project.metadata.write_bboxes(saved_boxes)
 
+    first_frame = project.media.frame_ids(video_id)[0]
+
     return {
-        track_id: Track(initial_frame=0, initial_bbox=bbox, frames={})
+        track_id: Track(initial_frame=first_frame, initial_bbox=bbox, frames={})
         for track_id, bbox in boxes.items()
     }
 
@@ -252,35 +254,39 @@ def propagate_tracks(
     project: Project,
 ) -> TrackMetadata:
 
-    frame_ids = project.media.frame_ids(video_id)
+    with sam2_frame_sequence(project, video_id) as sequence:
+        track_metadata = TrackMetadata(video_id, tracks, len(sequence.frame_ids))
 
-    if not frame_ids or frame_ids != list(range(len(frame_ids))):
-        raise ValueError(f"{video_id}: expected contiguous zero-based frames")
+        state = predictor.init_state(str(sequence.path))
 
-    track_metadata = TrackMetadata(video_id, tracks, len(frame_ids))
+        for track_id, track in tracks.items():
+            predictor.add_new_points_or_box(
+                inference_state=state,
+                frame_idx=sequence.sequence_index(track.initial_frame),
+                obj_id=int(track_id),
+                box=np.asarray(track.initial_bbox, dtype=np.float32),
+            )
 
-    state = predictor.init_state(str(project.media.frames_path(video_id)))
+        processed: set[int] = set()
 
-    for track_id, track in tracks.items():
-        predictor.add_new_points_or_box(
-            inference_state=state,
-            frame_idx=track.initial_frame,
-            obj_id=int(track_id),
-            box=np.asarray(track.initial_bbox, dtype=np.float32),
-        )
+        for prediction in predictor.propagate_in_video(state):
+            frame_idx = sequence.original(prediction.frame_idx)
 
-    processed: set[int] = set()
+            if frame_idx in processed:
+                raise RuntimeError("SAM2 returned a duplicate frame")
 
-    for prediction in predictor.propagate_in_video(state):
-        if prediction.frame_idx in processed or not 0 <= prediction.frame_idx < len(frame_ids):
-            raise RuntimeError("Invalid predictor frame index")
+            processed.add(frame_idx)
 
-        processed.add(prediction.frame_idx)
+            process_frame(
+                video_id,
+                prediction,
+                track_metadata,
+                project=project,
+                original_frame=frame_idx,
+            )
 
-        process_frame(video_id, prediction, track_metadata, project=project)
-
-    if processed != set(frame_ids):
-        raise RuntimeError("SAM2 did not process the full sequence")
+        if processed != set(sequence.frame_ids):
+            raise RuntimeError("SAM2 did not process the full sequence")
 
     return track_metadata
 
@@ -291,8 +297,9 @@ def process_frame(
     track_metadata: TrackMetadata,
     *,
     project: Project,
+    original_frame: int | None = None,
 ) -> None:
-    frame_idx = prediction.frame_idx
+    frame_idx = prediction.frame_idx if original_frame is None else original_frame
 
     frame = project.media.read_frame(
         video_id,
