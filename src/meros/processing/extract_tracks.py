@@ -271,7 +271,9 @@ def propagate_tracks(
                     previous = track.frames.get(str(first_frame))
 
                     if previous is None:
-                        previous = track.frames.get(str(frame_ids[frame_ids.index(first_frame) - 1]))
+                        previous = track.frames.get(
+                            str(frame_ids[frame_ids.index(first_frame) - 1])
+                        )
 
                     if previous is None:
                         bbox = track.initial_bbox
