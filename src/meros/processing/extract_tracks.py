@@ -182,7 +182,7 @@ def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
             if key == ord("a"):
                 state.adding = True
 
-                drag_start = None
+                state.drag_start = None
 
                 state.pending = None
 
@@ -201,9 +201,9 @@ def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
 
                     state.adding = False
 
-                    drag_start = None
+                    state.drag_start = None
 
-                    pending = None
+                    state.pending = None
 
             elif key == ord("q"):
                 if not boxes:
