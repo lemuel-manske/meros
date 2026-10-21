@@ -30,7 +30,7 @@ class FrameSequence:
 
 
 @contextmanager
-def sam2_frame_sequence(project: Project, video_id: str) -> Generator[FrameSequence]:
+def sam2_frame_sequence(project: Project, video_id: str) -> Generator[FrameSequence, None, None]:
     frame_ids = tuple(project.media.frame_ids(video_id))
 
     if not frame_ids:
