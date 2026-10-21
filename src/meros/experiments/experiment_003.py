@@ -305,9 +305,7 @@ def candidate_matches(
 def compare(source: Sample, target: Sample) -> MatchResult:
     aligned, alignment_inliers, alignment_applied = coarse_alignment(source, target)
 
-    pairs = candidate_matches(
-        source.points, target.points, aligned if alignment_applied else None
-    )
+    pairs = candidate_matches(source.points, target.points, aligned if alignment_applied else None)
 
     statistics: ComparisonRow = {
         "source": "",
