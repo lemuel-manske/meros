@@ -41,8 +41,8 @@ The `same_individual` column is derived from `individuals.json`, never inferred 
 4. Detect spot centroids and filter connected components by size and shape.
 5. Encode each candidate spot using its six nearest-neighbor distances, normalized by the farthest of those neighbors.
 6. Normalize spot positions by each sample's detected-point extent, reject candidate pairs more than 0.22 apart in normalized position, and generate mutual descriptor matches with a ratio test.
-7. Verify correspondences with affine RANSAC.
-8. Write overlays, matched-pair images, `metrics.csv`, and `run.json`.
+7. Independently estimate an initial alignment using masked SIFT features and partial-affine RANSAC (at least 12 inliers). If registration fails, use the previous normalized-position gate.\n8. Verify spot correspondences with affine RANSAC.
+9. Write overlays, matched-pair images, `metrics.csv`, and `run.json`.
 
 **Limitations:** These descriptors capture sorted neighbor distances rather than explicit graph connectivity. They are not affine-invariant and can be confused by distinct constellations. Watermarks overlapping fish pixels are not explicitly removed; visually inspect detections.
 
@@ -64,7 +64,7 @@ explicit graph edges.
 
 Each comparison records:
 
-- Detected spots in source and target crops.
+- Detected spots in source and target crops.\n- Number of coarse-registration SIFT inliers and whether it was applied.
 - Number of tentative descriptor matches.
 - Whether RANSAC was attempted, and the number and fraction of inliers.
 - Median accepted-match reprojection error, in pixels, when defined.
