@@ -81,26 +81,25 @@ class MatchResult:
     inlier_mask: list[bool]
 
 
-def load_frame(path: Path, frame_index: int) -> Image:
-    capture = cv.VideoCapture(str(path))
+def validate_exclusions(
+    exclusions: list[Roi],
+    width: int,
+    height: int,
+) -> None:
+    for x, y, w, h in exclusions:
+        if not (0 <= x < width and 0 <= y < height and w > 0 and h > 0):
+            raise ValueError(f"Invalid watermark exclusion: {(x, y, w, h)}")
 
-    try:
-        if not capture.isOpened():
-            raise FileNotFoundError(path)
-
-        capture.set(cv.CAP_PROP_POS_FRAMES, frame_index)
-
-        decoded, image = capture.read()
-
-        if not decoded or image is None:
-            raise ValueError(f"Cannot decode frame {frame_index}: {path}")
-
-        return cast(Image, image)
-    finally:
-        capture.release()
+        if x + w > width or y + h > height:
+            raise ValueError(f"Watermark exclusion outside frame: {(x, y, w, h)}")
 
 
-def detect_spots(image: Image, roi: Roi | None) -> tuple[Points, Image]:
+def detect_spots(
+    image: Image,
+    roi: Roi | None,
+    exclusions: list[Roi] | None = None,
+    origin: tuple[int, int] = (0, 0),
+) -> tuple[Points, Image]:
     height, width = image.shape[:2]
 
     x, y, w, h = roi if roi is not None else (0, 0, width, height)
@@ -111,7 +110,54 @@ def detect_spots(image: Image, roi: Roi | None) -> tuple[Points, Image]:
     if x + w > width or y + h > height:
         raise ValueError(f"ROI outside image: {roi}")
 
-    gray = cv.cvtColor(image[y : y + h, x : x + w], cv.COLOR_BGR2GRAY)
+    if image.ndim != 3 or image.shape[2] != 4:
+        raise ValueError("Expected a uint8 BGRA masked crop")
+
+    if image.dtype != np.uint8:
+        raise ValueError("Expected uint8 masked crop")
+
+    exclusion_boxes = exclusions or []
+
+    # Exclusion boxes are specified in original full-frame coordinates.
+    full_x, full_y = origin
+
+    valid = image[:, :, 3] == 255
+
+    for ex, ey, ew, eh in exclusion_boxes:
+        local_x1 = max(0, ex - full_x)
+        local_y1 = max(0, ey - full_y)
+        local_x2 = min(width, ex + ew - full_x)
+        local_y2 = min(height, ey + eh - full_y)
+
+        if local_x1 < local_x2 and local_y1 < local_y2:
+            valid[local_y1:local_y2, local_x1:local_x2] = False
+
+    valid = cv.erode(
+        valid.astype(np.uint8),
+        np.ones((5, 5), dtype=np.uint8),
+        iterations=1,
+    ).astype(bool)
+
+    valid[:y, :] = False
+    valid[y + h :, :] = False
+    valid[:, :x] = False
+    valid[:, x + w :] = False
+
+    gray = cv.cvtColor(image[:, :, :3], cv.COLOR_BGR2GRAY)
+
+    # A neutral fill avoids black transparent pixels polluting CLAHE and thresholding.
+    active = gray[valid]
+
+    if active.size == 0:
+        return np.empty((0, 2), dtype=np.float32), cv.cvtColor(
+            image, cv.COLOR_BGRA2BGR
+        )
+
+    filled = gray.copy()
+
+    filled[~valid] = int(np.median(active))
+
+    gray = filled
 
     enhanced = cv.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
 
@@ -146,6 +192,9 @@ def detect_spots(image: Image, roi: Roi | None) -> tuple[Points, Image]:
         if not (0.35 <= aspect <= 2.8 and 0.25 <= density <= 0.94):
             continue
 
+        if not np.all(valid[top : top + component_height, left : left + component_width]):
+            continue
+
         center_x, center_y = centers[index]
 
         found.append((float(center_x + x), float(center_y + y), area))
@@ -157,7 +206,7 @@ def detect_spots(image: Image, roi: Roi | None) -> tuple[Points, Image]:
         dtype=np.float32,
     ).reshape(-1, 2)
 
-    annotated = image.copy()
+    annotated = cv.cvtColor(image, cv.COLOR_BGRA2BGR)
 
     cv.rectangle(annotated, (x, y), (x + w - 1, y + h - 1), (255, 180, 0), 2)
 
@@ -358,8 +407,13 @@ def run(
     output: Path,
     delta: int,
     rois: dict[VideoId, Roi | None],
+    exclusions: dict[VideoId, list[Roi]],
 ) -> list[ComparisonRow]:
     videos, selections = read_metadata(data)
+
+    from meros.project import Project
+
+    project = Project.open(data)
 
     if output.exists():
         raise FileExistsError(f"Refusing to overwrite run: {output}")
@@ -377,13 +431,30 @@ def run(
         )
 
         for label, frame_index in frames:
-            frame = load_frame(data.parent / videos[video_id]["path"], frame_index)
+            frame = cast(
+                Image,
+                project.media.read_masked_crop(
+                    video_id,
+                    track["track_id"],
+                    frame_index,
+                ),
+            )
 
-            points, annotated = detect_spots(frame, rois[video_id])
+            # Crops are bounding-box-relative; recover their position from track metadata.
+            track_metadata = project.metadata.read_track(video_id)
+            observation = track_metadata.tracks[track["track_id"]].frames[str(frame_index)]
+            x1, y1, _, _ = observation.bbox
+
+            points, annotated = detect_spots(
+                frame,
+                rois[video_id],
+                exclusions[video_id],
+                origin=(x1, y1),
+            )
 
             save_image(output / f"{video_id}_{label}_spots.png", annotated)
 
-            samples[video_id, label] = Sample(frame, points)
+            samples[video_id, label] = Sample(annotated, points)
 
     comparisons: tuple[tuple[SampleKey, SampleKey, bool], ...] = (
         (("h01", "reference"), ("h01", "offset"), True),
@@ -421,6 +492,7 @@ def run(
     provenance: dict[str, object] = {
         "delta": delta,
         "rois": rois,
+        "exclusions": exclusions,
         "video_metadata": {
             video_id: {"mirrored": videos[video_id].get("mirrored", False)}
             for video_id in VIDEO_IDS
@@ -439,6 +511,10 @@ def main() -> None:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--roi-h01", nargs=4, type=int, metavar=("X", "Y", "W", "H"))
     parser.add_argument("--roi-h02", nargs=4, type=int, metavar=("X", "Y", "W", "H"))
+    parser.add_argument("--exclude-h01", nargs=4, type=int, action="append",
+                        metavar=("X", "Y", "W", "H"), default=[])
+    parser.add_argument("--exclude-h02", nargs=4, type=int, action="append",
+                        metavar=("X", "Y", "W", "H"), default=[])
     parser.add_argument("--delta", type=int, default=30)
 
     args = parser.parse_args()
@@ -455,7 +531,12 @@ def main() -> None:
         datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
     )
 
-    rows = run(args.data, output, args.delta, rois)
+    exclusions: dict[VideoId, list[Roi]] = {
+        "h01": [cast(Roi, tuple(box)) for box in args.exclude_h01],
+        "h02": [cast(Roi, tuple(box)) for box in args.exclude_h02],
+    }
+
+    rows = run(args.data, output, args.delta, rois, exclusions)
 
     print(f"Exp-003: wrote {len(rows)} comparisons to {output}")
 
