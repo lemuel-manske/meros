@@ -18,7 +18,8 @@ __pycache__
 
 /build/
 /dist/
-/results/
+/results/*
+!/results/README.md
 
 # disposable derived metadata is rebuilt by the pipeline.
 /data/metadata/alignment/

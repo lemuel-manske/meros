@@ -20,8 +20,6 @@ Eligible observations must:
 - Have annotation `quality >= 3`.
 - Match the annotated `track_id`.
 
-**Why `>= 3` rather than `> 3`?** The highest quality recorded in the current `videos.json` is 3. A strict threshold greater than 3 would select no data.
-
 Every eligible annotation segment creates a reference sample. The selection's reference frame is used when it lies inside the qualifying segment; otherwise, the segment midpoint is used. An offset frame (30 frames later, or 30 earlier when needed) is included only if it belongs to that segment.
 
 An individual selection may contribute multiple qualifying annotation segments. Each segment gets a distinct sample ID.
