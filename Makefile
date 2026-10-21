@@ -81,6 +81,12 @@ results-save:
 	$(PYTHON) -m dvc add "$(RUN_DIR)"
 
 
+# Pipeline.
+
+pipeline:
+	$(PYTHON) -m meros.pipeline.engine
+
+
 # Experiments.
 
 run:

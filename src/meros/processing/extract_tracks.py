@@ -200,7 +200,9 @@ def select_track_seeds(
     boxes = saved_boxes.get(video_id)
 
     if not boxes:
-        frame = project.media.read_frame(video_id, 0)
+        fst = project.media.frame_ids(video_id)[0]  # 1st it not always 0. See videos.json
+
+        frame = project.media.read_frame(video_id, fst)
 
         boxes = bbox_selector(video_id, frame)
 
