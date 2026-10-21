@@ -15,7 +15,10 @@ from datetime import datetime, timezone
 from numpy.typing import NDArray
 from pathlib import Path
 from scipy.spatial import KDTree
-from typing import Literal, NotRequired, TypedDict, cast
+
+from meros.domain import TrackSelection
+from meros.project import Project
+from typing import Literal, TypedDict, cast
 
 
 type VideoId = Literal["h01", "h02"]
@@ -32,25 +35,6 @@ VIDEO_IDS: tuple[VideoId, ...] = ("h01", "h02")
 NEIGHBORS = 6
 MAX_SPOTS = 180
 MIN_RANSAC_MATCHES = 8
-
-
-class TrackData(TypedDict):
-    video_id: str
-    track_id: str
-    start_frame: int
-    end_frame: int
-    reference_frame: int
-
-
-class IndividualData(TypedDict):
-    individual_id: str
-    tracks: list[TrackData]
-
-
-class VideoData(TypedDict):
-    video_id: str
-    path: str
-    mirrored: NotRequired[bool]
 
 
 class ComparisonRow(TypedDict):
@@ -339,24 +323,20 @@ def draw_matches(source: Sample, target: Sample, result: MatchResult) -> Image:
     return output
 
 
-def read_metadata(
-    root: Path,
-) -> tuple[dict[str, VideoData], dict[VideoId, tuple[str, TrackData]]]:
-    raw_videos = json.loads((root / "metadata/videos/videos.json").read_text())
-    raw_individuals = json.loads((root / "metadata/individuals/individuals.json").read_text())
+def selected_tracks(project: Project) -> dict[VideoId, TrackSelection]:
+    selections: dict[VideoId, tuple[str, TrackSelection]] = {}
 
-    videos = {video["video_id"]: video for video in cast(list[VideoData], raw_videos)}
-
-    selections: dict[VideoId, tuple[str, TrackData]] = {}
-
-    for individual in cast(list[IndividualData], raw_individuals):
-        for track in individual["tracks"]:
-            if track["video_id"] not in VIDEO_IDS:
+    for individual in project.metadata.read_individuals():
+        for track in individual.tracks:
+            if track.video_id not in VIDEO_IDS:
                 continue
 
-            video_id = cast(VideoId, track["video_id"])
+            video_id = cast(VideoId, track.video_id)
 
-            selections[video_id] = (individual["individual_id"], track)
+            if video_id in selections:
+                raise ValueError(f"Multiple selections assigned to {video_id}")
+
+            selections[video_id] = (individual.individual_id, track)
 
     if set(selections) != set(VIDEO_IDS):
         raise ValueError("Need both h01 and h02 in individuals.json")
@@ -364,19 +344,19 @@ def read_metadata(
     if selections["h01"][0] == selections["h02"][0]:
         raise ValueError("h01 and h02 must be different individuals")
 
-    return videos, selections
+    return {video_id: selection for video_id, (_, selection) in selections.items()}
 
 
-def offset_frame(track: TrackData, delta: int) -> int:
-    reference = track["reference_frame"]
+def offset_frame(track: TrackSelection, delta: int) -> int:
+    reference = track.reference_frame
 
     alternative = reference + delta
 
-    if alternative > track["end_frame"]:
+    if alternative > track.end_frame:
         alternative = reference - delta
 
-    if alternative < track["start_frame"]:
-        raise ValueError(f"No valid offset frame for {track['video_id']}")
+    if alternative < track.start_frame:
+        raise ValueError(f"No valid offset frame for {track.video_id}")
 
     return alternative
 
@@ -387,16 +367,14 @@ def save_image(path: Path, image: Image) -> None:
 
 
 def run(
-    data: Path,
+    project: Project,
     output: Path,
     delta: int,
     exclusions: dict[VideoId, list[Roi]],
 ) -> list[ComparisonRow]:
-    videos, selections = read_metadata(data)
+    selections = selected_tracks(project)
 
-    from meros.project import Project
-
-    project = Project.open(data)
+    videos = {video.video_id: video for video in project.metadata.read_videos()}
 
     if output.exists():
         raise FileExistsError(f"Refusing to overwrite run: {output}")
@@ -406,10 +384,10 @@ def run(
     samples: dict[SampleKey, Sample] = {}
 
     for video_id in VIDEO_IDS:
-        track = selections[video_id][1]
+        track = selections[video_id]
 
         frames: tuple[tuple[FrameLabel, int], ...] = (
-            ("reference", track["reference_frame"]),
+            ("reference", track.reference_frame),
             ("offset", offset_frame(track, delta)),
         )
 
@@ -418,7 +396,7 @@ def run(
                 Image,
                 project.media.read_masked_crop(
                     video_id,
-                    track["track_id"],
+                    track.track_id,
                     frame_index,
                 ),
             )
@@ -475,7 +453,7 @@ def run(
         "delta": delta,
         "exclusions": exclusions,
         "video_metadata": {
-            video_id: {"mirrored": videos[video_id].get("mirrored", False)}
+            video_id: {"mirrored": videos[video_id].mirrored}
             for video_id in VIDEO_IDS
         },
     }
@@ -488,8 +466,6 @@ def run(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
 
-    parser.add_argument("--data", type=Path, default=Path("data"))
-    parser.add_argument("--output", type=Path)
     parser.add_argument("--exclude-h01", nargs=4, type=int, action="append",
                         metavar=("X", "Y", "W", "H"), default=[])
     parser.add_argument("--exclude-h02", nargs=4, type=int, action="append",
@@ -501,7 +477,9 @@ def main() -> None:
     if args.delta <= 0:
         parser.error("--delta must be positive")
 
-    output = args.output or Path("results/003") / (
+    project = Project.open()
+
+    output = Path("results/003") / (
         datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
     )
 
@@ -510,7 +488,7 @@ def main() -> None:
         "h02": [cast(Roi, tuple(box)) for box in args.exclude_h02],
     }
 
-    rows = run(args.data, output, args.delta, exclusions)
+    rows = run(project, output, args.delta, exclusions)
 
     print(f"Exp-003: wrote {len(rows)} comparisons to {output}")
 
