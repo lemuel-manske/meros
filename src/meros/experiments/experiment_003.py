@@ -30,7 +30,8 @@ type SampleKey = tuple[str, FrameLabel]
 MIN_QUALITY = 3
 FRAME_DELTA = 30
 NEIGHBORS = 6
-MAX_SPOTS = 180
+MAX_SPOTS = 320
+MAX_POSITION_DELTA = 0.22
 MIN_RANSAC_MATCHES = 8
 
 
@@ -175,6 +176,18 @@ def descriptors(points: Points, neighbors: int = NEIGHBORS) -> Points:
     return np.asarray(r, dtype=np.float32)
 
 
+def normalized_positions(points: Points) -> Points:
+    if len(points) == 0:
+        return points.copy()
+
+    low = points.min(axis=0)
+    high = points.max(axis=0)
+
+    extent = np.maximum(high - low, 1.0)
+
+    return np.asarray((points - low) / extent, dtype=np.float32)
+
+
 def candidate_matches(source: Points, target: Points) -> list[tuple[int, int]]:
     source_descriptors = descriptors(source)
     target_descriptors = descriptors(target)
@@ -182,26 +195,42 @@ def candidate_matches(source: Points, target: Points) -> list[tuple[int, int]]:
     if len(source_descriptors) < 2 or len(target_descriptors) < 2:
         return []
 
-    distances_raw, indices_raw = KDTree(target_descriptors).query(source_descriptors, k=2)
+    source_position = normalized_positions(source)
+    target_position = normalized_positions(target)
 
-    _, reverse_raw = KDTree(source_descriptors).query(target_descriptors, k=1)
+    position_distances = np.linalg.norm(
+        source_position[:, None, :] - target_position[None, :, :],
+        axis=2,
+    )
 
-    distances = cast(NDArray[np.float32], distances_raw)
-    indices = cast(NDArray[np.int64], indices_raw)
-    reverse = cast(NDArray[np.int64], reverse_raw)
+    descriptor_distances = np.linalg.norm(
+        source_descriptors[:, None, :] - target_descriptors[None, :, :],
+        axis=2,
+    )
+
+    descriptor_distances[position_distances > MAX_POSITION_DELTA] = np.inf
+
+    reverse = np.argmin(descriptor_distances, axis=0)
 
     candidates: list[tuple[int, int]] = []
 
-    for source_index in range(len(source_descriptors)):
-        target_index = int(indices[source_index, 0])
+    for source_index, row in enumerate(descriptor_distances):
+        eligible = np.flatnonzero(np.isfinite(row))
 
-        if distances[source_index, 0] >= 0.88 * max(distances[source_index, 1], 1e-10):
+        if len(eligible) < 2:
             continue
 
-        if int(reverse[target_index]) != source_index:
+        ranked = eligible[np.argsort(row[eligible])]
+
+        best, runner_up = int(ranked[0]), int(ranked[1])
+
+        if row[best] >= 0.88 * max(float(row[runner_up]), 1e-10):
             continue
 
-        candidates.append((source_index, target_index))
+        if int(reverse[best]) != source_index:
+            continue
+
+        candidates.append((source_index, best))
 
     return candidates
 
@@ -454,6 +483,8 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
         "viewpoint": "frontal",
         "minimum_quality": MIN_QUALITY,
         "frame_delta": FRAME_DELTA,
+        "max_spots": MAX_SPOTS,
+        "max_position_delta": MAX_POSITION_DELTA,
         "selections": [
             {
                 "individual_id": selection.individual_id,
