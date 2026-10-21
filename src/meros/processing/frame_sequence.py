@@ -12,7 +12,9 @@ from meros.project import Project
 MAX_SAM2_FRAMES = 96
 
 
-def frame_batches(frame_ids: tuple[int, ...], size: int = MAX_SAM2_FRAMES) -> Iterator[tuple[int, ...]]:
+def frame_batches(
+    frame_ids: tuple[int, ...], size: int = MAX_SAM2_FRAMES
+) -> Iterator[tuple[int, ...]]:
     """Bound SAM2 memory; include preceding frame to transfer the last bounding box."""
     if size < 2:
         raise ValueError("Batch size must be at least 2")
@@ -25,10 +27,7 @@ def frame_batches(frame_ids: tuple[int, ...], size: int = MAX_SAM2_FRAMES) -> It
     while run_start < len(frame_ids):
         run_end = run_start + 1
 
-        while (
-            run_end < len(frame_ids)
-            and frame_ids[run_end] == frame_ids[run_end - 1] + 1
-        ):
+        while run_end < len(frame_ids) and frame_ids[run_end] == frame_ids[run_end - 1] + 1:
             run_end += 1
 
         start = run_start
