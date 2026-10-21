@@ -39,7 +39,7 @@ The local descriptors are invariant to translation, in-plane rotation, and unifo
 
 ## Run
 
-From the repository root after `make init` and `make data-pull`:
+From the repository root after preparing the project's masked crops (same default `Project.open()` storage as Exp-002):
 
 ```bash
 make run EXPERIMENT=003
@@ -54,7 +54,7 @@ python -m meros.experiments.experiment_003 \
   --delta 30
 ```
 
-Watermark exclusion coordinates use the original frame and are translated using track bounding-box metadata. Prepared masked crops must be present under `data/media/masked_crops/`. Generate them with the existing processing pipeline before running Exp-003. The experiment does not decode videos or execute SAM2.
+Watermark exclusion coordinates use the original frame and are translated using track bounding-box metadata. Prepared masked crops must be present under `data/media/masked_crops/`. Generate them with the existing processing pipeline before running Exp-003. The experiment does not decode videos or execute SAM2. It reads selections and videos through `project.metadata` and crops through `project.media`. There are no `--data` or `--output` arguments; each run creates a timestamped directory under `results/003/`, following Exp-002.
 
 Each run writes a new directory under `results/003/`. Spot detection covers the entire segmented fish, potentially including body spots rather than only head spots. **Inspect the diagnostic images before interpreting metrics**.
 
