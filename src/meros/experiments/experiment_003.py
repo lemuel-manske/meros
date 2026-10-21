@@ -96,19 +96,10 @@ def validate_exclusions(
 
 def detect_spots(
     image: Image,
-    roi: Roi | None,
     exclusions: list[Roi] | None = None,
     origin: tuple[int, int] = (0, 0),
 ) -> tuple[Points, Image]:
     height, width = image.shape[:2]
-
-    x, y, w, h = roi if roi is not None else (0, 0, width, height)
-
-    if not (0 <= x < width and 0 <= y < height and w > 0 and h > 0):
-        raise ValueError(f"Invalid ROI: {roi}")
-
-    if x + w > width or y + h > height:
-        raise ValueError(f"ROI outside image: {roi}")
 
     if image.ndim != 3 or image.shape[2] != 4:
         raise ValueError("Expected a uint8 BGRA masked crop")
@@ -137,11 +128,6 @@ def detect_spots(
         np.ones((5, 5), dtype=np.uint8),
         iterations=1,
     ).astype(bool)
-
-    valid[:y, :] = False
-    valid[y + h :, :] = False
-    valid[:, :x] = False
-    valid[:, x + w :] = False
 
     gray = cv.cvtColor(image[:, :, :3], cv.COLOR_BGR2GRAY)
 
@@ -177,13 +163,13 @@ def detect_spots(
     for index in range(1, count):
         left, top, component_width, component_height, area = map(int, stats[index])
 
-        if not (5 <= area <= max(10, int(w * h * 0.001))):
+        if not (5 <= area <= max(10, int(width * height * 0.001))):
             continue
 
         if component_width < 2 or component_height < 2:
             continue
 
-        if left == 0 or top == 0 or left + component_width >= w or top + component_height >= h:
+        if left == 0 or top == 0 or left + component_width >= width or top + component_height >= height:
             continue
 
         aspect = component_width / component_height
@@ -197,7 +183,7 @@ def detect_spots(
 
         center_x, center_y = centers[index]
 
-        found.append((float(center_x + x), float(center_y + y), area))
+        found.append((float(center_x), float(center_y), area))
 
     found.sort(key=lambda item: (-item[2], item[1], item[0]))
 
@@ -207,8 +193,6 @@ def detect_spots(
     ).reshape(-1, 2)
 
     annotated = cv.cvtColor(image, cv.COLOR_BGRA2BGR)
-
-    cv.rectangle(annotated, (x, y), (x + w - 1, y + h - 1), (255, 180, 0), 2)
 
     for center_x, center_y in points:
         center = (round(float(center_x)), round(float(center_y)))
@@ -406,7 +390,6 @@ def run(
     data: Path,
     output: Path,
     delta: int,
-    rois: dict[VideoId, Roi | None],
     exclusions: dict[VideoId, list[Roi]],
 ) -> list[ComparisonRow]:
     videos, selections = read_metadata(data)
@@ -447,7 +430,6 @@ def run(
 
             points, annotated = detect_spots(
                 frame,
-                rois[video_id],
                 exclusions[video_id],
                 origin=(x1, y1),
             )
@@ -491,7 +473,6 @@ def run(
 
     provenance: dict[str, object] = {
         "delta": delta,
-        "rois": rois,
         "exclusions": exclusions,
         "video_metadata": {
             video_id: {"mirrored": videos[video_id].get("mirrored", False)}
@@ -509,8 +490,6 @@ def main() -> None:
 
     parser.add_argument("--data", type=Path, default=Path("data"))
     parser.add_argument("--output", type=Path)
-    parser.add_argument("--roi-h01", nargs=4, type=int, metavar=("X", "Y", "W", "H"))
-    parser.add_argument("--roi-h02", nargs=4, type=int, metavar=("X", "Y", "W", "H"))
     parser.add_argument("--exclude-h01", nargs=4, type=int, action="append",
                         metavar=("X", "Y", "W", "H"), default=[])
     parser.add_argument("--exclude-h02", nargs=4, type=int, action="append",
@@ -522,11 +501,6 @@ def main() -> None:
     if args.delta <= 0:
         parser.error("--delta must be positive")
 
-    rois: dict[VideoId, Roi | None] = {
-        "h01": cast(Roi, tuple(args.roi_h01)) if args.roi_h01 is not None else None,
-        "h02": cast(Roi, tuple(args.roi_h02)) if args.roi_h02 is not None else None,
-    }
-
     output = args.output or Path("results/003") / (
         datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
     )
@@ -536,7 +510,7 @@ def main() -> None:
         "h02": [cast(Roi, tuple(box)) for box in args.exclude_h02],
     }
 
-    rows = run(args.data, output, args.delta, rois, exclusions)
+    rows = run(args.data, output, args.delta, exclusions)
 
     print(f"Exp-003: wrote {len(rows)} comparisons to {output}")
 
