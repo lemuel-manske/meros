@@ -27,8 +27,8 @@ No cross-video same-individual positive pair is currently available from these t
 
 ## Method
 
-1. Decode the annotated reference frame and one frame offset by `--delta`.
-2. Optionally crop a manually supplied head region of interest (ROI).
+1. Read precomputed BGRA masked crops for the annotated reference frame and one frame offset by `--delta`. The upstream pipeline extracts frames, applies the `mirrored` flag, tracks fish, and produces masked crops.
+2. Optionally restrict detections to a head region of interest (ROI) in **masked-crop coordinates**. The fish alpha channel excludes background pixels, with a small erosion to suppress silhouette edges. Optional watermark rectangles are excluded in **original full-frame coordinates**.
 3. Apply CLAHE and adaptive thresholding; filter dark connected components by area and shape.
 4. Encode each spot using sorted normalized distances to its six nearest neighbors.
 5. Generate tentative correspondences with a descriptor ratio test and mutual nearest-neighbor verification.
@@ -51,12 +51,14 @@ To restrict detection to the head:
 python -m meros.experiments.experiment_003 \
   --roi-h01 X Y WIDTH HEIGHT \
   --roi-h02 X Y WIDTH HEIGHT \
+  --exclude-h01 FRAME_X FRAME_Y WIDTH HEIGHT \
+  --exclude-h02 FRAME_X FRAME_Y WIDTH HEIGHT \
   --delta 30
 ```
 
-Coordinates are pixel coordinates in decoded source frames, not masked crops. Raw videos must be present under `data/media/videos/`.
+Head ROI coordinates refer to each masked crop (not full-frame coordinates). Watermark exclusion coordinates use the original frame, and are translated using track bounding-box metadata. A single ROI for both reference and offset crops is suitable only when their crop geometry is comparable. Prepared masked crops must be present under `data/media/masked_crops/`. Generate them with the existing processing pipeline before running Exp-003. The experiment does not decode videos or execute SAM2.
 
-Each run writes a new directory under `results/003/`. By default no ROI is applied, which may yield non-head background detections: **inspect the diagnostic images before interpreting metrics**.
+Each run writes a new directory under `results/003/`. By default no head ROI is applied, which may yield non-head fish-body detections: **inspect the diagnostic images before interpreting metrics**.
 
 ## Metrics and limitations
 
