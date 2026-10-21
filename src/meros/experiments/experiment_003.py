@@ -33,6 +33,7 @@ NEIGHBORS = 6
 MAX_SPOTS = 320
 MAX_POSITION_DELTA = 0.22
 MIN_RANSAC_MATCHES = 8
+MIN_ALIGNMENT_INLIERS = 12
 
 
 class ComparisonRow(TypedDict):
@@ -48,12 +49,15 @@ class ComparisonRow(TypedDict):
     median_residual_px: float | None
     source_coverage: float
     target_coverage: float
+    alignment_inliers: int
+    alignment_applied: bool
 
 
 @dataclass(frozen=True)
 class Sample:
     image: Image
     points: Points
+    mask: Image
 
 
 @dataclass(frozen=True)
@@ -188,15 +192,78 @@ def normalized_positions(points: Points) -> Points:
     return np.asarray((points - low) / extent, dtype=np.float32)
 
 
-def candidate_matches(source: Points, target: Points) -> list[tuple[int, int]]:
+def coarse_alignment(source: Sample, target: Sample) -> tuple[Points, int, bool]:
+    """Estimate initial geometry using image features, independently of spot descriptors."""
+    sift = cv.SIFT.create(nfeatures=2500)
+
+    source_gray = cv.cvtColor(source.image, cv.COLOR_BGR2GRAY)
+    target_gray = cv.cvtColor(target.image, cv.COLOR_BGR2GRAY)
+
+    source_keys, source_desc = sift.detectAndCompute(source_gray, source.mask)
+    target_keys, target_desc = sift.detectAndCompute(target_gray, target.mask)
+
+    if source_desc is None or target_desc is None:
+        return source.points.copy(), 0, False
+
+    matcher = cv.BFMatcher(cv.NORM_L2)
+
+    matches = [
+        pair[0]
+        for pair in matcher.knnMatch(source_desc, target_desc, k=2)
+        if len(pair) == 2 and pair[0].distance < 0.7 * pair[1].distance
+    ]
+
+    if len(matches) < MIN_ALIGNMENT_INLIERS:
+        return source.points.copy(), 0, False
+
+    source_keys_points = np.asarray(
+        [source_keys[pair.queryIdx].pt for pair in matches], dtype=np.float32
+    )
+    target_keys_points = np.asarray(
+        [target_keys[pair.trainIdx].pt for pair in matches], dtype=np.float32
+    )
+
+    cv.setRNGSeed(0)
+
+    matrix, inliers = cv.estimateAffinePartial2D(
+        source_keys_points,
+        target_keys_points,
+        method=cv.RANSAC,
+        ransacReprojThreshold=4.0,
+        maxIters=3000,
+        confidence=0.99,
+    )
+
+    count = int(inliers.sum()) if inliers is not None else 0
+
+    if matrix is None or count < MIN_ALIGNMENT_INLIERS:
+        return source.points.copy(), count, False
+
+    transformed = source.points @ matrix[:, :2].T + matrix[:, 2]
+
+    return np.asarray(transformed, dtype=np.float32), count, True
+
+
+def candidate_matches(
+    source: Points, target: Points, source_aligned: Points | None = None
+) -> list[tuple[int, int]]:
     source_descriptors = descriptors(source)
     target_descriptors = descriptors(target)
 
     if len(source_descriptors) < 2 or len(target_descriptors) < 2:
         return []
 
-    source_position = normalized_positions(source)
-    target_position = normalized_positions(target)
+    if source_aligned is None:
+        source_position = normalized_positions(source)
+        target_position = normalized_positions(target)
+    else:
+        source_position = source_aligned
+        target_position = target
+
+    scale = np.maximum(np.ptp(target_position, axis=0), 1.0)
+
+    source_position = source_position / scale
+    target_position = target_position / scale
 
     position_distances = np.linalg.norm(
         source_position[:, None, :] - target_position[None, :, :],
@@ -235,15 +302,19 @@ def candidate_matches(source: Points, target: Points) -> list[tuple[int, int]]:
     return candidates
 
 
-def compare(source: Points, target: Points) -> MatchResult:
-    pairs = candidate_matches(source, target)
+def compare(source: Sample, target: Sample) -> MatchResult:
+    aligned, alignment_inliers, alignment_applied = coarse_alignment(source, target)
+
+    pairs = candidate_matches(
+        source.points, target.points, aligned if alignment_applied else None
+    )
 
     statistics: ComparisonRow = {
         "source": "",
         "target": "",
         "same_individual": False,
-        "source_spots": len(source),
-        "target_spots": len(target),
+        "source_spots": len(source.points),
+        "target_spots": len(target.points),
         "tentative_matches": len(pairs),
         "ransac_attempted": False,
         "inliers": 0,
@@ -251,6 +322,8 @@ def compare(source: Points, target: Points) -> MatchResult:
         "median_residual_px": None,
         "source_coverage": 0.0,
         "target_coverage": 0.0,
+        "alignment_inliers": alignment_inliers,
+        "alignment_applied": alignment_applied,
     }
 
     inlier_mask = [False] * len(pairs)
@@ -258,8 +331,8 @@ def compare(source: Points, target: Points) -> MatchResult:
     if len(pairs) < MIN_RANSAC_MATCHES:
         return MatchResult(statistics, pairs, inlier_mask)
 
-    source_points = np.asarray([source[i] for i, _ in pairs], dtype=np.float32)
-    target_points = np.asarray([target[j] for _, j in pairs], dtype=np.float32)
+    source_points = np.asarray([source.points[i] for i, _ in pairs], dtype=np.float32)
+    target_points = np.asarray([target.points[j] for _, j in pairs], dtype=np.float32)
 
     cv.setRNGSeed(0)
 
@@ -290,8 +363,8 @@ def compare(source: Points, target: Points) -> MatchResult:
     statistics["inliers"] = count
     statistics["inlier_ratio"] = count / len(pairs)
     statistics["median_residual_px"] = float(np.median(residuals[accepted])) if count else None
-    statistics["source_coverage"] = count / max(1, len(source))
-    statistics["target_coverage"] = count / max(1, len(target))
+    statistics["source_coverage"] = count / max(1, len(source.points))
+    statistics["target_coverage"] = count / max(1, len(target.points))
 
     return MatchResult(statistics, pairs, accepted.tolist())
 
@@ -429,7 +502,11 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
 
             save_image(output / name, annotated)
 
-            samples[selection.sample_id, label] = Sample(annotated, points)
+            mask = np.asarray((frame[:, :, 3] == 255).astype(np.uint8) * 255, dtype=np.uint8)
+
+            clean = cast(Image, cv.cvtColor(frame, cv.COLOR_BGRA2BGR))
+
+            samples[selection.sample_id, label] = Sample(clean, points, mask)
 
     comparisons: list[tuple[EligibleSelection, FrameLabel, EligibleSelection, FrameLabel]] = []
 
@@ -452,7 +529,7 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
         source = samples[source_key]
         target = samples[target_key]
 
-        result = compare(source.points, target.points)
+        result = compare(source, target)
 
         result.statistics["source"] = "/".join(source_key)
         result.statistics["target"] = "/".join(target_key)
@@ -485,6 +562,7 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
         "frame_delta": FRAME_DELTA,
         "max_spots": MAX_SPOTS,
         "max_position_delta": MAX_POSITION_DELTA,
+        "minimum_alignment_inliers": MIN_ALIGNMENT_INLIERS,
         "selections": [
             {
                 "individual_id": selection.individual_id,
