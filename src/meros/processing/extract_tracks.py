@@ -158,6 +158,11 @@ def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
                     2,
                 )
 
+            if pending is not None:
+                x1, y1, x2, y2 = pending
+
+                cv.rectangle(preview, (x1, y1), (x2, y2), (0, 255, 255), 2)
+
             cv.imshow(window, preview)
 
             key = cv.waitKeyEx(30)
@@ -176,6 +181,25 @@ def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
                 drag_start = None
 
                 pending = None
+
+            elif key in (13, 10, 32, 0x0D):
+                if adding and pending is not None:
+                    x1, y1, x2, y2 = pending
+
+                    if x1 == x2 or y1 == y2:
+                        print(f"{video_id}: box must have nonzero width and height.")
+
+                        continue
+
+                    track_id = str(len(boxes))
+
+                    boxes[track_id] = pending.copy()
+
+                    adding = False
+
+                    drag_start = None
+
+                    pending = None
 
             elif key == ord("q"):
                 if not boxes:
