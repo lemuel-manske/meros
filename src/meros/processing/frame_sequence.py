@@ -20,18 +20,30 @@ def frame_batches(frame_ids: tuple[int, ...], size: int = MAX_SAM2_FRAMES) -> It
     if not frame_ids:
         return
 
-    start = 0
+    run_start = 0
 
-    while start < len(frame_ids):
-        stop = min(start + size, len(frame_ids))
+    while run_start < len(frame_ids):
+        run_end = run_start + 1
 
-        if start > 0 and frame_ids[start] == frame_ids[start - 1] + 1:
-            yield frame_ids[start - 1 : stop]
-        else:
-            yield frame_ids[start:stop]
+        while (
+            run_end < len(frame_ids)
+            and frame_ids[run_end] == frame_ids[run_end - 1] + 1
+        ):
+            run_end += 1
 
-        start = stop
+        start = run_start
 
+        while start < run_end:
+            stop = min(start + size, run_end)
+
+            if start > run_start:
+                yield frame_ids[start - 1 : stop]
+            else:
+                yield frame_ids[start:stop]
+
+            start = stop
+
+        run_start = run_end
 
 
 @dataclass(frozen=True)
