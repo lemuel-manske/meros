@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from numpy.typing import NDArray
 from pathlib import Path
 from itertools import combinations
+from scipy.optimize import linear_sum_assignment
 from scipy.spatial import KDTree
 
 from meros.domain import TrackSelection, VideoAnnotation
@@ -34,6 +35,7 @@ MAX_SPOTS = 320
 MAX_POSITION_DELTA = 0.22
 MIN_RANSAC_MATCHES = 8
 MIN_ALIGNMENT_INLIERS = 12
+MAX_SPATIAL_DISTANCE_PX = 8.0
 
 
 class ComparisonRow(TypedDict):
@@ -51,6 +53,11 @@ class ComparisonRow(TypedDict):
     target_coverage: float
     alignment_inliers: int
     alignment_applied: bool
+    spatial_matches: int
+    spatial_source_recall: float | None
+    spatial_target_recall: float | None
+    spatial_repeatability: float | None
+    spatial_median_error_px: float | None
 
 
 @dataclass(frozen=True)
@@ -77,6 +84,7 @@ class MatchResult:
     statistics: ComparisonRow
     pairs: list[tuple[int, int]]
     inlier_mask: list[bool]
+    spatial_pairs: list[tuple[int, int]]
 
 
 def detect_spots(image: Image) -> tuple[Points, Image]:
@@ -302,10 +310,46 @@ def candidate_matches(
     return candidates
 
 
+def spatial_matches(aligned: Points, target: Points) -> tuple[list[tuple[int, int]], float | None]:
+    """Assign nearby spots uniquely; allow every source spot to remain unmatched."""
+    if len(aligned) == 0 or len(target) == 0:
+        return [], None
+
+    distances = np.linalg.norm(aligned[:, None, :] - target[None, :, :], axis=2)
+
+    unmatched = np.full((len(aligned), len(aligned)), MAX_SPATIAL_DISTANCE_PX)
+
+    costs = np.concatenate((distances, unmatched), axis=1)
+
+    source_indices, assigned_columns = linear_sum_assignment(costs)
+
+    pairs = [
+        (int(i), int(j))
+        for i, j in zip(source_indices, assigned_columns, strict=True)
+        if j < len(target) and distances[i, j] <= MAX_SPATIAL_DISTANCE_PX
+    ]
+
+    median = float(np.median([distances[i, j] for i, j in pairs])) if pairs else None
+
+    return pairs, median
+
+
 def compare(source: Sample, target: Sample) -> MatchResult:
     aligned, alignment_inliers, alignment_applied = coarse_alignment(source, target)
 
     pairs = candidate_matches(source.points, target.points, aligned if alignment_applied else None)
+
+    if alignment_applied:
+        spatial_pairs, spatial_median = spatial_matches(aligned, target.points)
+        spatial_source_recall = len(spatial_pairs) / max(1, len(source.points))
+        spatial_target_recall = len(spatial_pairs) / max(1, len(target.points))
+        spatial_repeatability = len(spatial_pairs) / max(1, min(len(source.points), len(target.points)))
+    else:
+        spatial_pairs = []
+        spatial_median = None
+        spatial_source_recall = None
+        spatial_target_recall = None
+        spatial_repeatability = None
 
     statistics: ComparisonRow = {
         "source": "",
@@ -322,12 +366,17 @@ def compare(source: Sample, target: Sample) -> MatchResult:
         "target_coverage": 0.0,
         "alignment_inliers": alignment_inliers,
         "alignment_applied": alignment_applied,
+        "spatial_matches": len(spatial_pairs),
+        "spatial_source_recall": spatial_source_recall,
+        "spatial_target_recall": spatial_target_recall,
+        "spatial_repeatability": spatial_repeatability,
+        "spatial_median_error_px": spatial_median,
     }
 
     inlier_mask = [False] * len(pairs)
 
     if len(pairs) < MIN_RANSAC_MATCHES:
-        return MatchResult(statistics, pairs, inlier_mask)
+        return MatchResult(statistics, pairs, inlier_mask, spatial_pairs)
 
     source_points = np.asarray([source.points[i] for i, _ in pairs], dtype=np.float32)
     target_points = np.asarray([target.points[j] for _, j in pairs], dtype=np.float32)
@@ -347,7 +396,7 @@ def compare(source: Sample, target: Sample) -> MatchResult:
     statistics["ransac_attempted"] = True
 
     if matrix is None or mask is None or np.linalg.det(matrix[:, :2]) <= 0:
-        return MatchResult(statistics, pairs, inlier_mask)
+        return MatchResult(statistics, pairs, inlier_mask, spatial_pairs)
 
     accepted = mask.ravel().astype(bool)
 
@@ -364,10 +413,12 @@ def compare(source: Sample, target: Sample) -> MatchResult:
     statistics["source_coverage"] = count / max(1, len(source.points))
     statistics["target_coverage"] = count / max(1, len(target.points))
 
-    return MatchResult(statistics, pairs, accepted.tolist())
+    return MatchResult(statistics, pairs, accepted.tolist(), spatial_pairs)
 
 
-def draw_matches(source: Sample, target: Sample, result: MatchResult) -> Image:
+def draw_matches(
+    source: Sample, target: Sample, result: MatchResult, *, spatial: bool = False
+) -> Image:
     source_image = source.image
     target_image = target.image
 
@@ -391,8 +442,15 @@ def draw_matches(source: Sample, target: Sample, result: MatchResult) -> Image:
             1,
         )
 
+    if spatial:
+        display_pairs = result.spatial_pairs
+        accepted_flags = [True] * len(display_pairs)
+    else:
+        display_pairs = result.pairs
+        accepted_flags = result.inlier_mask
+
     for (source_index, target_index), accepted in zip(
-        result.pairs, result.inlier_mask, strict=True
+        display_pairs, accepted_flags, strict=True
     ):
         source_point = (
             int(round(float(source.points[source_index, 0]))),
@@ -556,6 +614,10 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
 
         save_image(output / name, figure)
 
+        spatial_figure = draw_matches(source, target, result, spatial=True)
+
+        save_image(output / name.replace('.png', '--spatial.png'), spatial_figure)
+
         rows.append(result.statistics)
 
     with (output / "metrics.csv").open("w", newline="", encoding="utf-8") as stream:
@@ -573,6 +635,7 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
         "max_spots": MAX_SPOTS,
         "max_position_delta": MAX_POSITION_DELTA,
         "minimum_alignment_inliers": MIN_ALIGNMENT_INLIERS,
+        "maximum_spatial_distance_px": MAX_SPATIAL_DISTANCE_PX,
         "selections": [
             {
                 "individual_id": selection.individual_id,
