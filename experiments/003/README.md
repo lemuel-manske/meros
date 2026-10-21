@@ -40,7 +40,7 @@ The `same_individual` column is derived from `individuals.json`, never inferred 
 3. Apply CLAHE and adaptive thresholding.
 4. Detect spot centroids and filter connected components by size and shape.
 5. Encode each candidate spot using its six nearest-neighbor distances, normalized by the farthest of those neighbors.
-6. Generate mutual descriptor matches with a ratio test.
+6. Normalize spot positions by each sample's detected-point extent, reject candidate pairs more than 0.22 apart in normalized position, and generate mutual descriptor matches with a ratio test.
 7. Verify correspondences with affine RANSAC.
 8. Write overlays, matched-pair images, `metrics.csv`, and `run.json`.
 
@@ -52,8 +52,7 @@ The detector extracts candidate spot centers from thresholded masked crops.
 For each detected spot, its descriptor comprises the sorted distances to its
 six nearest neighboring spots, normalized by the distance to the sixth neighbor.
 
-Tentative cross-image correspondences are generated using descriptor nearest
-neighbors, a ratio test, and a mutual-nearest-neighbor check.
+Tentative cross-image correspondences are restricted to spatially nearby candidates\n(normalized spot-coordinate distance at most 0.22) before applying descriptor\nnearest-neighbor matching, a ratio test, and a mutual-nearest-neighbor check.\nThe detector's maximum spot count is increased from 180 to 320; this is still a\ncap rather than a guarantee that all detected components are true pigmentation spots.
 
 Affine RANSAC then verifies geometric consistency. The experiment requires
 at least eight tentative matches before attempting RANSAC, uses a 5-pixel
@@ -79,9 +78,7 @@ as a missing value, not as zero.
 
 ## Observations and results
 
-No verified performance measurements from the current prepared masked-crop
-dataset are reported here yet. Inspection of the spot overlays and matches
-must precede claims about identification accuracy.
+Initial baseline inspection showed unstable correspondence geometry even for\nsame-video positive comparisons. The spatial gate is a controlled refinement\nintended to reject matches between distant anatomical regions. It is not a\nvalidated improvement until positive and negative results are remeasured.\nThe gate can also reject legitimate matches under large pose or crop changes.\nCompare new results with the baseline before making identification claims.
 
 ## Running the experiment
 
@@ -101,4 +98,4 @@ Inlier count, inlier ratio, and residual error are geometry diagnostics, not ide
 
 ## Next steps
 
-The next priority is checking whether detections actually correspond to pigmentation spots, and whether whole-fish matching should be narrowed to the head automatically in a future experiment.
+Review the new spot overlays and verify that positional gating improves the\npositive comparisons without falsely increasing the negative comparison.\nThen assess whether automatic anatomical head localization and watermark\nexclusion are justified by the evidence, within experiment 003.
