@@ -367,9 +367,7 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
     selections = eligible_selections(project)
 
     if not selections:
-        raise ValueError(
-            "No individual selections have frontal annotations with quality >= 3"
-        )
+        raise ValueError("No individual selections have frontal annotations with quality >= 3")
 
     if output.exists():
         raise FileExistsError(f"Refusing to overwrite run: {output}")
@@ -379,9 +377,7 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
     samples: dict[SampleKey, Sample] = {}
 
     for selection in selections:
-        frames: list[tuple[FrameLabel, int]] = [
-            ("reference", selection.reference_frame)
-        ]
+        frames: list[tuple[FrameLabel, int]] = [("reference", selection.reference_frame)]
 
         offset = offset_frame(selection)
 
