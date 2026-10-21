@@ -403,7 +403,7 @@ def run(
 
             # Crops are bounding-box-relative; recover their position from track metadata.
             track_metadata = project.metadata.read_track(video_id)
-            observation = track_metadata.tracks[track["track_id"]].frames[str(frame_index)]
+            observation = track_metadata.tracks[track.track_id].frames[str(frame_index)]
             x1, y1, _, _ = observation.bbox
 
             points, annotated = detect_spots(
