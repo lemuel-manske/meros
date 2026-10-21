@@ -10,7 +10,7 @@ import numpy as np
 from meros.domain import BBox, Track, TrackMetadata, TrackObservation
 from meros.domain.prediction import Prediction, VideoPredictor
 from meros.external import build_sam2_predictor
-from meros.processing.frame_sequence import sam2_frame_sequence
+from meros.processing.frame_sequence import frame_batches, sam2_frame_sequence
 from meros.project import Project
 
 
@@ -252,39 +252,61 @@ def propagate_tracks(
     project: Project,
 ) -> TrackMetadata:
 
-    with sam2_frame_sequence(project, video_id) as sequence:
-        track_metadata = TrackMetadata(video_id, tracks, len(sequence.frame_ids))
+    frame_ids = tuple(project.media.frame_ids(video_id))
 
-        state = predictor.init_state(str(sequence.path))
+    track_metadata = TrackMetadata(video_id, tracks, len(frame_ids))
 
-        for track_id, track in tracks.items():
-            predictor.add_new_points_or_box(
-                inference_state=state,
-                frame_idx=sequence.sequence_index(track.initial_frame),
-                obj_id=int(track_id),
-                box=np.asarray(track.initial_bbox, dtype=np.float32),
-            )
+    processed: set[int] = set()
 
-        processed: set[int] = set()
+    for batch in frame_batches(frame_ids):
+        with sam2_frame_sequence(project, video_id, batch) as sequence:
+            state = predictor.init_state(str(sequence.path))
 
-        for prediction in predictor.propagate_in_video(state):
-            frame_idx = sequence.original(prediction.frame_idx)
+            first_frame = batch[0]
 
-            if frame_idx in processed:
-                raise RuntimeError("SAM2 returned a duplicate frame")
+            for track_id, track in tracks.items():
+                if first_frame == track.initial_frame:
+                    bbox = track.initial_bbox
+                else:
+                    previous = track.frames.get(str(first_frame))
 
-            processed.add(frame_idx)
+                    if previous is None:
+                        previous = track.frames.get(str(frame_ids[frame_ids.index(first_frame) - 1]))
 
-            process_frame(
-                video_id,
-                prediction,
-                track_metadata,
-                project=project,
-                original_frame=frame_idx,
-            )
+                    if previous is None:
+                        raise ValueError(
+                            f"{video_id}/{track_id}: no prior box for batch {first_frame}"
+                        )
 
-        if processed != set(sequence.frame_ids):
-            raise RuntimeError("SAM2 did not process the full sequence")
+                    bbox = previous.bbox
+
+                predictor.add_new_points_or_box(
+                    inference_state=state,
+                    frame_idx=0,
+                    obj_id=int(track_id),
+                    box=np.asarray(bbox, dtype=np.float32),
+                )
+
+            for prediction in predictor.propagate_in_video(state):
+                frame_idx = sequence.original(prediction.frame_idx)
+
+                if frame_idx in processed:
+                    continue
+
+                processed.add(frame_idx)
+
+                process_frame(
+                    video_id,
+                    prediction,
+                    track_metadata,
+                    project=project,
+                    original_frame=frame_idx,
+                )
+
+        print(f"{video_id}: tracked {len(processed)}/{len(frame_ids)} frames.", flush=True)
+
+    if processed != set(frame_ids):
+        raise RuntimeError("SAM2 did not process the full sequence")
 
     return track_metadata
 
