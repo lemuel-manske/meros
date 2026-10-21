@@ -42,7 +42,7 @@ The `same_individual` column is derived from `individuals.json`, never inferred 
 5. Encode each candidate spot using its six nearest-neighbor distances, normalized by the farthest of those neighbors.
 6. Normalize spot positions by each sample's detected-point extent, reject candidate pairs more than 0.22 apart in normalized position, and generate mutual descriptor matches with a ratio test.
 7. Independently estimate an initial alignment using masked SIFT features and partial-affine RANSAC (at least 12 inliers). If registration fails, use the previous normalized-position gate.\n8. Verify spot correspondences with affine RANSAC.
-9. Write overlays, matched-pair images, `metrics.csv`, and `run.json`.
+9. As an ablation, assign transformed spot positions to target spots with one-to-one minimum-cost matching and an 8-pixel cutoff; only attempt this when SIFT registration succeeds.\n10. Write overlays, both kinds of match figures, `metrics.csv`, and `run.json`.
 
 **Limitations:** These descriptors capture sorted neighbor distances rather than explicit graph connectivity. They are not affine-invariant and can be confused by distinct constellations. Watermarks overlapping fish pixels are not explicitly removed; visually inspect detections.
 
@@ -64,7 +64,7 @@ explicit graph edges.
 
 Each comparison records:
 
-- Detected spots in source and target crops.\n- Number of coarse-registration SIFT inliers and whether it was applied.
+- Detected spots in source and target crops.\n- Number of coarse-registration SIFT inliers and whether it was applied.\n- Post-registration spatial match count, per-image matched fractions, repeatability relative to the smaller detection set, and median aligned-coordinate distance. These are undefined when registration fails, not zero-evidence of mismatch.
 - Number of tentative descriptor matches.
 - Whether RANSAC was attempted, and the number and fraction of inliers.
 - Median accepted-match reprojection error, in pixels, when defined.
@@ -73,14 +73,14 @@ Each comparison records:
 
 Each timestamped `results/003/` run writes a `metrics.csv` table, `run.json`
 with the source commit and selected metadata, spot-overlay PNGs, and
-correspondence PNGs. An undefined inlier ratio or median residual is represented
+correspondence PNGs, and separate `--spatial.png` comparisons. An undefined inlier ratio or median residual is represented
 as a missing value, not as zero.
 
 ## Observations and results
 
 Initial baseline inspection showed unstable correspondence geometry even for\nsame-video positive comparisons. The spatial gate is a controlled refinement\nintended to reject matches between distant anatomical regions. It is not a\nvalidated improvement until positive and negative results are remeasured.\nThe gate can also reject legitimate matches under large pose or crop changes.\nCompare new results with the baseline before making identification claims.
 
-## Running the experiment
+**A/B interpretation:** Legacy descriptor matches/RANSAC are preserved in the original columns. Spatial matches are independently assigned after SIFT registration and therefore measure spot-detection agreement conditional on successful appearance alignment, not independent identity evidence. Failed alignment reports zero spatial matches and leaves conditional rates undefined.\n\n## Running the experiment
 
 Prepare the project media and masked crops using the existing Meros pipeline first.
 
