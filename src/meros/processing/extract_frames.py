@@ -48,7 +48,15 @@ def frames_complete(project: Project) -> bool:
         except ValueError:
             return False
 
-        if actual != list(range(expected)):
+        requested = []
+
+        if intervals:
+            for interval in intervals:
+                requested.extend(range(interval.start, interval.end + 1))
+        else:
+            requested = list(range(capture_len))
+
+        if actual != requested:
             return False
 
         for idx in actual:
