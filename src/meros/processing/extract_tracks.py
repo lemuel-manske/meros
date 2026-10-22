@@ -152,13 +152,7 @@ def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
             preview = frame.copy()
 
             for track_id, (x1, y1, x2, y2) in boxes.items():
-                cv.rectangle(
-                    preview,
-                    (x1, y1),
-                    (x2, y2),
-                    color=(0, 255, 0),
-                    thickness=2
-                )
+                cv.rectangle(preview, (x1, y1), (x2, y2), color=(0, 255, 0), thickness=2)
 
                 cv.putText(
                     preview,

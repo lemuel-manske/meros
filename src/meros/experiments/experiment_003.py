@@ -28,9 +28,15 @@ type Points = NDArray[np.float32]
 
 type SampleKey = tuple[str, FrameLabel]
 
+# hard-set pairs for comparison,
+# for example, to test very distant frames
+pairs = {
+    "h01": ("170", "510"),
+}
+
 # Sample selection
-MIN_QUALITY = 3
 FRAME_DELTA = 30  # how many frames forward/backward to look for a comparison frame?
+MIN_QUALITY = 3
 
 # Spot detection
 MAX_SPOTS = 320  # how many spots to consider per image?
@@ -38,15 +44,16 @@ SPOT_THRESHOLD_BLOCK_SIZE = 35
 SPOT_THRESHOLD_C = 8
 
 # Geometric descriptors
+MAX_POSITION_DELTA = 0.22
+MIN_RANSAC_MATCHES = 6  # how many tentative matches are required to attempt RANSAC?
 NEIGHBORS = 6  # how many nearest neighbors to consider for each spot?
 SPOT_MATCH_RATIO = 0.88
-MAX_POSITION_DELTA = 0.22
 
 # SIFT alignment
+MIN_ALIGNMENT_INLIERS = 12
 SIFT_FEATURES = 2500  # how many SIFT features to extract per image?
 SIFT_MATCH_RATIO = 0.7  # best SIFT match must be clearly better than the second-best
 SIFT_RANSAC_THRESHOLD_PX = 4.0
-MIN_ALIGNMENT_INLIERS = 12
 
 # Spatial matching
 MAX_SPATIAL_DISTANCE_PX = 8.0
@@ -167,7 +174,9 @@ def detect_spots(image: Image) -> tuple[Points, Image]:
         aspect = component_width / component_height
         density = area / (component_width * component_height)
 
-        if not (0.35 <= aspect <= 2.8 and 0.25 <= density <= 0.94):  # heuristics: should not be too elongated or sparse
+        if not (
+            0.35 <= aspect <= 2.8 and 0.25 <= density <= 0.94
+        ):  # heuristics: should not be too elongated or sparse
             continue
 
         if not np.all(valid[top : top + component_height, left : left + component_width]):
@@ -202,7 +211,9 @@ def descriptors(points: Points, neighbors: int = NEIGHBORS) -> Points:
 
     neighbor_distances = np.asarray(distances[:, 1:], dtype=np.float32)
 
-    r = neighbor_distances / np.maximum(neighbor_distances[:, -1:], 1e-5)  # normalize by the distance to the farthest neighbor
+    r = neighbor_distances / np.maximum(
+        neighbor_distances[:, -1:], 1e-5
+    )  # normalize by the distance to the farthest neighbor
 
     return np.asarray(r, dtype=np.float32)
 
@@ -260,7 +271,7 @@ def coarse_alignment(source: Sample, target: Sample) -> tuple[Points, int, bool]
         method=cv.RANSAC,
         ransacReprojThreshold=SIFT_RANSAC_THRESHOLD_PX,
         maxIters=3000,
-        confidence=0.99
+        confidence=0.99,
     )
 
     count = int(inliers.sum()) if inliers is not None else 0
@@ -567,12 +578,20 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
     samples: dict[SampleKey, Sample] = {}
 
     for selection in selections:
-        frames: list[tuple[FrameLabel, int]] = [("reference", selection.reference_frame)]
+        frames: list[tuple[FrameLabel, int]] = []
 
-        offset = offset_frame(selection)
+        if selection.track.video_id not in pairs.keys():
+            frames = [("reference", selection.reference_frame)]
 
-        if offset is not None:
-            frames.append(("offset", offset))
+            offset = offset_frame(selection)
+
+            if offset is not None:
+                frames.append(("offset", offset))
+        else:
+            reference, offset = pairs[selection.track.video_id]
+
+            frames.append(("reference", int(reference)))
+            frames.append(("offset", int(offset)))
 
         for label, frame_index in frames:
             frame = cast(
