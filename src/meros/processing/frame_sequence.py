@@ -9,13 +9,12 @@ from tempfile import TemporaryDirectory
 from meros.project import Project
 
 
-MAX_SAM2_FRAMES = 96
+MAX_SAM2_FRAMES = 124
 
 
 def frame_batches(
     frame_ids: tuple[int, ...], size: int = MAX_SAM2_FRAMES
 ) -> Iterator[tuple[int, ...]]:
-    """Bound SAM2 memory; include preceding frame to transfer the last bounding box."""
     if size < 2:
         raise ValueError("Batch size must be at least 2")
 

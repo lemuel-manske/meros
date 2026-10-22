@@ -104,7 +104,7 @@ class BoxSelectionState:
     pending: list[int] | None = None
 
 
-# for manual selection
+# meant for manual selection of fish bounding boxes in the first frame of a video, to be used as seeds for tracking
 def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
     window = f"{video_id}: a = add fish, Enter = confirm box, q = save, Esc = cancel"
 
@@ -115,6 +115,8 @@ def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
     state = BoxSelectionState()
 
     def on_mouse(event: int, x: int, y: int, _flags: int, _userdata: object) -> None:
+        _ = (_flags, _userdata)
+
         if not state.adding:
             return
 
@@ -150,16 +152,22 @@ def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
             preview = frame.copy()
 
             for track_id, (x1, y1, x2, y2) in boxes.items():
-                cv.rectangle(preview, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv.rectangle(
+                    preview,
+                    (x1, y1),
+                    (x2, y2),
+                    color=(0, 255, 0),
+                    thickness=2
+                )
 
                 cv.putText(
                     preview,
                     track_id,
                     (x1, max(20, y1)),
                     cv.FONT_HERSHEY_SIMPLEX,
-                    0.7,
-                    (0, 255, 0),
-                    2,
+                    fontScale=0.7,
+                    color=(0, 255, 0),
+                    thickness=2,
                 )
 
             if state.pending is not None:
@@ -186,7 +194,7 @@ def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
 
                 state.pending = None
 
-            elif key in (13, 10, 32, 0x0D):
+            elif key in (13, 10, 32):  # Enter, Space
                 if state.adding and state.pending is not None:
                     x1, y1, x2, y2 = state.pending
 
@@ -200,9 +208,7 @@ def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
                     boxes[track_id] = state.pending.copy()
 
                     state.adding = False
-
                     state.drag_start = None
-
                     state.pending = None
 
             elif key == ord("q"):
@@ -221,26 +227,25 @@ def select_track_seeds(
     video_id: str,
     *,
     project: Project,
-    bbox_selector: Callable[[str, np.ndarray], BBox] = select_fish_bboxes,
 ) -> dict[str, Track]:
-    saved_boxes = project.metadata.read_bboxes()
-
-    boxes = saved_boxes.get(video_id)
+    bboxes = project.metadata.read_bboxes()
+    box = bboxes.get(video_id)
 
     first_frame = project.media.frame_ids(video_id)[0]
 
-    if not boxes:
+    # if the bounding boxes for this video have not been selected yet, prompt the user to select them
+    if not box:
         frame = project.media.read_frame(video_id, first_frame)
 
-        boxes = bbox_selector(video_id, frame)
+        box = select_fish_bboxes(video_id, frame)
 
-        saved_boxes[video_id] = boxes
+        bboxes[video_id] = box
 
-        project.metadata.write_bboxes(saved_boxes)
+        project.metadata.write_bboxes(bboxes)
 
     return {
         track_id: Track(initial_frame=first_frame, initial_bbox=bbox, frames={})
-        for track_id, bbox in boxes.items()
+        for track_id, bbox in box.items()
     }
 
 

@@ -85,10 +85,15 @@ def run(project: Project) -> None:
             frames_to_extract = []
 
             intervals = video.intervals
+
             if len(intervals) > 0:
+                # keep just the frames that are in the intervals, and skip the rest
+
                 for interval in intervals:
                     frames_to_extract.extend(range(interval.start, interval.end + 1))
             else:
+                # no intervals, so extract all frames
+
                 frames_to_extract = list(range(int(capture.get(cv.CAP_PROP_FRAME_COUNT))))
 
             while True:
@@ -100,7 +105,6 @@ def run(project: Project) -> None:
                 if video.mirrored:
                     frame = cv.flip(frame, 1)
 
-                # video sources never change, so we can skip frames that already exist
                 if frame_idx in frames_to_extract and str(frame_idx) not in existing_frames_ids:
                     project.media.write_frame(
                         video.video_id,
@@ -119,3 +123,7 @@ def run(project: Project) -> None:
             raise RuntimeError(f"{video.video_id}: no frames extracted.")
 
         print(f"{video.video_id}: extracted {count} frames.")
+
+
+if __name__ == "__main__":
+    run(Project.open())

@@ -9,16 +9,16 @@ import cv2 as cv
 import numpy as np
 
 from dataclasses import dataclass
+from itertools import combinations
 from numpy.typing import NDArray
 from pathlib import Path
-from itertools import combinations
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial import KDTree
+from typing import Literal, TypedDict, cast
 
 from meros.domain import TrackSelection, VideoAnnotation
 from meros.experiments.common import experiment_output, git_revision
 from meros.project import Project
-from typing import Literal, TypedDict, cast
 
 
 type FrameLabel = Literal["reference", "offset"]
@@ -28,13 +28,27 @@ type Points = NDArray[np.float32]
 
 type SampleKey = tuple[str, FrameLabel]
 
+# Sample selection
 MIN_QUALITY = 3
-FRAME_DELTA = 30
-NEIGHBORS = 6
-MAX_SPOTS = 320
+FRAME_DELTA = 30  # how many frames forward/backward to look for a comparison frame?
+
+# Spot detection
+MAX_SPOTS = 320  # how many spots to consider per image?
+SPOT_THRESHOLD_BLOCK_SIZE = 35
+SPOT_THRESHOLD_C = 8
+
+# Geometric descriptors
+NEIGHBORS = 6  # how many nearest neighbors to consider for each spot?
+SPOT_MATCH_RATIO = 0.88
 MAX_POSITION_DELTA = 0.22
-MIN_RANSAC_MATCHES = 8
+
+# SIFT alignment
+SIFT_FEATURES = 2500  # how many SIFT features to extract per image?
+SIFT_MATCH_RATIO = 0.7  # best SIFT match must be clearly better than the second-best
+SIFT_RANSAC_THRESHOLD_PX = 4.0
 MIN_ALIGNMENT_INLIERS = 12
+
+# Spatial matching
 MAX_SPATIAL_DISTANCE_PX = 8.0
 
 
@@ -87,12 +101,14 @@ class MatchResult:
     spatial_pairs: list[tuple[int, int]]
 
 
+# returns possible spots
 def detect_spots(image: Image) -> tuple[Points, Image]:
     if image.ndim != 3 or image.shape[2] != 4 or image.dtype != np.uint8:
         raise ValueError("Expected a uint8 BGRA masked crop")
 
     height, width = image.shape[:2]
 
+    # erode the mask to avoid edge artifacts; only consider fully valid pixels for spot detection
     valid = cv.erode(
         (image[:, :, 3] == 255).astype(np.uint8),
         np.ones((5, 5), dtype=np.uint8),
@@ -100,30 +116,30 @@ def detect_spots(image: Image) -> tuple[Points, Image]:
     ).astype(bool)
 
     gray = cv.cvtColor(image[:, :, :3], cv.COLOR_BGR2GRAY)
+    gray_active = gray[valid]
 
-    active = gray[valid]
-
+    # draw the annotated image in BGR, ignoring the alpha channel
     annotated = cast(Image, cv.cvtColor(image, cv.COLOR_BGRA2BGR))
 
-    if active.size == 0:
+    if gray_active.size == 0:
         return np.empty((0, 2), dtype=np.float32), annotated
 
     filled = gray.copy()
-
-    filled[~valid] = int(np.median(active))
+    filled[~valid] = int(np.median(gray_active))
 
     enhanced = cv.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(filled)
 
+    # adaptative limiar so that spots are detected even in low-contrast regions ("""pattern extraction""")
     binary = cv.adaptiveThreshold(
         enhanced,
-        255,
+        255,  # maxValue
         cv.ADAPTIVE_THRESH_GAUSSIAN_C,
         cv.THRESH_BINARY_INV,
-        35,
-        8,
+        SPOT_THRESHOLD_BLOCK_SIZE,  # blockSize
+        SPOT_THRESHOLD_C,  # C
     )
 
-    # Never let invalid or transparent pixels become candidate spots.
+    # never let invalid or transparent pixels become candidate spots.
     binary[~valid] = 0
 
     count, _, stats, centers = cv.connectedComponentsWithStats(binary, connectivity=8)
@@ -133,6 +149,7 @@ def detect_spots(image: Image) -> tuple[Points, Image]:
     for index in range(1, count):
         left, top, component_width, component_height, area = map(int, stats[index])
 
+        # remove tiny spots and spots that are too large relative to the image size
         if not (5 <= area <= max(10, int(width * height * 0.001))):
             continue
 
@@ -150,7 +167,7 @@ def detect_spots(image: Image) -> tuple[Points, Image]:
         aspect = component_width / component_height
         density = area / (component_width * component_height)
 
-        if not (0.35 <= aspect <= 2.8 and 0.25 <= density <= 0.94):
+        if not (0.35 <= aspect <= 2.8 and 0.25 <= density <= 0.94):  # heuristics: should not be too elongated or sparse
             continue
 
         if not np.all(valid[top : top + component_height, left : left + component_width]):
@@ -176,18 +193,21 @@ def detect_spots(image: Image) -> tuple[Points, Image]:
 
 
 def descriptors(points: Points, neighbors: int = NEIGHBORS) -> Points:
-    if len(points) < neighbors + 1:
+    k = neighbors + 1  # skip the point itself
+
+    if len(points) < k:
         return np.empty((0, neighbors), dtype=np.float32)
 
-    distances, _ = KDTree(points).query(points, k=neighbors + 1)
+    distances, _ = KDTree(points).query(points, k)
 
     neighbor_distances = np.asarray(distances[:, 1:], dtype=np.float32)
 
-    r = neighbor_distances / np.maximum(neighbor_distances[:, -1:], 1e-5)
+    r = neighbor_distances / np.maximum(neighbor_distances[:, -1:], 1e-5)  # normalize by the distance to the farthest neighbor
 
     return np.asarray(r, dtype=np.float32)
 
 
+# what if fish is more close or farther?
 def normalized_positions(points: Points) -> Points:
     if len(points) == 0:
         return points.copy()
@@ -202,7 +222,8 @@ def normalized_positions(points: Points) -> Points:
 
 def coarse_alignment(source: Sample, target: Sample) -> tuple[Points, int, bool]:
     """Estimate initial geometry using image features, independently of spot descriptors."""
-    sift = cv.SIFT.create(nfeatures=2500)
+
+    sift = cv.SIFT.create(nfeatures=SIFT_FEATURES)
 
     source_gray = cv.cvtColor(source.image, cv.COLOR_BGR2GRAY)
     target_gray = cv.cvtColor(target.image, cv.COLOR_BGR2GRAY)
@@ -218,7 +239,7 @@ def coarse_alignment(source: Sample, target: Sample) -> tuple[Points, int, bool]
     matches = [
         pair[0]
         for pair in matcher.knnMatch(source_desc, target_desc, k=2)
-        if len(pair) == 2 and pair[0].distance < 0.7 * pair[1].distance
+        if len(pair) == 2 and pair[0].distance < SIFT_MATCH_RATIO * pair[1].distance
     ]
 
     if len(matches) < MIN_ALIGNMENT_INLIERS:
@@ -237,9 +258,9 @@ def coarse_alignment(source: Sample, target: Sample) -> tuple[Points, int, bool]
         source_keys_points,
         target_keys_points,
         method=cv.RANSAC,
-        ransacReprojThreshold=4.0,
+        ransacReprojThreshold=SIFT_RANSAC_THRESHOLD_PX,
         maxIters=3000,
-        confidence=0.99,
+        confidence=0.99
     )
 
     count = int(inliers.sum()) if inliers is not None else 0
@@ -299,7 +320,7 @@ def candidate_matches(
 
         best, runner_up = int(ranked[0]), int(ranked[1])
 
-        if row[best] >= 0.88 * max(float(row[runner_up]), 1e-10):
+        if row[best] >= SPOT_MATCH_RATIO * max(float(row[runner_up]), 1e-10):
             continue
 
         if int(reverse[best]) != source_index:
@@ -469,6 +490,9 @@ def draw_matches(
     return output
 
 
+# return a list of all eligible selections for comparison:
+# - frontal viewpoint
+# - quality >= MIN_QUALITY
 def eligible_selections(project: Project) -> list[EligibleSelection]:
     videos = {video.video_id: video for video in project.metadata.read_videos()}
 
@@ -511,6 +535,7 @@ def eligible_selections(project: Project) -> list[EligibleSelection]:
     return eligible
 
 
+# return a to-compare frame based on a selection, forward or backward by FRAME_DELTA
 def offset_frame(selection: EligibleSelection) -> int | None:
     start = max(selection.track.start_frame, selection.annotation.start_frame)
     end = min(selection.track.end_frame, selection.annotation.end_frame)
@@ -526,11 +551,6 @@ def offset_frame(selection: EligibleSelection) -> int | None:
         return backward
 
     return None
-
-
-def save_image(path: Path, image: Image) -> None:
-    if not cv.imwrite(str(path), image):
-        raise OSError(f"Could not write {path}")
 
 
 def run(project: Project, output: Path) -> list[ComparisonRow]:
@@ -568,7 +588,9 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
 
             name = f"{selection.sample_id}--{label}--spots.png"
 
-            save_image(output / name, annotated)
+            p = output / name
+            if not cv.imwrite(p, annotated):
+                raise OSError(f"Could not write {p}")
 
             mask = np.asarray((frame[:, :, 3] == 255).astype(np.uint8) * 255, dtype=np.uint8)
 
@@ -612,11 +634,15 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
             f"{target_selection.sample_id}--{target_label}.png"
         )
 
-        save_image(output / name, figure)
+        p = output / name
+        if not cv.imwrite(str(p), figure):
+            raise OSError(f"Could not write {p}")
 
         spatial_figure = draw_matches(source, target, result, spatial=True)
 
-        save_image(output / name.replace(".png", "--spatial.png"), spatial_figure)
+        p = output / name.replace(".png", "--spatial.png")
+        if not cv.imwrite(str(p), spatial_figure):
+            raise OSError(f"Could not write {p}")
 
         rows.append(result.statistics)
 
