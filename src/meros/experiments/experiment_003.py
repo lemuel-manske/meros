@@ -1,4 +1,4 @@
-"""Experiment 003: spatial spot matching with forced mask-based registration."""
+"""Experiment 003: visual feature matching with geometric verification."""
 
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from itertools import combinations
 from numpy.typing import NDArray
 from pathlib import Path
-from scipy.optimize import linear_sum_assignment
 from typing import Literal, TypedDict, cast
 
 from meros.domain import TrackSelection, VideoAnnotation
@@ -42,29 +41,29 @@ MAX_SPOTS = 320  # how many spots to consider per image?
 SPOT_THRESHOLD_BLOCK_SIZE = 35
 SPOT_THRESHOLD_C = 8
 
-# SIFT alignment
-MIN_ALIGNMENT_INLIERS = 12
+# Visual feature matching
+MIN_GEOMETRY_MATCHES = 4
+SPOT_REGION_RADIUS_PX = 16
 SIFT_FEATURES = 2500  # how many SIFT features to extract per image?
 SIFT_MATCH_RATIO = 0.7  # best SIFT match must be clearly better than the second-best
 SIFT_RANSAC_THRESHOLD_PX = 4.0
-
-# Spatial matching
-MAX_SPATIAL_DISTANCE_PX = 8.0
 
 
 class ComparisonRow(TypedDict):
     source: str
     target: str
     same_individual: bool
-    source_spots: int
-    target_spots: int
-    alignment_method: str
-    alignment_inliers: int
-    spatial_matches: int
-    spatial_source_recall: float | None
-    spatial_target_recall: float | None
-    spatial_repeatability: float | None
-    spatial_median_error_px: float | None
+    source_features: int
+    target_features: int
+    forward_matches: int
+    reverse_matches: int
+    mutual_matches: int
+    ransac_attempted: bool
+    inliers: int
+    inlier_ratio: float | None
+    feature_coverage: float | None
+    identity_score: float
+    median_residual_px: float | None
 
 
 @dataclass(frozen=True)
@@ -72,6 +71,8 @@ class Sample:
     image: Image
     points: Points
     mask: Image
+    keypoints: tuple[cv.KeyPoint, ...]
+    descriptors: Points | None
 
 
 @dataclass(frozen=True)
@@ -90,6 +91,7 @@ class EligibleSelection:
 class MatchResult:
     statistics: ComparisonRow
     pairs: list[tuple[int, int]]
+    accepted: list[bool]
 
 
 # returns possible spots
@@ -185,152 +187,126 @@ def detect_spots(image: Image) -> tuple[Points, Image]:
     return points, annotated
 
 
-def coarse_alignment(source: Sample, target: Sample) -> tuple[Points, int, bool]:
-    """Estimate initial geometry using image features, independently of spot descriptors."""
+def extract_features(
+    image: Image, mask: Image, points: Points
+) -> tuple[tuple[cv.KeyPoint, ...], Points | None]:
+    """Describe SIFT regions around the detected dark components."""
+    region_mask = np.zeros_like(mask)
+
+    for x, y in points:
+        cv.circle(
+            region_mask,
+            (round(float(x)), round(float(y))),
+            SPOT_REGION_RADIUS_PX,
+            255,
+            -1,
+        )
+
+    region_mask = cv.bitwise_and(region_mask, mask)
+
+    gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
 
     sift = cv.SIFT.create(nfeatures=SIFT_FEATURES)
 
-    source_gray = cv.cvtColor(source.image, cv.COLOR_BGR2GRAY)
-    target_gray = cv.cvtColor(target.image, cv.COLOR_BGR2GRAY)
+    keypoints, descriptions = sift.detectAndCompute(gray, region_mask)
 
-    source_keys, source_desc = sift.detectAndCompute(source_gray, source.mask)
-    target_keys, target_desc = sift.detectAndCompute(target_gray, target.mask)
+    return tuple(keypoints), (
+        np.asarray(descriptions, dtype=np.float32) if descriptions is not None else None
+    )
 
-    if source_desc is None or target_desc is None:
-        return source.points.copy(), 0, False
+
+def ratio_matches(source: Points, target: Points) -> dict[int, int]:
+    """Retain unambiguous visual descriptor correspondences."""
+    if len(source) < 2 or len(target) < 2:
+        return {}
 
     matcher = cv.BFMatcher(cv.NORM_L2)
 
-    matches = [
-        pair[0]
-        for pair in matcher.knnMatch(source_desc, target_desc, k=2)
-        if len(pair) == 2 and pair[0].distance < SIFT_MATCH_RATIO * pair[1].distance
-    ]
+    return {
+        i: int(pairs[0].trainIdx)
+        for i, pairs in enumerate(matcher.knnMatch(source, target, k=2))
+        if len(pairs) == 2 and pairs[0].distance < SIFT_MATCH_RATIO * pairs[1].distance
+    }
 
-    if len(matches) < MIN_ALIGNMENT_INLIERS:
-        return source.points.copy(), 0, False
 
-    source_keys_points = np.asarray(
-        [source_keys[pair.queryIdx].pt for pair in matches], dtype=np.float32
-    )
-    target_keys_points = np.asarray(
-        [target_keys[pair.trainIdx].pt for pair in matches], dtype=np.float32
-    )
+def compare(source: Sample, target: Sample) -> MatchResult:
+    source_desc = source.descriptors
+    target_desc = target.descriptors
+
+    forward: dict[int, int] = {}
+    reverse: dict[int, int] = {}
+
+    if source_desc is not None and target_desc is not None:
+        forward = ratio_matches(source_desc, target_desc)
+        reverse = ratio_matches(target_desc, source_desc)
+
+    pairs = [(i, j) for i, j in forward.items() if reverse.get(j) == i]
+
+    source_count = len(source.keypoints)
+    target_count = len(target.keypoints)
+
+    statistics: ComparisonRow = {
+        "source": "",
+        "target": "",
+        "same_individual": False,
+        "source_features": source_count,
+        "target_features": target_count,
+        "forward_matches": len(forward),
+        "reverse_matches": len(reverse),
+        "mutual_matches": len(pairs),
+        "ransac_attempted": False,
+        "inliers": 0,
+        "inlier_ratio": None,
+        "feature_coverage": None,
+        "identity_score": 0.0,
+        "median_residual_px": None,
+    }
+
+    accepted = [False] * len(pairs)
+
+    if len(pairs) < MIN_GEOMETRY_MATCHES:
+        return MatchResult(statistics, pairs, accepted)
+
+    source_points = np.asarray([source.keypoints[i].pt for i, _ in pairs], dtype=np.float32)
+    target_points = np.asarray([target.keypoints[j].pt for _, j in pairs], dtype=np.float32)
 
     cv.setRNGSeed(0)
 
-    matrix, inliers = cv.estimateAffinePartial2D(
-        source_keys_points,
-        target_keys_points,
+    matrix, mask = cv.estimateAffinePartial2D(
+        source_points,
+        target_points,
         method=cv.RANSAC,
         ransacReprojThreshold=SIFT_RANSAC_THRESHOLD_PX,
         maxIters=3000,
         confidence=0.99,
     )
 
-    count = int(inliers.sum()) if inliers is not None else 0
+    statistics["ransac_attempted"] = True
 
-    if matrix is None or count < MIN_ALIGNMENT_INLIERS:
-        return source.points.copy(), count, False
+    if matrix is None or mask is None:
+        return MatchResult(statistics, pairs, accepted)
 
-    transformed = source.points @ matrix[:, :2].T + matrix[:, 2]
+    accepted = mask.ravel().astype(bool).tolist()
+    inliers = sum(accepted)
 
-    return np.asarray(transformed, dtype=np.float32), count, True
-
-
-def mask_alignment(source: Sample, target: Sample) -> Points:
-    """Register mask bounding boxes without using image texture or spot matches."""
-    source_y, source_x = np.nonzero(source.mask)
-    target_y, target_x = np.nonzero(target.mask)
-
-    if len(source_x) == 0 or len(target_x) == 0:
-        return np.empty((0, 2), dtype=np.float32)
-
-    source_center = np.array(
-        [(source_x.min() + source_x.max()) / 2, (source_y.min() + source_y.max()) / 2],
-        dtype=np.float32,
-    )
-    target_center = np.array(
-        [(target_x.min() + target_x.max()) / 2, (target_y.min() + target_y.max()) / 2],
-        dtype=np.float32,
+    residuals = np.linalg.norm(
+        source_points @ matrix[:, :2].T + matrix[:, 2] - target_points,
+        axis=1,
     )
 
-    source_width = max(float(source_x.max() - source_x.min()), 1.0)
-    source_height = max(float(source_y.max() - source_y.min()), 1.0)
-    target_width = max(float(target_x.max() - target_x.min()), 1.0)
-    target_height = max(float(target_y.max() - target_y.min()), 1.0)
-
-    source_scale = max(source_width, source_height)
-    target_scale = max(target_width, target_height)
-
-    return np.asarray(
-        (source.points - source_center) * (target_scale / source_scale) + target_center,
-        dtype=np.float32,
+    statistics["inliers"] = inliers
+    statistics["inlier_ratio"] = inliers / len(pairs)
+    statistics["feature_coverage"] = (
+        inliers / min(source_count, target_count) if source_count and target_count else None
+    )
+    statistics["identity_score"] = (
+        inliers / min(source_count, target_count) if source_count and target_count else 0.0
+    )
+    statistics["median_residual_px"] = (
+        float(np.median(residuals[np.asarray(accepted, dtype=bool)])) if inliers else None
     )
 
-
-def spatial_matches(aligned: Points, target: Points) -> tuple[list[tuple[int, int]], float | None]:
-    """Assign nearby spots uniquely; allow every source spot to remain unmatched."""
-    if len(aligned) == 0 or len(target) == 0:
-        return [], None
-
-    distances = np.linalg.norm(aligned[:, None, :] - target[None, :, :], axis=2)
-
-    unmatched = np.full((len(aligned), len(aligned)), MAX_SPATIAL_DISTANCE_PX)
-
-    costs = np.concatenate((distances, unmatched), axis=1)
-
-    source_indices, assigned_columns = linear_sum_assignment(costs)
-
-    pairs = [
-        (int(i), int(j))
-        for i, j in zip(source_indices, assigned_columns, strict=True)
-        if j < len(target) and distances[i, j] <= MAX_SPATIAL_DISTANCE_PX
-    ]
-
-    median = float(np.median([distances[i, j] for i, j in pairs])) if pairs else None
-
-    return pairs, median
-
-
-def compare(source: Sample, target: Sample) -> MatchResult:
-    aligned, alignment_inliers, alignment_applied = coarse_alignment(source, target)
-
-    if alignment_applied:
-        alignment_method = "sift"
-    else:
-        alignment_method = "mask_bbox"
-        aligned = mask_alignment(source, target)
-
-    if len(aligned) == 0:
-        spatial_pairs: list[tuple[int, int]] = []
-        spatial_median = None
-    else:
-        spatial_pairs, spatial_median = spatial_matches(aligned, target.points)
-
-    source_count = len(source.points)
-    target_count = len(target.points)
-
-    statistics: ComparisonRow = {
-        "source": "",
-        "target": "",
-        "same_individual": False,
-        "source_spots": source_count,
-        "target_spots": target_count,
-        "alignment_method": alignment_method,
-        "alignment_inliers": alignment_inliers,
-        "spatial_matches": len(spatial_pairs),
-        "spatial_source_recall": len(spatial_pairs) / source_count if source_count else None,
-        "spatial_target_recall": len(spatial_pairs) / target_count if target_count else None,
-        "spatial_repeatability": (
-            len(spatial_pairs) / min(source_count, target_count)
-            if source_count and target_count
-            else None
-        ),
-        "spatial_median_error_px": spatial_median,
-    }
-
-    return MatchResult(statistics, spatial_pairs)
+    return MatchResult(statistics, pairs, accepted)
 
 
 def draw_matches(source: Sample, target: Sample, result: MatchResult) -> Image:
@@ -357,18 +333,23 @@ def draw_matches(source: Sample, target: Sample, result: MatchResult) -> Image:
             1,
         )
 
-    for source_index, target_index in result.pairs:
+    for (source_index, target_index), accepted in zip(result.pairs, result.accepted, strict=True):
         source_point = (
-            int(round(float(source.points[source_index, 0]))),
-            int(round(float(source.points[source_index, 1]))),
+            round(float(source.keypoints[source_index].pt[0])),
+            round(float(source.keypoints[source_index].pt[1])),
         )
-
         target_point = (
-            int(round(float(target.points[target_index, 0]))) + source_image.shape[1],
-            int(round(float(target.points[target_index, 1]))),
+            round(float(target.keypoints[target_index].pt[0])) + source_image.shape[1],
+            round(float(target.keypoints[target_index].pt[1])),
         )
 
-        cv.line(output, source_point, target_point, (0, 220, 0), 1)
+        cv.line(
+            output,
+            source_point,
+            target_point,
+            (0, 220, 0) if accepted else (40, 80, 220),
+            1,
+        )
 
     return output
 
@@ -487,7 +468,11 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
 
             clean = cast(Image, cv.cvtColor(frame, cv.COLOR_BGRA2BGR))
 
-            samples[selection.sample_id, label] = Sample(clean, points, mask)
+            keypoints, descriptions = extract_features(clean, mask, points)
+
+            samples[selection.sample_id, label] = Sample(
+                clean, points, mask, keypoints, descriptions
+            )
 
     comparisons: list[tuple[EligibleSelection, FrameLabel, EligibleSelection, FrameLabel]] = []
 
@@ -544,9 +529,11 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
         "minimum_quality": MIN_QUALITY,
         "frame_delta": FRAME_DELTA,
         "max_spots": MAX_SPOTS,
-        "minimum_alignment_inliers": MIN_ALIGNMENT_INLIERS,
-        "maximum_spatial_distance_px": MAX_SPATIAL_DISTANCE_PX,
-        "fallback_alignment": "mask_bbox_center_uniform_scale",
+        "spot_region_radius_px": SPOT_REGION_RADIUS_PX,
+        "sift_features": SIFT_FEATURES,
+        "sift_match_ratio": SIFT_MATCH_RATIO,
+        "ransac_threshold_px": SIFT_RANSAC_THRESHOLD_PX,
+        "identity_score": "ransac_inliers / min(source_features, target_features)",
         "selections": [
             {
                 "individual_id": selection.individual_id,

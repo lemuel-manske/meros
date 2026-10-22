@@ -1,82 +1,84 @@
-# Experiment 003 — Spatial spot matching with forced registration
+# Experiment 003 — Appearance-first matching with geometric verification
 
-## Question
+## Question and scope
 
-After bringing two segmented fish into a comparable coordinate system, how many
-detected dark components can be paired spatially? In particular, how many pairs
-appear **between different individuals** if registration is forced instead of
-skipping the comparison when SIFT fails?
+> Can visual features from pigmentation-rich regions, verified by geometric consistency, distinguish observations of the same *Epinephelus itajara* from different individuals?
 
-This is a diagnostic of spatial agreement, **not** an individual-ID classifier.
+This is a SIFT-based exploratory baseline, not a validated identity classifier or a reproduction of the U-Net/HesAffNet/HardNet/Fisher-vector method.
 
-## Inputs and comparisons
+## Data and selection criteria
 
-The experiment reads BGRA masked crops from the existing pipeline. Eligible
-selections have frontal annotations with quality >= 3 and matching track IDs.
-For each selection it compares its reference to an offset frame and compares
-reference frames across selections (including different individuals).
+The experiment uses the existing `Project` metadata API and BGRA masked crops.
 
-The existing optional hard-set frame pairs in the Python file can override the
-reference/offset frames for a video; these are exploratory frame choices and
-must be considered when interpreting same-video results.
+Eligible observations:
 
-## Method
+- Belong to a track in `individuals.json`.
+- Overlap an annotation with `viewpoint="frontal"` and `quality >= 3`.
+- Match the annotation's `track_id`.
 
-1. Detect up to 320 dark connected components inside an eroded fish alpha mask,
-   using grayscale CLAHE, adaptive thresholding, and component shape filters.
-   The resulting centroids are *candidate* spots, not verified pigmentation.
-2. Attempt masked SIFT matching followed by partial-affine RANSAC. Accept this
-   registration when it has at least 12 geometric inliers.
-3. **When SIFT fails**, force a coarse registration using the fish mask bounding
-   boxes: translate mask centers to coincide and apply a uniform scale based on
-   their longest bounding-box dimension. This does not use SIFT texture or
-   detected spot correspondences. It does not account for pose, orientation,
-   anatomical landmarks, or 3D shape.
-4. Transform source spot centers into target coordinates and use Hungarian
-   one-to-one minimum-cost assignment. Source points may remain unmatched;
-   retain only target assignments within 8 pixels.
-5. Save spot overlays, one comparison PNG per pair, `metrics.csv`, and
-   `run.json`.
+Each eligible annotation yields a reference frame and, when available, an offset frame normally 30 frames away. Optional hard-set frame pairs in the Python file override this selection for specified videos; currently h01 uses frames 170 and 510.
 
-The previous six-neighbor descriptor matcher (A) and conditional spatial
-matcher (B) were removed. This single method always attempts an association
-when both masks have valid pixels, recording the registration source in
-`alignment_method` (`sift` or `mask_bbox`).
+## Comparisons and labels
 
-## Metrics and interpretation
+The experiment compares reference/offset frames within each eligible selection and reference frames across selections.
 
-- `alignment_method`: distinguishes SIFT registration from forced mask
-  bounding-box registration.
-- `alignment_inliers`: SIFT RANSAC inliers, even if mask fallback is used.
-- `spatial_matches`: number of uniquely assigned spots within 8 pixels.
-- `spatial_source_recall`, `spatial_target_recall`: paired fraction of
-  detected points in each image.
-- `spatial_repeatability`: paired fraction relative to the smaller point set.
-- `spatial_median_error_px`: median distance among accepted pairs.
+`same_individual` comes from the metadata, not from the matcher. Reference/offset frames from a single video do **not** constitute an independent-encounter identification test.
 
-These measures are **conditional on the registration method**. In particular,
-a forced negative h01/h02 comparison can produce many spatial pairs simply
-because two dense point clouds were brought into overlapping regions.
-A green line means an assigned pair passed the distance cutoff, not that the
-same biological spot was identified. Compare positive and negative pairs under
-comparable registrations before drawing conclusions.
+## Representations and processing
 
-Previous results (before this change) were: h01 positive, 140/320 spatial
-pairs with SIFT; h02 positive, 112/320 with SIFT. The h01/h02 negative was
-**not evaluated** by the previous spatial method because SIFT alignment
-failed. Those numbers are historical context, not results from the new fallback.
+1. Read the masked BGRA crop and erode its alpha mask to avoid silhouette edges.
+2. Apply grayscale CLAHE and adaptive thresholding; filter connected components by size and shape, retaining up to 320 candidate dark-region centers.
+3. Restrict **SIFT keypoint detection** to 16-pixel-radius neighborhoods around those centers, intersected with the alpha mask.
+4. Compute visual SIFT descriptors, perform bidirectional nearest-neighbor ratio tests (0.7), and retain mutual correspondences.
+5. Apply partial-affine RANSAC with a 4-pixel reprojection threshold to those appearance-selected matches.
+6. Save detected-spot overlays, match figures, per-pair metrics, and run provenance.
 
-The detector still covers the entire masked fish, not just the head, and does
-not explicitly exclude watermarks.
+SIFT descriptor support can extend beyond the keypoint-detection mask. Dark components are candidates, not independently validated pigmentation spots; the detector covers the whole segmented fish rather than a head-only anatomical ROI.
 
-## Run
+## Matching method
 
-Prepare masked crops with the existing pipeline, then:
+Appearance determines tentative correspondences **before** geometric verification. Unlike the previous spatial matcher, this implementation does not pre-align images by SIFT or mask bounding boxes and does not match spots solely because their centers are close.
+
+Mutual descriptor matches are passed to partial-affine RANSAC when at least four are available. Green correspondence lines are RANSAC inliers; red lines are rejected candidates. A failed fit or insufficient matches yields zero inliers.
+
+The exploratory `identity_score` is defined as:
+
+```text
+ransac_inliers / min(source_features, target_features)
+```
+
+It is a normalized diagnostic score, not a calibrated identity probability.
+
+## Measurements and outputs
+
+Each comparison records source/target feature counts, forward/reverse ratio-test matches, mutual matches, whether RANSAC ran, inlier count and ratio, feature coverage, `identity_score`, and median inlier reprojection residual in pixels.
+
+`make run EXPERIMENT=003` writes a new timestamped directory under `results/003/`, containing `metrics.csv`, `run.json`, spot overlays, and correspondence PNGs. Results from earlier versions of experiment 003 are not directly comparable.
+
+## Observations and results
+
+Earlier spatial-assignment runs paired many points even across h01 and h02 after forced silhouette alignment, illustrating that centroid proximity is insufficient as an identity signal.
+
+The appearance-first approach instead tests whether visual descriptors produce mutual matches that also agree geometrically. Its scores must be examined on positive and negative pairs rather than interpreted from the number of green lines alone. No general identification accuracy is established by the current small sample.
+
+## Running the experiment
+
+Prepare masked crops through the existing pipeline, then run:
 
 ```bash
 make run EXPERIMENT=003
 ```
 
-Results are written to a new timestamped directory under `results/003/`.
-Inspect `alignment_method` alongside match counts; do not compare fallback
-scores directly with SIFT-aligned scores as though they used the same geometry.
+## Interpretation and limitations
+
+SIFT may respond to common textures, anatomical structures, lighting, or watermarks rather than individual pigmentation alone. Same-video positives share acquisition conditions; the current sample is too small to establish re-identification performance across encounters or unseen individuals.
+
+## Next steps
+
+1. Inspect whether RANSAC inliers lie on real, stable pigmentation regions rather than background artifacts or watermarks.
+2. Compare the score on additional positive and negative pairs with similar viewpoints.
+3. Validate on independent encounters before tuning parameters or claiming identification.
+
+## References
+
+- https://doi.org/10.1049/cvi2.12337
