@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from numpy.typing import NDArray
 from pathlib import Path
 from itertools import combinations
+from scipy.optimize import linear_sum_assignment
 from scipy.spatial import KDTree
 
 from meros.domain import TrackSelection, VideoAnnotation
@@ -30,8 +31,11 @@ type SampleKey = tuple[str, FrameLabel]
 MIN_QUALITY = 3
 FRAME_DELTA = 30
 NEIGHBORS = 6
-MAX_SPOTS = 180
+MAX_SPOTS = 320
+MAX_POSITION_DELTA = 0.22
 MIN_RANSAC_MATCHES = 8
+MIN_ALIGNMENT_INLIERS = 12
+MAX_SPATIAL_DISTANCE_PX = 8.0
 
 
 class ComparisonRow(TypedDict):
@@ -47,12 +51,20 @@ class ComparisonRow(TypedDict):
     median_residual_px: float | None
     source_coverage: float
     target_coverage: float
+    alignment_inliers: int
+    alignment_applied: bool
+    spatial_matches: int
+    spatial_source_recall: float | None
+    spatial_target_recall: float | None
+    spatial_repeatability: float | None
+    spatial_median_error_px: float | None
 
 
 @dataclass(frozen=True)
 class Sample:
     image: Image
     points: Points
+    mask: Image
 
 
 @dataclass(frozen=True)
@@ -72,6 +84,7 @@ class MatchResult:
     statistics: ComparisonRow
     pairs: list[tuple[int, int]]
     inlier_mask: list[bool]
+    spatial_pairs: list[tuple[int, int]]
 
 
 def detect_spots(image: Image) -> tuple[Points, Image]:
@@ -175,46 +188,177 @@ def descriptors(points: Points, neighbors: int = NEIGHBORS) -> Points:
     return np.asarray(r, dtype=np.float32)
 
 
-def candidate_matches(source: Points, target: Points) -> list[tuple[int, int]]:
+def normalized_positions(points: Points) -> Points:
+    if len(points) == 0:
+        return points.copy()
+
+    low = points.min(axis=0)
+    high = points.max(axis=0)
+
+    extent = np.maximum(high - low, 1.0)
+
+    return np.asarray((points - low) / extent, dtype=np.float32)
+
+
+def coarse_alignment(source: Sample, target: Sample) -> tuple[Points, int, bool]:
+    """Estimate initial geometry using image features, independently of spot descriptors."""
+    sift = cv.SIFT.create(nfeatures=2500)
+
+    source_gray = cv.cvtColor(source.image, cv.COLOR_BGR2GRAY)
+    target_gray = cv.cvtColor(target.image, cv.COLOR_BGR2GRAY)
+
+    source_keys, source_desc = sift.detectAndCompute(source_gray, source.mask)
+    target_keys, target_desc = sift.detectAndCompute(target_gray, target.mask)
+
+    if source_desc is None or target_desc is None:
+        return source.points.copy(), 0, False
+
+    matcher = cv.BFMatcher(cv.NORM_L2)
+
+    matches = [
+        pair[0]
+        for pair in matcher.knnMatch(source_desc, target_desc, k=2)
+        if len(pair) == 2 and pair[0].distance < 0.7 * pair[1].distance
+    ]
+
+    if len(matches) < MIN_ALIGNMENT_INLIERS:
+        return source.points.copy(), 0, False
+
+    source_keys_points = np.asarray(
+        [source_keys[pair.queryIdx].pt for pair in matches], dtype=np.float32
+    )
+    target_keys_points = np.asarray(
+        [target_keys[pair.trainIdx].pt for pair in matches], dtype=np.float32
+    )
+
+    cv.setRNGSeed(0)
+
+    matrix, inliers = cv.estimateAffinePartial2D(
+        source_keys_points,
+        target_keys_points,
+        method=cv.RANSAC,
+        ransacReprojThreshold=4.0,
+        maxIters=3000,
+        confidence=0.99,
+    )
+
+    count = int(inliers.sum()) if inliers is not None else 0
+
+    if matrix is None or count < MIN_ALIGNMENT_INLIERS:
+        return source.points.copy(), count, False
+
+    transformed = source.points @ matrix[:, :2].T + matrix[:, 2]
+
+    return np.asarray(transformed, dtype=np.float32), count, True
+
+
+def candidate_matches(
+    source: Points, target: Points, source_aligned: Points | None = None
+) -> list[tuple[int, int]]:
     source_descriptors = descriptors(source)
     target_descriptors = descriptors(target)
 
     if len(source_descriptors) < 2 or len(target_descriptors) < 2:
         return []
 
-    distances_raw, indices_raw = KDTree(target_descriptors).query(source_descriptors, k=2)
+    if source_aligned is None:
+        source_position = normalized_positions(source)
+        target_position = normalized_positions(target)
+    else:
+        source_position = source_aligned
+        target_position = target
 
-    _, reverse_raw = KDTree(source_descriptors).query(target_descriptors, k=1)
+    scale = np.maximum(np.ptp(target_position, axis=0), 1.0)
 
-    distances = cast(NDArray[np.float32], distances_raw)
-    indices = cast(NDArray[np.int64], indices_raw)
-    reverse = cast(NDArray[np.int64], reverse_raw)
+    source_position = source_position / scale
+    target_position = target_position / scale
+
+    position_distances = np.linalg.norm(
+        source_position[:, None, :] - target_position[None, :, :],
+        axis=2,
+    )
+
+    descriptor_distances = np.linalg.norm(
+        source_descriptors[:, None, :] - target_descriptors[None, :, :],
+        axis=2,
+    )
+
+    descriptor_distances[position_distances > MAX_POSITION_DELTA] = np.inf
+
+    reverse = np.argmin(descriptor_distances, axis=0)
 
     candidates: list[tuple[int, int]] = []
 
-    for source_index in range(len(source_descriptors)):
-        target_index = int(indices[source_index, 0])
+    for source_index, row in enumerate(descriptor_distances):
+        eligible = np.flatnonzero(np.isfinite(row))
 
-        if distances[source_index, 0] >= 0.88 * max(distances[source_index, 1], 1e-10):
+        if len(eligible) < 2:
             continue
 
-        if int(reverse[target_index]) != source_index:
+        ranked = eligible[np.argsort(row[eligible])]
+
+        best, runner_up = int(ranked[0]), int(ranked[1])
+
+        if row[best] >= 0.88 * max(float(row[runner_up]), 1e-10):
             continue
 
-        candidates.append((source_index, target_index))
+        if int(reverse[best]) != source_index:
+            continue
+
+        candidates.append((source_index, best))
 
     return candidates
 
 
-def compare(source: Points, target: Points) -> MatchResult:
-    pairs = candidate_matches(source, target)
+def spatial_matches(aligned: Points, target: Points) -> tuple[list[tuple[int, int]], float | None]:
+    """Assign nearby spots uniquely; allow every source spot to remain unmatched."""
+    if len(aligned) == 0 or len(target) == 0:
+        return [], None
+
+    distances = np.linalg.norm(aligned[:, None, :] - target[None, :, :], axis=2)
+
+    unmatched = np.full((len(aligned), len(aligned)), MAX_SPATIAL_DISTANCE_PX)
+
+    costs = np.concatenate((distances, unmatched), axis=1)
+
+    source_indices, assigned_columns = linear_sum_assignment(costs)
+
+    pairs = [
+        (int(i), int(j))
+        for i, j in zip(source_indices, assigned_columns, strict=True)
+        if j < len(target) and distances[i, j] <= MAX_SPATIAL_DISTANCE_PX
+    ]
+
+    median = float(np.median([distances[i, j] for i, j in pairs])) if pairs else None
+
+    return pairs, median
+
+
+def compare(source: Sample, target: Sample) -> MatchResult:
+    aligned, alignment_inliers, alignment_applied = coarse_alignment(source, target)
+
+    pairs = candidate_matches(source.points, target.points, aligned if alignment_applied else None)
+
+    if alignment_applied:
+        spatial_pairs, spatial_median = spatial_matches(aligned, target.points)
+        spatial_source_recall = len(spatial_pairs) / max(1, len(source.points))
+        spatial_target_recall = len(spatial_pairs) / max(1, len(target.points))
+        spatial_repeatability = len(spatial_pairs) / max(
+            1, min(len(source.points), len(target.points))
+        )
+    else:
+        spatial_pairs = []
+        spatial_median = None
+        spatial_source_recall = None
+        spatial_target_recall = None
+        spatial_repeatability = None
 
     statistics: ComparisonRow = {
         "source": "",
         "target": "",
         "same_individual": False,
-        "source_spots": len(source),
-        "target_spots": len(target),
+        "source_spots": len(source.points),
+        "target_spots": len(target.points),
         "tentative_matches": len(pairs),
         "ransac_attempted": False,
         "inliers": 0,
@@ -222,15 +366,22 @@ def compare(source: Points, target: Points) -> MatchResult:
         "median_residual_px": None,
         "source_coverage": 0.0,
         "target_coverage": 0.0,
+        "alignment_inliers": alignment_inliers,
+        "alignment_applied": alignment_applied,
+        "spatial_matches": len(spatial_pairs),
+        "spatial_source_recall": spatial_source_recall,
+        "spatial_target_recall": spatial_target_recall,
+        "spatial_repeatability": spatial_repeatability,
+        "spatial_median_error_px": spatial_median,
     }
 
     inlier_mask = [False] * len(pairs)
 
     if len(pairs) < MIN_RANSAC_MATCHES:
-        return MatchResult(statistics, pairs, inlier_mask)
+        return MatchResult(statistics, pairs, inlier_mask, spatial_pairs)
 
-    source_points = np.asarray([source[i] for i, _ in pairs], dtype=np.float32)
-    target_points = np.asarray([target[j] for _, j in pairs], dtype=np.float32)
+    source_points = np.asarray([source.points[i] for i, _ in pairs], dtype=np.float32)
+    target_points = np.asarray([target.points[j] for _, j in pairs], dtype=np.float32)
 
     cv.setRNGSeed(0)
 
@@ -247,7 +398,7 @@ def compare(source: Points, target: Points) -> MatchResult:
     statistics["ransac_attempted"] = True
 
     if matrix is None or mask is None or np.linalg.det(matrix[:, :2]) <= 0:
-        return MatchResult(statistics, pairs, inlier_mask)
+        return MatchResult(statistics, pairs, inlier_mask, spatial_pairs)
 
     accepted = mask.ravel().astype(bool)
 
@@ -261,13 +412,15 @@ def compare(source: Points, target: Points) -> MatchResult:
     statistics["inliers"] = count
     statistics["inlier_ratio"] = count / len(pairs)
     statistics["median_residual_px"] = float(np.median(residuals[accepted])) if count else None
-    statistics["source_coverage"] = count / max(1, len(source))
-    statistics["target_coverage"] = count / max(1, len(target))
+    statistics["source_coverage"] = count / max(1, len(source.points))
+    statistics["target_coverage"] = count / max(1, len(target.points))
 
-    return MatchResult(statistics, pairs, accepted.tolist())
+    return MatchResult(statistics, pairs, accepted.tolist(), spatial_pairs)
 
 
-def draw_matches(source: Sample, target: Sample, result: MatchResult) -> Image:
+def draw_matches(
+    source: Sample, target: Sample, result: MatchResult, *, spatial: bool = False
+) -> Image:
     source_image = source.image
     target_image = target.image
 
@@ -279,9 +432,26 @@ def draw_matches(source: Sample, target: Sample, result: MatchResult) -> Image:
     output[: source_image.shape[0], : source_image.shape[1]] = source_image
     output[: target_image.shape[0], source_image.shape[1] :] = target_image
 
-    for (source_index, target_index), accepted in zip(
-        result.pairs, result.inlier_mask, strict=True
-    ):
+    for point in source.points:
+        cv.circle(output, (round(float(point[0])), round(float(point[1]))), 3, (0, 255, 255), 1)
+
+    for point in target.points:
+        cv.circle(
+            output,
+            (round(float(point[0])) + source_image.shape[1], round(float(point[1]))),
+            3,
+            (0, 255, 255),
+            1,
+        )
+
+    if spatial:
+        display_pairs = result.spatial_pairs
+        accepted_flags = [True] * len(display_pairs)
+    else:
+        display_pairs = result.pairs
+        accepted_flags = result.inlier_mask
+
+    for (source_index, target_index), accepted in zip(display_pairs, accepted_flags, strict=True):
         source_point = (
             int(round(float(source.points[source_index, 0]))),
             int(round(float(source.points[source_index, 1]))),
@@ -400,7 +570,11 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
 
             save_image(output / name, annotated)
 
-            samples[selection.sample_id, label] = Sample(annotated, points)
+            mask = np.asarray((frame[:, :, 3] == 255).astype(np.uint8) * 255, dtype=np.uint8)
+
+            clean = cast(Image, cv.cvtColor(frame, cv.COLOR_BGRA2BGR))
+
+            samples[selection.sample_id, label] = Sample(clean, points, mask)
 
     comparisons: list[tuple[EligibleSelection, FrameLabel, EligibleSelection, FrameLabel]] = []
 
@@ -423,7 +597,7 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
         source = samples[source_key]
         target = samples[target_key]
 
-        result = compare(source.points, target.points)
+        result = compare(source, target)
 
         result.statistics["source"] = "/".join(source_key)
         result.statistics["target"] = "/".join(target_key)
@@ -440,6 +614,10 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
 
         save_image(output / name, figure)
 
+        spatial_figure = draw_matches(source, target, result, spatial=True)
+
+        save_image(output / name.replace(".png", "--spatial.png"), spatial_figure)
+
         rows.append(result.statistics)
 
     with (output / "metrics.csv").open("w", newline="", encoding="utf-8") as stream:
@@ -454,6 +632,10 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
         "viewpoint": "frontal",
         "minimum_quality": MIN_QUALITY,
         "frame_delta": FRAME_DELTA,
+        "max_spots": MAX_SPOTS,
+        "max_position_delta": MAX_POSITION_DELTA,
+        "minimum_alignment_inliers": MIN_ALIGNMENT_INLIERS,
+        "maximum_spatial_distance_px": MAX_SPATIAL_DISTANCE_PX,
         "selections": [
             {
                 "individual_id": selection.individual_id,
