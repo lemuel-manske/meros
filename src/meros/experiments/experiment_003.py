@@ -66,6 +66,7 @@ class ComparisonRow(TypedDict):
     spatial_repeatability: float | None
     spatial_median_error_px: float | None
 
+
 @dataclass(frozen=True)
 class Sample:
     image: Image
@@ -89,6 +90,7 @@ class EligibleSelection:
 class MatchResult:
     statistics: ComparisonRow
     pairs: list[tuple[int, int]]
+
 
 # returns possible spots
 def detect_spots(image: Image) -> tuple[Points, Image]:
