@@ -49,7 +49,6 @@ SIFT_MATCH_RATIO = 0.7  # best SIFT match must be clearly better than the second
 SIFT_RANSAC_THRESHOLD_PX = 4.0
 
 
-
 class ComparisonRow(TypedDict):
     source: str
     target: str
@@ -188,7 +187,9 @@ def detect_spots(image: Image) -> tuple[Points, Image]:
     return points, annotated
 
 
-def extract_features(image: Image, mask: Image, points: Points) -> tuple[tuple[cv.KeyPoint, ...], Points | None]:
+def extract_features(
+    image: Image, mask: Image, points: Points
+) -> tuple[tuple[cv.KeyPoint, ...], Points | None]:
     """Describe SIFT regions around the detected dark components."""
     region_mask = np.zeros_like(mask)
 
@@ -239,11 +240,7 @@ def compare(source: Sample, target: Sample) -> MatchResult:
         forward = ratio_matches(source_desc, target_desc)
         reverse = ratio_matches(target_desc, source_desc)
 
-    pairs = [
-        (i, j)
-        for i, j in forward.items()
-        if reverse.get(j) == i
-    ]
+    pairs = [(i, j) for i, j in forward.items() if reverse.get(j) == i]
 
     source_count = len(source.keypoints)
     target_count = len(target.keypoints)
@@ -270,12 +267,8 @@ def compare(source: Sample, target: Sample) -> MatchResult:
     if len(pairs) < MIN_GEOMETRY_MATCHES:
         return MatchResult(statistics, pairs, accepted)
 
-    source_points = np.asarray(
-        [source.keypoints[i].pt for i, _ in pairs], dtype=np.float32
-    )
-    target_points = np.asarray(
-        [target.keypoints[j].pt for _, j in pairs], dtype=np.float32
-    )
+    source_points = np.asarray([source.keypoints[i].pt for i, _ in pairs], dtype=np.float32)
+    target_points = np.asarray([target.keypoints[j].pt for _, j in pairs], dtype=np.float32)
 
     cv.setRNGSeed(0)
 
@@ -304,19 +297,13 @@ def compare(source: Sample, target: Sample) -> MatchResult:
     statistics["inliers"] = inliers
     statistics["inlier_ratio"] = inliers / len(pairs)
     statistics["feature_coverage"] = (
-        inliers / min(source_count, target_count)
-        if source_count and target_count
-        else None
+        inliers / min(source_count, target_count) if source_count and target_count else None
     )
     statistics["identity_score"] = (
-        inliers / min(source_count, target_count)
-        if source_count and target_count
-        else 0.0
+        inliers / min(source_count, target_count) if source_count and target_count else 0.0
     )
     statistics["median_residual_px"] = (
-        float(np.median(residuals[np.asarray(accepted, dtype=bool)]))
-        if inliers
-        else None
+        float(np.median(residuals[np.asarray(accepted, dtype=bool)])) if inliers else None
     )
 
     return MatchResult(statistics, pairs, accepted)
@@ -346,9 +333,7 @@ def draw_matches(source: Sample, target: Sample, result: MatchResult) -> Image:
             1,
         )
 
-    for (source_index, target_index), accepted in zip(
-        result.pairs, result.accepted, strict=True
-    ):
+    for (source_index, target_index), accepted in zip(result.pairs, result.accepted, strict=True):
         source_point = (
             round(float(source.keypoints[source_index].pt[0])),
             round(float(source.keypoints[source_index].pt[1])),
