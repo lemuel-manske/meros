@@ -1,82 +1,51 @@
-# Experiment 003 — Spatial spot matching with forced registration
+# Experiment 003 — Appearance-first matching with geometric verification
 
-## Question
+## Goal
 
-After bringing two segmented fish into a comparable coordinate system, how many
-detected dark components can be paired spatially? In particular, how many pairs
-appear **between different individuals** if registration is forced instead of
-skipping the comparison when SIFT fails?
-
-This is a diagnostic of spatial agreement, **not** an individual-ID classifier.
-
-## Inputs and comparisons
-
-The experiment reads BGRA masked crops from the existing pipeline. Eligible
-selections have frontal annotations with quality >= 3 and matching track IDs.
-For each selection it compares its reference to an offset frame and compares
-reference frames across selections (including different individuals).
-
-The existing optional hard-set frame pairs in the Python file can override the
-reference/offset frames for a video; these are exploratory frame choices and
-must be considered when interpreting same-video results.
+Test whether pigmentation-region **visual descriptors** and geometric consistency
+can distinguish two observations of the same *Epinephelus itajara* from different
+individuals. This is a small exploratory baseline, not a validated ID model
+or an implementation of the paper's U-Net/HesAffNet/HardNet/Fisher-vector pipeline.
 
 ## Method
 
-1. Detect up to 320 dark connected components inside an eroded fish alpha mask,
-   using grayscale CLAHE, adaptive thresholding, and component shape filters.
-   The resulting centroids are *candidate* spots, not verified pigmentation.
-2. Attempt masked SIFT matching followed by partial-affine RANSAC. Accept this
-   registration when it has at least 12 geometric inliers.
-3. **When SIFT fails**, force a coarse registration using the fish mask bounding
-   boxes: translate mask centers to coincide and apply a uniform scale based on
-   their longest bounding-box dimension. This does not use SIFT texture or
-   detected spot correspondences. It does not account for pose, orientation,
-   anatomical landmarks, or 3D shape.
-4. Transform source spot centers into target coordinates and use Hungarian
-   one-to-one minimum-cost assignment. Source points may remain unmatched;
-   retain only target assignments within 8 pixels.
-5. Save spot overlays, one comparison PNG per pair, `metrics.csv`, and
-   `run.json`.
+1. Select frontal track observations (annotation quality >= 3), reference frames
+   and offset frames. The optional hard-set frame pairs in the Python source
+   override the usual 30-frame offset for selected videos.
+2. Read masked BGRA crops. Apply CLAHE and adaptive thresholding to detect up
+   to 320 candidate dark-component centroids inside the eroded fish mask.
+3. Restrict SIFT feature **detection** to disks of radius 16 pixels around these
+   candidate centroids, intersected with the fish alpha mask. The SIFT
+   descriptors describe actual local image appearance, not just centroid
+   positions; their support patches can extend beyond the detection mask.
+4. Match SIFT descriptors by nearest-neighbor ratio (0.7) **in both directions**,
+   retaining mutually preferred pairs.
+5. Apply partial-affine RANSAC (4 px reprojection threshold) to these visual
+   correspondences. Green lines show inliers; red lines show rejected candidates.
+   No preliminary SIFT registration or mask-bounding-box alignment is used
+   to *force* spatial matches.
+6. Record a simple `identity_score = inliers / min(source_features, target_features)`
+   along with raw match and inlier counts. A missing/failed geometric fit scores
+   zero. This score is a provisional diagnostic, **not a probability**.
 
-The previous six-neighbor descriptor matcher (A) and conditional spatial
-matcher (B) were removed. This single method always attempts an association
-when both masks have valid pixels, recording the registration source in
-`alignment_method` (`sift` or `mask_bbox`).
+## Outputs
 
-## Metrics and interpretation
+`make run EXPERIMENT=003` writes a timestamped directory under `results/003/`,
+containing spot overlays, visual correspondences, `metrics.csv`, and `run.json`.
+Compare `identity_score`, `inliers`, `mutual_matches`, and `median_residual_px`
+between same-individual and different-individual pairs. Counts from previous
+versions of experiment 003 are not directly comparable to these features.
 
-- `alignment_method`: distinguishes SIFT registration from forced mask
-  bounding-box registration.
-- `alignment_inliers`: SIFT RANSAC inliers, even if mask fallback is used.
-- `spatial_matches`: number of uniquely assigned spots within 8 pixels.
-- `spatial_source_recall`, `spatial_target_recall`: paired fraction of
-  detected points in each image.
-- `spatial_repeatability`: paired fraction relative to the smaller point set.
-- `spatial_median_error_px`: median distance among accepted pairs.
+## Interpretation
 
-These measures are **conditional on the registration method**. In particular,
-a forced negative h01/h02 comparison can produce many spatial pairs simply
-because two dense point clouds were brought into overlapping regions.
-A green line means an assigned pair passed the distance cutoff, not that the
-same biological spot was identified. Compare positive and negative pairs under
-comparable registrations before drawing conclusions.
+Previous experiments found many accidental centroid-proximity matches in
+h01/h02 after forced silhouette alignment, so proximity alone does not
+establish identity. The current implementation instead **selects candidate
+correspondences from visual appearance before verifying geometry**.
 
-Previous results (before this change) were: h01 positive, 140/320 spatial
-pairs with SIFT; h02 positive, 112/320 with SIFT. The h01/h02 negative was
-**not evaluated** by the previous spatial method because SIFT alignment
-failed. Those numbers are historical context, not results from the new fallback.
-
-The detector still covers the entire masked fish, not just the head, and does
-not explicitly exclude watermarks.
-
-## Run
-
-Prepare masked crops with the existing pipeline, then:
-
-```bash
-make run EXPERIMENT=003
-```
-
-Results are written to a new timestamped directory under `results/003/`.
-Inspect `alignment_method` alongside match counts; do not compare fallback
-scores directly with SIFT-aligned scores as though they used the same geometry.
+SIFT can still respond to common texture, shared acquisition conditions,
+or watermarks. The spot detector covers the entire segmented fish, not an
+anatomically localized head region. Same-video positives are not independent
+encounters, and the available small set does not establish population-level
+accuracy. Measure positive/negative score separation and expand to independent
+encounters before tuning thresholds or claiming identification.
