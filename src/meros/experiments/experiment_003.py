@@ -1,4 +1,4 @@
-"""Experiment 003: head-spot geometry with affine RANSAC verification."""
+"""Experiment 003: spatial spot matching with forced mask-based registration."""
 
 from __future__ import annotations
 
@@ -13,7 +13,6 @@ from itertools import combinations
 from numpy.typing import NDArray
 from pathlib import Path
 from scipy.optimize import linear_sum_assignment
-from scipy.spatial import KDTree
 from typing import Literal, TypedDict, cast
 
 from meros.domain import TrackSelection, VideoAnnotation
@@ -43,12 +42,6 @@ MAX_SPOTS = 320  # how many spots to consider per image?
 SPOT_THRESHOLD_BLOCK_SIZE = 35
 SPOT_THRESHOLD_C = 8
 
-# Geometric descriptors
-MAX_POSITION_DELTA = 0.22
-MIN_RANSAC_MATCHES = 6  # how many tentative matches are required to attempt RANSAC?
-NEIGHBORS = 6  # how many nearest neighbors to consider for each spot?
-SPOT_MATCH_RATIO = 0.88
-
 # SIFT alignment
 MIN_ALIGNMENT_INLIERS = 12
 SIFT_FEATURES = 2500  # how many SIFT features to extract per image?
@@ -65,15 +58,8 @@ class ComparisonRow(TypedDict):
     same_individual: bool
     source_spots: int
     target_spots: int
-    tentative_matches: int
-    ransac_attempted: bool
-    inliers: int
-    inlier_ratio: float | None
-    median_residual_px: float | None
-    source_coverage: float
-    target_coverage: float
+    alignment_method: str
     alignment_inliers: int
-    alignment_applied: bool
     spatial_matches: int
     spatial_source_recall: float | None
     spatial_target_recall: float | None
@@ -104,8 +90,6 @@ class EligibleSelection:
 class MatchResult:
     statistics: ComparisonRow
     pairs: list[tuple[int, int]]
-    inlier_mask: list[bool]
-    spatial_pairs: list[tuple[int, int]]
 
 
 # returns possible spots
@@ -201,36 +185,6 @@ def detect_spots(image: Image) -> tuple[Points, Image]:
     return points, annotated
 
 
-def descriptors(points: Points, neighbors: int = NEIGHBORS) -> Points:
-    k = neighbors + 1  # skip the point itself
-
-    if len(points) < k:
-        return np.empty((0, neighbors), dtype=np.float32)
-
-    distances, _ = KDTree(points).query(points, k)
-
-    neighbor_distances = np.asarray(distances[:, 1:], dtype=np.float32)
-
-    r = neighbor_distances / np.maximum(
-        neighbor_distances[:, -1:], 1e-5
-    )  # normalize by the distance to the farthest neighbor
-
-    return np.asarray(r, dtype=np.float32)
-
-
-# what if fish is more close or farther?
-def normalized_positions(points: Points) -> Points:
-    if len(points) == 0:
-        return points.copy()
-
-    low = points.min(axis=0)
-    high = points.max(axis=0)
-
-    extent = np.maximum(high - low, 1.0)
-
-    return np.asarray((points - low) / extent, dtype=np.float32)
-
-
 def coarse_alignment(source: Sample, target: Sample) -> tuple[Points, int, bool]:
     """Estimate initial geometry using image features, independently of spot descriptors."""
 
@@ -284,62 +238,35 @@ def coarse_alignment(source: Sample, target: Sample) -> tuple[Points, int, bool]
     return np.asarray(transformed, dtype=np.float32), count, True
 
 
-def candidate_matches(
-    source: Points, target: Points, source_aligned: Points | None = None
-) -> list[tuple[int, int]]:
-    source_descriptors = descriptors(source)
-    target_descriptors = descriptors(target)
+def mask_alignment(source: Sample, target: Sample) -> Points:
+    """Register mask bounding boxes without using image texture or spot matches."""
+    source_y, source_x = np.nonzero(source.mask)
+    target_y, target_x = np.nonzero(target.mask)
 
-    if len(source_descriptors) < 2 or len(target_descriptors) < 2:
-        return []
+    if len(source_x) == 0 or len(target_x) == 0:
+        return np.empty((0, 2), dtype=np.float32)
 
-    if source_aligned is None:
-        source_position = normalized_positions(source)
-        target_position = normalized_positions(target)
-    else:
-        source_position = source_aligned
-        target_position = target
-
-    scale = np.maximum(np.ptp(target_position, axis=0), 1.0)
-
-    source_position = source_position / scale
-    target_position = target_position / scale
-
-    position_distances = np.linalg.norm(
-        source_position[:, None, :] - target_position[None, :, :],
-        axis=2,
+    source_center = np.array(
+        [(source_x.min() + source_x.max()) / 2, (source_y.min() + source_y.max()) / 2],
+        dtype=np.float32,
+    )
+    target_center = np.array(
+        [(target_x.min() + target_x.max()) / 2, (target_y.min() + target_y.max()) / 2],
+        dtype=np.float32,
     )
 
-    descriptor_distances = np.linalg.norm(
-        source_descriptors[:, None, :] - target_descriptors[None, :, :],
-        axis=2,
+    source_width = max(float(source_x.max() - source_x.min()), 1.0)
+    source_height = max(float(source_y.max() - source_y.min()), 1.0)
+    target_width = max(float(target_x.max() - target_x.min()), 1.0)
+    target_height = max(float(target_y.max() - target_y.min()), 1.0)
+
+    source_scale = max(source_width, source_height)
+    target_scale = max(target_width, target_height)
+
+    return np.asarray(
+        (source.points - source_center) * (target_scale / source_scale) + target_center,
+        dtype=np.float32,
     )
-
-    descriptor_distances[position_distances > MAX_POSITION_DELTA] = np.inf
-
-    reverse = np.argmin(descriptor_distances, axis=0)
-
-    candidates: list[tuple[int, int]] = []
-
-    for source_index, row in enumerate(descriptor_distances):
-        eligible = np.flatnonzero(np.isfinite(row))
-
-        if len(eligible) < 2:
-            continue
-
-        ranked = eligible[np.argsort(row[eligible])]
-
-        best, runner_up = int(ranked[0]), int(ranked[1])
-
-        if row[best] >= SPOT_MATCH_RATIO * max(float(row[runner_up]), 1e-10):
-            continue
-
-        if int(reverse[best]) != source_index:
-            continue
-
-        candidates.append((source_index, best))
-
-    return candidates
 
 
 def spatial_matches(aligned: Points, target: Points) -> tuple[list[tuple[int, int]], float | None]:
@@ -369,90 +296,44 @@ def spatial_matches(aligned: Points, target: Points) -> tuple[list[tuple[int, in
 def compare(source: Sample, target: Sample) -> MatchResult:
     aligned, alignment_inliers, alignment_applied = coarse_alignment(source, target)
 
-    pairs = candidate_matches(source.points, target.points, aligned if alignment_applied else None)
-
     if alignment_applied:
-        spatial_pairs, spatial_median = spatial_matches(aligned, target.points)
-        spatial_source_recall = len(spatial_pairs) / max(1, len(source.points))
-        spatial_target_recall = len(spatial_pairs) / max(1, len(target.points))
-        spatial_repeatability = len(spatial_pairs) / max(
-            1, min(len(source.points), len(target.points))
-        )
+        alignment_method = "sift"
     else:
-        spatial_pairs = []
+        alignment_method = "mask_bbox"
+        aligned = mask_alignment(source, target)
+
+    if len(aligned) == 0:
+        spatial_pairs: list[tuple[int, int]] = []
         spatial_median = None
-        spatial_source_recall = None
-        spatial_target_recall = None
-        spatial_repeatability = None
+    else:
+        spatial_pairs, spatial_median = spatial_matches(aligned, target.points)
+
+    source_count = len(source.points)
+    target_count = len(target.points)
 
     statistics: ComparisonRow = {
         "source": "",
         "target": "",
         "same_individual": False,
-        "source_spots": len(source.points),
-        "target_spots": len(target.points),
-        "tentative_matches": len(pairs),
-        "ransac_attempted": False,
-        "inliers": 0,
-        "inlier_ratio": None,
-        "median_residual_px": None,
-        "source_coverage": 0.0,
-        "target_coverage": 0.0,
+        "source_spots": source_count,
+        "target_spots": target_count,
+        "alignment_method": alignment_method,
         "alignment_inliers": alignment_inliers,
-        "alignment_applied": alignment_applied,
         "spatial_matches": len(spatial_pairs),
-        "spatial_source_recall": spatial_source_recall,
-        "spatial_target_recall": spatial_target_recall,
-        "spatial_repeatability": spatial_repeatability,
+        "spatial_source_recall": len(spatial_pairs) / source_count if source_count else None,
+        "spatial_target_recall": len(spatial_pairs) / target_count if target_count else None,
+        "spatial_repeatability": (
+            len(spatial_pairs) / min(source_count, target_count)
+            if source_count and target_count
+            else None
+        ),
         "spatial_median_error_px": spatial_median,
     }
 
-    inlier_mask = [False] * len(pairs)
-
-    if len(pairs) < MIN_RANSAC_MATCHES:
-        return MatchResult(statistics, pairs, inlier_mask, spatial_pairs)
-
-    source_points = np.asarray([source.points[i] for i, _ in pairs], dtype=np.float32)
-    target_points = np.asarray([target.points[j] for _, j in pairs], dtype=np.float32)
-
-    cv.setRNGSeed(0)
-
-    matrix, mask = cv.estimateAffine2D(
-        source_points,
-        target_points,
-        method=cv.RANSAC,
-        ransacReprojThreshold=5.0,
-        maxIters=3000,
-        confidence=0.99,
-        refineIters=10,
-    )
-
-    statistics["ransac_attempted"] = True
-
-    if matrix is None or mask is None or np.linalg.det(matrix[:, :2]) <= 0:
-        return MatchResult(statistics, pairs, inlier_mask, spatial_pairs)
-
-    accepted = mask.ravel().astype(bool)
-
-    residuals = np.linalg.norm(
-        source_points @ matrix[:, :2].T + matrix[:, 2] - target_points,
-        axis=1,
-    )
-
-    count = int(accepted.sum())
-
-    statistics["inliers"] = count
-    statistics["inlier_ratio"] = count / len(pairs)
-    statistics["median_residual_px"] = float(np.median(residuals[accepted])) if count else None
-    statistics["source_coverage"] = count / max(1, len(source.points))
-    statistics["target_coverage"] = count / max(1, len(target.points))
-
-    return MatchResult(statistics, pairs, accepted.tolist(), spatial_pairs)
+    return MatchResult(statistics, spatial_pairs)
 
 
-def draw_matches(
-    source: Sample, target: Sample, result: MatchResult, *, spatial: bool = False
-) -> Image:
+def draw_matches(source: Sample, target: Sample, result: MatchResult) -> Image:
     source_image = source.image
     target_image = target.image
 
@@ -476,14 +357,7 @@ def draw_matches(
             1,
         )
 
-    if spatial:
-        display_pairs = result.spatial_pairs
-        accepted_flags = [True] * len(display_pairs)
-    else:
-        display_pairs = result.pairs
-        accepted_flags = result.inlier_mask
-
-    for (source_index, target_index), accepted in zip(display_pairs, accepted_flags, strict=True):
+    for source_index, target_index in result.pairs:
         source_point = (
             int(round(float(source.points[source_index, 0]))),
             int(round(float(source.points[source_index, 1]))),
@@ -494,9 +368,7 @@ def draw_matches(
             int(round(float(target.points[target_index, 1]))),
         )
 
-        color = (0, 220, 0) if accepted else (40, 80, 220)
-
-        cv.line(output, source_point, target_point, color, 1)
+        cv.line(output, source_point, target_point, (0, 220, 0), 1)
 
     return output
 
@@ -657,12 +529,6 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
         if not cv.imwrite(str(p), figure):
             raise OSError(f"Could not write {p}")
 
-        spatial_figure = draw_matches(source, target, result, spatial=True)
-
-        p = output / name.replace(".png", "--spatial.png")
-        if not cv.imwrite(str(p), spatial_figure):
-            raise OSError(f"Could not write {p}")
-
         rows.append(result.statistics)
 
     with (output / "metrics.csv").open("w", newline="", encoding="utf-8") as stream:
@@ -678,9 +544,9 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
         "minimum_quality": MIN_QUALITY,
         "frame_delta": FRAME_DELTA,
         "max_spots": MAX_SPOTS,
-        "max_position_delta": MAX_POSITION_DELTA,
         "minimum_alignment_inliers": MIN_ALIGNMENT_INLIERS,
         "maximum_spatial_distance_px": MAX_SPATIAL_DISTANCE_PX,
+        "fallback_alignment": "mask_bbox_center_uniform_scale",
         "selections": [
             {
                 "individual_id": selection.individual_id,
