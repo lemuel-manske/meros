@@ -12,6 +12,8 @@ EXTRAS ?= data,dev
 
 # Experiment selection and artifact locations.
 
+DEBUG ?= 0
+
 EXPERIMENT ?=
 
 RUN_DIR ?=

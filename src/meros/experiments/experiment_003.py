@@ -10,19 +10,16 @@ import numpy as np
 
 from dataclasses import dataclass
 from itertools import combinations
-from numpy.typing import NDArray
 from pathlib import Path
 from typing import Literal, TypedDict, cast
 
 from meros.domain import TrackSelection, VideoAnnotation
-from meros.experiments.common import experiment_output, git_revision
+from meros.experiments.common import debug_img, experiment_output, git_revision
 from meros.project import Project
+from meros.types import Image, Points
 
 
-type FrameLabel = Literal["reference", "offset"]
-
-type Image = NDArray[np.uint8]
-type Points = NDArray[np.float32]
+type FrameLabel = Literal["reference", "target"]
 
 type SampleKey = tuple[str, FrameLabel]
 
@@ -30,6 +27,7 @@ type SampleKey = tuple[str, FrameLabel]
 # for example, to test very distant frames
 pairs = {
     "h01": ("170", "510"),
+    "h02": ("1000", "1140"),
 }
 
 # Sample selection
@@ -108,21 +106,31 @@ def detect_spots(image: Image) -> tuple[Points, Image]:
         iterations=1,
     ).astype(bool)
 
-    gray = cv.cvtColor(image[:, :, :3], cv.COLOR_BGR2GRAY)
-    gray_active = gray[valid]
+    gray = cv.cvtColor(image[:, :, :3], cv.COLOR_BGR2GRAY)  # gray scale
+    gray_active = gray[valid]  # only consider pixels inside the valid mask
+
+    debug_img(gray)
 
     # draw the annotated image in BGR, ignoring the alpha channel
+    # for demonstration purposes
     annotated = cast(Image, cv.cvtColor(image, cv.COLOR_BGRA2BGR))
 
-    if gray_active.size == 0:
+    if gray_active.size == 0:  # no valid pixels to detect spots
         return np.empty((0, 2), dtype=np.float32), annotated
 
     filled = gray.copy()
-    filled[~valid] = int(np.median(gray_active))
+    filled[~valid] = int(
+        np.median(gray_active)
+    )  # fill invalid pixels with the median of valid pixels
 
+    debug_img(filled)
+
+    # enhance the gray image contrast
     enhanced = cv.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(filled)
 
-    # adaptative limiar so that spots are detected even in low-contrast regions ("""pattern extraction""")
+    debug_img(enhanced)
+
+    # adaptative limiar so that spots are detected even in low-contrast regions
     binary = cv.adaptiveThreshold(
         enhanced,
         255,  # maxValue
@@ -132,23 +140,27 @@ def detect_spots(image: Image) -> tuple[Points, Image]:
         SPOT_THRESHOLD_C,  # C
     )
 
-    # never let invalid or transparent pixels become candidate spots.
+    # filter out invalid; never let invalid or transparent pixels become candidate spots.
     binary[~valid] = 0
 
-    count, _, stats, centers = cv.connectedComponentsWithStats(binary, connectivity=8)
+    debug_img(binary)
+
+    count, _, stats, centroids = cv.connectedComponentsWithStats(binary, connectivity=8)
 
     found: list[tuple[float, float, int]] = []
 
-    for index in range(1, count):
+    for index in range(1, count):  # skip the background
         left, top, component_width, component_height, area = map(int, stats[index])
 
         # remove tiny spots and spots that are too large relative to the image size
         if not (5 <= area <= max(10, int(width * height * 0.001))):
             continue
 
+        # remove spots that are too close to the image edge, which are likely artifacts
         if component_width < 2 or component_height < 2:
             continue
 
+        # remove spots that are too close to the image edge, which are likely artifacts
         if (
             left == 0
             or top == 0
@@ -160,20 +172,20 @@ def detect_spots(image: Image) -> tuple[Points, Image]:
         aspect = component_width / component_height
         density = area / (component_width * component_height)
 
-        if not (
-            0.35 <= aspect <= 2.8 and 0.25 <= density <= 0.94
-        ):  # heuristics: should not be too elongated or sparse
+        # heuristics: should not be too elongated or sparse
+        if not (0.35 <= aspect <= 2.8 and 0.25 <= density <= 0.94):
             continue
 
+        # filter out spots that are not fully valid; this avoids spots that are partially occluded or on the edge of the mask
         if not np.all(valid[top : top + component_height, left : left + component_width]):
             continue
 
-        center_x, center_y = centers[index]
+        center_x, center_y = centroids[index]
 
         found.append((float(center_x), float(center_y), area))
 
+    # sort out and get MAX_SPOTS best spots
     found.sort(key=lambda item: (-item[2], item[1], item[0]))
-
     points = np.asarray(
         [(center_x, center_y) for center_x, center_y, _ in found[:MAX_SPOTS]],
         dtype=np.float32,
@@ -190,7 +202,6 @@ def detect_spots(image: Image) -> tuple[Points, Image]:
 def extract_features(
     image: Image, mask: Image, points: Points
 ) -> tuple[tuple[cv.KeyPoint, ...], Points | None]:
-    """Describe SIFT regions around the detected dark components."""
     region_mask = np.zeros_like(mask)
 
     for x, y in points:
@@ -207,8 +218,17 @@ def extract_features(
     gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
 
     sift = cv.SIFT.create(nfeatures=SIFT_FEATURES)
-
     keypoints, descriptions = sift.detectAndCompute(gray, region_mask)
+
+    debug_img(
+        cv.drawKeypoints(
+            image,
+            keypoints,
+            outImage=None,  # pyright: ignore
+            color=None,  # pyright: ignore
+            flags=cv.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS,
+        )  # pyright: ignore
+    )
 
     return tuple(keypoints), (
         np.asarray(descriptions, dtype=np.float32) if descriptions is not None else None
@@ -216,7 +236,6 @@ def extract_features(
 
 
 def ratio_matches(source: Points, target: Points) -> dict[int, int]:
-    """Retain unambiguous visual descriptor correspondences."""
     if len(source) < 2 or len(target) < 2:
         return {}
 
@@ -399,24 +418,6 @@ def eligible_selections(project: Project) -> list[EligibleSelection]:
     return eligible
 
 
-# return a to-compare frame based on a selection, forward or backward by FRAME_DELTA
-def offset_frame(selection: EligibleSelection) -> int | None:
-    start = max(selection.track.start_frame, selection.annotation.start_frame)
-    end = min(selection.track.end_frame, selection.annotation.end_frame)
-
-    forward = selection.reference_frame + FRAME_DELTA
-
-    if forward <= end:
-        return forward
-
-    backward = selection.reference_frame - FRAME_DELTA
-
-    if backward >= start:
-        return backward
-
-    return None
-
-
 def run(project: Project, output: Path) -> list[ComparisonRow]:
     selections = eligible_selections(project)
 
@@ -433,18 +434,10 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
     for selection in selections:
         frames: list[tuple[FrameLabel, int]] = []
 
-        if selection.track.video_id not in pairs.keys():
-            frames = [("reference", selection.reference_frame)]
+        reference, target = pairs[selection.track.video_id]
 
-            offset = offset_frame(selection)
-
-            if offset is not None:
-                frames.append(("offset", offset))
-        else:
-            reference, offset = pairs[selection.track.video_id]
-
-            frames.append(("reference", int(reference)))
-            frames.append(("offset", int(offset)))
+        frames.append(("reference", int(reference)))
+        frames.append(("target", int(target)))
 
         for label, frame_index in frames:
             frame = cast(
@@ -477,8 +470,8 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
     comparisons: list[tuple[EligibleSelection, FrameLabel, EligibleSelection, FrameLabel]] = []
 
     for selection in selections:
-        if (selection.sample_id, "offset") in samples:
-            comparisons.append((selection, "reference", selection, "offset"))
+        if (selection.sample_id, "target") in samples:
+            comparisons.append((selection, "reference", selection, "target"))
 
     for source, target in combinations(selections, 2):
         comparisons.append((source, "reference", target, "reference"))
