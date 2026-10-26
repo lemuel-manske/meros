@@ -9,9 +9,6 @@ from meros.domain import VideoPredictor
 from meros.external import build_sam2_predictor
 from meros.project import Project
 from meros.processing import (
-    align_masked_crops,
-    build_composites,
-    enhance_composites,
     extract_frames,
     extract_masked_crops,
     extract_tracks,
@@ -71,21 +68,6 @@ def create_pipeline(
                 "masked_crops",
                 partial(extract_masked_crops.run, project, predictor_factory=predictor_factory),
                 partial(extract_masked_crops.masked_crops_complete, project),
-            ),
-            Stage(
-                "alignments",
-                partial(align_masked_crops.run, project),
-                partial(align_masked_crops.alignments_complete, project),
-            ),
-            Stage(
-                "composites",
-                partial(build_composites.run, project),
-                partial(build_composites.composites_complete, project),
-            ),
-            Stage(
-                "enhanced_composites",
-                partial(enhance_composites.run, project),
-                partial(enhance_composites.enhanced_composites_complete, project),
             ),
         ]
     )
