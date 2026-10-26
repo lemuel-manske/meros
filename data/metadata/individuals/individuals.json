@@ -135,8 +135,8 @@
         "video_id": "h02",
         "track_id": "0",
         "start_frame": 1000,
-        "end_frame": 1750,
-        "reference_frame": 1375
+        "end_frame": 1340,
+        "reference_frame": 1170
       }
     ]
   },

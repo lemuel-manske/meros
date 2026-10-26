@@ -7,19 +7,7 @@ import numpy as np
 from matplotlib.axes import Axes
 
 from src.meros.processing.match_images import match_images, MatchStats
-
-
-# map is_same_individual to a pair
-paths = {
-    True: (
-        "data/media/masked_crops/65_7/0/210.png",
-        "data/media/masked_crops/65_7/0/179.png",
-    ),
-    False: (
-        "data/media/masked_crops/65_7/0/210.png",
-        "data/media/masked_crops/101_11/0/250.png",
-    ),
-}
+from src.meros.sandbox.sources import sources
 
 
 @dataclass(frozen=True)
@@ -33,18 +21,28 @@ class Pair:
 def read_pairs() -> list[Pair]:
     r = []
 
-    for is_same_individual, (s, t) in paths.items():
-        source_img = cv.imread(s, cv.IMREAD_UNCHANGED)
-        assert source_img is not None, f"Could not load {s}"
+    pairs = []
+    for s in sources:
+        for t in sources:
+            if s.path == t.path:
+                continue
 
-        target_img = cv.imread(t, cv.IMREAD_UNCHANGED)
-        assert target_img is not None, f"Could not load {t}"
+            is_same_individual = s.individual_id == t.individual_id
+
+            pairs.append((s.path, t.path, is_same_individual))
+
+    for pair in pairs:
+        source_img = cv.imread(pair[0], cv.IMREAD_UNCHANGED)
+        assert source_img is not None, f"Could not load {pair[0]}"
+
+        target_img = cv.imread(pair[1], cv.IMREAD_UNCHANGED)
+        assert target_img is not None, f"Could not load {pair[1]}"
 
         r.append(
             Pair(
                 source=cv.cvtColor(source_img, cv.COLOR_BGR2BGRA),
                 target=cv.cvtColor(target_img, cv.COLOR_BGR2BGRA),
-                is_same_individual=is_same_individual,
+                is_same_individual=pair[2]
             )
         )
 

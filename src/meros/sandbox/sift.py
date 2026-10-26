@@ -1,8 +1,10 @@
 import cv2 as cv
 import matplotlib.pyplot as plt
 
+from src.meros.sandbox.sources import sources
+
 if __name__ == "__main__":
-    path = "data/media/masked_crops/101_12/0/13.png"
+    path = sources[0]
 
     img = cv.imread(path)
     assert img is not None
