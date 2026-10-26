@@ -9,8 +9,9 @@ from pathlib import Path
 
 from meros.domain import VideoPredictor
 from meros.external import build_sam2_predictor
+from meros.processing.common import frame_batches, sam2_frame_sequence
 from meros.processing.extract_tracks import tracks_complete
-from meros.processing.frame_sequence import frame_batches, sam2_frame_sequence
+from meros.utils import valid_image
 
 
 def video_masked_crops_complete(project: Project, video_id: str) -> bool:
@@ -30,7 +31,7 @@ def video_masked_crops_complete(project: Project, video_id: str) -> bool:
 
             path = project.media.paths.masked_crop(video_id, track_id, int(frame_idx))
 
-            if not project.media.valid_image(path, 4, shape, mask_area=observation.mask_area):
+            if not valid_image(path, 4, shape, mask_area=observation.mask_area):
                 return False
 
     return True
@@ -64,7 +65,7 @@ def batch_masked_crops_complete(
 
             path = project.media.paths.masked_crop(video_id, track_id, frame_idx)
 
-            if not project.media.valid_image(path, 4, shape, mask_area=observation.mask_area):
+            if not valid_image(path, 4, shape, mask_area=observation.mask_area):
                 return False
 
     return True
@@ -188,7 +189,7 @@ def extract_masked_crops(video_id: str, predictor: VideoPredictor, *, project: P
 
                     path = project.media.paths.masked_crop(video_id, track_id, frame_idx)
 
-                    if project.media.valid_image(
+                    if valid_image(
                         path,
                         4,
                         shape,

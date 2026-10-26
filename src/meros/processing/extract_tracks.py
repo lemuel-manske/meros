@@ -7,9 +7,16 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from meros.domain import BBox, Track, TrackMetadata, TrackObservation, Prediction, VideoPredictor
+from meros.domain import (
+    BBoxMap,
+    Track,
+    TrackMetadata,
+    TrackObservation,
+    Prediction,
+    VideoPredictor,
+)
 from meros.external import build_sam2_predictor
-from meros.processing.frame_sequence import frame_batches, sam2_frame_sequence
+from meros.processing.common import frame_batches, sam2_frame_sequence
 from meros.project import Project
 
 
@@ -120,10 +127,10 @@ class BoxSelectionState:
 
 
 # meant for manual selection of fish bounding boxes in the first frame of a video, to be used as seeds for tracking
-def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBox:
+def select_fish_bboxes(video_id: str, frame: np.ndarray) -> BBoxMap:
     window = f"{video_id}: a = add fish, Enter = confirm box, q = save, Esc = cancel"
 
-    boxes: BBox = {}
+    boxes: BBoxMap = {}
 
     height, width = frame.shape[:2]
 

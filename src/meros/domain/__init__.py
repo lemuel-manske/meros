@@ -1,8 +1,6 @@
 from .storage import (
-    AlignmentMetadata,
-    AlignmentRunMetadata,
-    AlignmentStatus,
     BBox,
+    BBoxMap,
     Individual,
     Interval,
     Track,
@@ -23,10 +21,8 @@ from .prediction import (
 )
 
 __all__ = [
-    "AlignmentMetadata",
-    "AlignmentRunMetadata",
-    "AlignmentStatus",
     "BBox",
+    "BBoxMap",
     "BinaryMask",
     "Individual",
     "Interval",

@@ -1,6 +1,7 @@
 import cv2 as cv
 
 from meros.project import Project
+from meros.utils import valid_image
 
 
 def frames_complete(project: Project) -> bool:
@@ -60,9 +61,7 @@ def frames_complete(project: Project) -> bool:
             return False
 
         for idx in actual:
-            if not project.media.valid_image(
-                project.media.frame_path(video.video_id, idx), 3, shape
-            ):
+            if not valid_image(project.media.frame_path(video.video_id, idx), 3, shape):
                 return False
 
     return True

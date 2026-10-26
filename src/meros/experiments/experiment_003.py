@@ -12,10 +12,9 @@ from itertools import combinations
 from pathlib import Path
 from typing import Literal, TypedDict, cast
 
-from meros.domain import TrackSelection, VideoAnnotation
-from meros.experiments.common import debug_img, experiment_output
+from meros.domain import VideoAnnotation
+from meros.experiments.common import debug_img, experiment_output, Image, Points
 from meros.project import Project
-from meros.types import Image, Points
 
 
 type FrameLabel = Literal["reference", "target"]
@@ -24,6 +23,7 @@ type SampleKey = tuple[str, FrameLabel]
 
 # hard-set pairs for comparison,
 # for example, to test very distant frames
+# TODO: replace by metadata.videos()
 pairs = {
     "h01": ("170", "510"),
     "h02": ("1000", "1140"),
@@ -77,13 +77,14 @@ class Sample:
 @dataclass(frozen=True)
 class EligibleSelection:
     individual_id: str
-    track: TrackSelection
+    track_id: str
+    video_id: str
     annotation: VideoAnnotation
     reference_frame: int
 
     @property
     def sample_id(self) -> str:
-        return f"{self.track.selection_id}--frontal-{self.annotation.start_frame}-{self.annotation.end_frame}"
+        return f"{self.annotation.start_frame}-{self.annotation.end_frame}"
 
 
 @dataclass(frozen=True)
@@ -382,35 +383,36 @@ def eligible_selections(project: Project) -> list[EligibleSelection]:
 
     eligible: list[EligibleSelection] = []
 
-    for individual in project.metadata.read_individuals():
-        for track in individual.tracks:
-            video = videos.get(track.video_id)
+    for vid in project.metadata.read_videos():
+        for ind in vid.individuals:
+            video = videos.get(vid.video_id)
 
             if video is None:
-                raise ValueError(f"Video metadata missing for {track.video_id}")
+                raise ValueError(f"Video metadata missing for {vid.video_id}")
 
             annotations = video.matching_annotations(
                 viewpoint="frontal",
                 min_quality=MIN_QUALITY,
-                track_id=track.track_id,
+                track_id=ind.track_id,
             )
 
             for annotation in annotations:
-                start = max(track.start_frame, annotation.start_frame)
-                end = min(track.end_frame, annotation.end_frame)
+                start = max(ind.start_frame, annotation.start_frame)
+                end = min(ind.end_frame, annotation.end_frame)
 
                 if start > end:
                     continue
 
-                reference = track.reference_frame
+                reference = ind.reference_frame
 
                 if not start <= reference <= end:
                     reference = (start + end) // 2
 
                 eligible.append(
                     EligibleSelection(
-                        individual_id=individual.individual_id,
-                        track=track,
+                        individual_id=ind.individual_id,
+                        track_id=ind.track_id,
+                        video_id=vid.video_id,
                         annotation=annotation,
                         reference_frame=reference,
                     )
@@ -435,7 +437,7 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
     for selection in selections:
         frames: list[tuple[FrameLabel, int]] = []
 
-        reference, target = pairs[selection.track.video_id]
+        reference, target = pairs[selection.video_id]
 
         frames.append(("reference", int(reference)))
         frames.append(("target", int(target)))
@@ -444,8 +446,8 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
             frame = cast(
                 Image,
                 project.media.read_masked_crop(
-                    selection.track.video_id,
-                    selection.track.track_id,
+                    selection.video_id,
+                    selection.track_id,
                     frame_index,
                 ),
             )

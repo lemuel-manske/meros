@@ -16,11 +16,10 @@ class Project:
     @classmethod
     def open(
         cls,
-        root: Path = Path("data"),
         *,
         checkpoint: Path = Path("external/sam2/checkpoints/sam2.1_hiera_large.pt"),
     ) -> "Project":
-        metadata = LocalFsMetadataStore(root)
-        media = LocalFsMediaStore(root)
+        metadata = LocalFsMetadataStore()
+        media = LocalFsMediaStore()
 
         return cls(media, metadata, checkpoint=checkpoint)

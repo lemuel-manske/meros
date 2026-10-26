@@ -1,30 +1,28 @@
-import cv2 as cv
-
 import json
 import os
 import tempfile
 
+import cv2 as cv
 import numpy as np
 
-from collections import defaultdict
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from meros.domain import (
-    AlignmentMetadata,
-    AlignmentRunMetadata,
-    BBox,
+    BBoxMap,
     Individual,
     Interval,
     Track,
     TrackMetadata,
     TrackObservation,
-    TrackSelection,
-    TrackSelectionKey,
     Video,
     VideoAnnotation,
 )
-from meros.domain.storage import validate_bbox
+from meros.utils import read_image, write_image
+
+
+MEDIA_ROOT = Path("data/media")
+METADATA_ROOT = Path("data/metadata")
 
 
 def write_json_atomic(path: Path, payload: object) -> None:
@@ -45,155 +43,69 @@ def write_json_atomic(path: Path, payload: object) -> None:
 
 @dataclass(frozen=True)
 class MediaPaths:
-    root: Path = Path("data")
-
-    def composite(self, selection: TrackSelection) -> Path:
-        return self.root / "media/alignment/selections" / selection.selection_id / "composite.png"
-
-    def composite_enhanced(self, selection: TrackSelection) -> Path:
-        return (
-            self.root
-            / "media/alignment/selections"
-            / selection.selection_id
-            / "enhanced_composite.png"
-        )
+    def frames(self, video_id: str) -> Path:
+        return MEDIA_ROOT / "frames" / video_id
 
     def frame(self, video_id: str, frame_idx: int) -> Path:
-        return (self.root / "media/frames") / video_id / f"{frame_idx}.jpg"
+        return MEDIA_ROOT / "frames" / video_id / f"{frame_idx}.jpg"
 
     def masked_crop(self, video_id: str, track_id: str, frame_idx: int) -> Path:
-        return (self.root / "media/masked_crops") / video_id / track_id / f"{frame_idx}.png"
+        return MEDIA_ROOT / "masked_crops" / video_id / track_id / f"{frame_idx}.png"
+
+
+media_paths = MediaPaths()
 
 
 class LocalFsMediaStore:
-    def __init__(self, root: Path = Path("data")) -> None:
-        self.paths = MediaPaths(root)
-
-    @staticmethod
-    def _read_image(path: Path, flags: int = cv.IMREAD_COLOR) -> np.ndarray:
-        image = cv.imread(str(path), flags)
-
-        if image is None:
-            raise FileNotFoundError(f"Could not read image: {path}")
-
-        return image
-
-    @staticmethod
-    def _write_image(path: Path, image: np.ndarray) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-
-        if not cv.imwrite(str(path), image):
-            raise RuntimeError(f"Could not write image: {path}")
-
-    @staticmethod
-    def valid_image(
-        path: Path,
-        channels: int,
-        shape: tuple[int, int] | None = None,
-        *,
-        mask_area: int | None = None,
-    ) -> bool:
-        if not path.is_file():
-            return False
-
-        try:
-            image = cv.imread(str(path), cv.IMREAD_UNCHANGED)
-        except cv.error:
-            return False
-
-        if (
-            image is None
-            or image.dtype != np.uint8
-            or image.ndim != 3
-            or image.shape[2] != channels
-        ):
-            return False
-
-        if shape is not None and image.shape[:2] != shape:
-            return False
-
-        if channels == 4:
-            alpha = image[:, :, 3]
-
-            if not np.all((alpha == 0) | (alpha == 255)) or not np.any(alpha == 255):
-                return False
-
-            if mask_area is not None and np.count_nonzero(alpha) != mask_area:
-                return False
-
-        return True
-
-    def frames_path(self, video_id: str) -> Path:
-        return (self.paths.root / "media/frames") / video_id
+    paths: MediaPaths = media_paths
 
     def frame_path(self, video_id: str, frame_idx: int) -> Path:
-        return self.paths.frame(video_id, frame_idx)
+        return media_paths.frame(video_id, frame_idx)
 
-    def read_frame(self, video_id: str, frame_idx: int) -> np.ndarray:
-        return self._read_image(self.paths.frame(video_id, frame_idx))
+    def frames_path(self, video_id: str) -> Path:
+        return media_paths.frames(video_id)
 
     def frame_ids(self, video_id: str) -> list[int]:
         return sorted(int(p.stem) for p in self.frames_path(video_id).glob("*.jpg"))
 
+    def read_frame(self, video_id: str, frame_idx: int) -> np.ndarray:
+        return read_image(media_paths.frame(video_id, frame_idx))
+
     def write_frame(self, video_id: str, frame_idx: int, frame: np.ndarray) -> None:
-        self._write_image(self.paths.frame(video_id, frame_idx), frame)
+        write_image(media_paths.frame(video_id, frame_idx), frame)
 
     def read_masked_crop(self, video_id: str, track_id: str, frame_idx: int) -> np.ndarray:
-        return self._read_image(
-            self.paths.masked_crop(video_id, track_id, frame_idx), cv.IMREAD_UNCHANGED
+        return read_image(
+            media_paths.masked_crop(video_id, track_id, frame_idx), cv.IMREAD_UNCHANGED
         )
 
     def write_masked_crop(
         self, video_id: str, track_id: str, frame_idx: int, masked_crop: np.ndarray
     ) -> None:
-        self._write_image(self.paths.masked_crop(video_id, track_id, frame_idx), masked_crop)
-
-    def read_composite(self, selection: TrackSelection) -> np.ndarray:
-        return self._read_image(self.paths.composite(selection), cv.IMREAD_UNCHANGED)
-
-    def write_composite(self, selection: TrackSelection, composite: np.ndarray) -> None:
-        self._write_image(self.paths.composite(selection), composite)
-
-    def read_composite_enhanced(self, selection: TrackSelection) -> np.ndarray:
-        return self._read_image(self.paths.composite_enhanced(selection), cv.IMREAD_UNCHANGED)
-
-    def write_composite_enhanced(self, selection: TrackSelection, composite: np.ndarray) -> None:
-        self._write_image(self.paths.composite_enhanced(selection), composite)
+        write_image(media_paths.masked_crop(video_id, track_id, frame_idx), masked_crop)
 
 
 @dataclass(frozen=True)
 class MetadataPaths:
-    root: Path = Path("data")
-
-    def alignment(
-        self,
-        video_id: str,
-        track_id: str,
-        start_frame: int,
-        end_frame: int,
-        reference_frame: int,
-    ) -> Path:
-        fname = f"{track_id}_{start_frame}_{end_frame}_ref_{reference_frame}.json"
-
-        return (self.root / "metadata/alignment") / video_id / fname
-
     def bboxes(self) -> Path:
-        return (self.root / "metadata/videos") / "bboxes.json"
+        return METADATA_ROOT / "videos" / "bboxes.json"
 
     def track(self, video_id: str) -> Path:
-        return (self.root / "metadata/tracks") / video_id / "metadata.json"
+        return METADATA_ROOT / "tracks" / video_id / "metadata.json"
 
     def videos(self) -> Path:
-        return (self.root / "metadata/videos") / "videos.json"
+        return METADATA_ROOT / "videos" / "videos.json"
+
+
+metadata_paths = MetadataPaths()
 
 
 class LocalFsMetadataStore:
-    def __init__(self, root: Path) -> None:
-        self.paths = MetadataPaths(root)
+    paths: MetadataPaths = metadata_paths
 
-    def read_bboxes(self) -> dict[str, BBox]:
+    def read_bboxes(self) -> dict[str, BBoxMap]:
         try:
-            with self.paths.bboxes().open("r", encoding="utf-8") as f:
+            with metadata_paths.bboxes().open("r", encoding="utf-8") as f:
                 metadata = json.load(f)
         except FileNotFoundError:
             return {}
@@ -205,16 +117,13 @@ class LocalFsMetadataStore:
             if not isinstance(tracks, dict):
                 raise ValueError("Seed boxes must be keyed by track")
 
-            for bbox in tracks.values():
-                validate_bbox(bbox)
-
         return metadata
 
-    def write_bboxes(self, boxes: dict[str, BBox]) -> None:
-        write_json_atomic(self.paths.bboxes(), boxes)
+    def write_bboxes(self, boxes: dict[str, BBoxMap]) -> None:
+        write_json_atomic(metadata_paths.bboxes(), boxes)
 
     def read_videos(self) -> list[Video]:
-        with self.paths.videos().open("r", encoding="utf-8") as f:
+        with metadata_paths.videos().open("r", encoding="utf-8") as f:
             metadata = json.load(f)
 
         return [
@@ -228,41 +137,17 @@ class LocalFsMetadataStore:
                         VideoAnnotation(**annotation)
                         for annotation in video_metadata.get("annotations", [])
                     ],
+                    "individuals": [
+                        Individual(**individual)
+                        for individual in video_metadata.get("individuals", [])
+                    ],
                 }
             )
             for video_metadata in metadata
         ]
 
-    def read_individuals(self) -> list[Individual]:
-        with self.paths.videos().open("r", encoding="utf-8") as f:
-            metadata = json.load(f)
-
-        individual_tracks = defaultdict(list)
-
-        for video in metadata:
-            for individual in video.get("individuals", []):
-                individual_id = individual["individual_id"]
-
-                individual_tracks[individual_id].append(
-                    TrackSelection(
-                        video_id=video["video_id"],
-                        track_id=individual["track_id"],
-                        start_frame=individual["start_frame"],
-                        end_frame=individual["end_frame"],
-                        reference_frame=individual["reference_frame"],
-                    )
-                )
-
-        return [
-            Individual(
-                individual_id=individual_id,
-                tracks=tracks,
-            )
-            for individual_id, tracks in individual_tracks.items()
-        ]
-
     def read_track(self, video_id: str) -> TrackMetadata:
-        path = self.paths.track(video_id)
+        path = metadata_paths.track(video_id)
 
         with path.open("r", encoding="utf-8") as f:
             metadata = json.load(f)
@@ -293,44 +178,6 @@ class LocalFsMetadataStore:
         )
 
     def write_track(self, video_id: str, metadata: TrackMetadata) -> None:
-        path = self.paths.track(video_id)
+        path = metadata_paths.track(video_id)
 
         write_json_atomic(path, asdict(metadata))
-
-    def write_alignment(self, _id: TrackSelectionKey, rows: list[AlignmentMetadata]) -> None:
-        video_id, track_id, start_frame, end_frame, selected_reference = _id
-
-        path = self.paths.alignment(video_id, track_id, start_frame, end_frame, selected_reference)
-
-        payload = {
-            "video_id": video_id,
-            "track_id": track_id,
-            "start_frame": start_frame,
-            "end_frame": end_frame,
-            "reference_frame": selected_reference,
-            "method": "SIFT mutual ratio matches, affine RANSAC",
-            "frames": [asdict(row) for row in rows],
-        }
-
-        write_json_atomic(path, payload)
-
-    def read_alignment(self, _id: TrackSelectionKey) -> AlignmentRunMetadata:
-        video_id, track_id, start_frame, end_frame, selected_reference = _id
-
-        path = self.paths.alignment(video_id, track_id, start_frame, end_frame, selected_reference)
-
-        with path.open("r", encoding="utf-8") as f:
-            metadata = json.load(f)
-
-        if metadata["reference_frame"] != selected_reference:
-            raise ValueError("Alignment reference differs from selection")
-
-        return AlignmentRunMetadata(
-            video_id=metadata["video_id"],
-            track_id=metadata["track_id"],
-            start_frame=metadata["start_frame"],
-            end_frame=metadata["end_frame"],
-            reference_frame=metadata["reference_frame"],
-            method=metadata["method"],
-            frames=[AlignmentMetadata(**row) for row in metadata["frames"]],
-        )
