@@ -15,13 +15,23 @@ from .storage import (
     Viewpoint,
 )
 
+from .prediction import (
+    BinaryMask,
+    Prediction,
+    SeedBox,
+    VideoPredictor,
+)
+
 __all__ = [
     "AlignmentMetadata",
     "AlignmentRunMetadata",
     "AlignmentStatus",
     "BBox",
+    "BinaryMask",
     "Individual",
     "Interval",
+    "Prediction",
+    "SeedBox",
     "Track",
     "TrackMetadata",
     "TrackObservation",
@@ -29,5 +39,6 @@ __all__ = [
     "TrackSelectionKey",
     "Video",
     "VideoAnnotation",
+    "VideoPredictor",
     "Viewpoint",
 ]

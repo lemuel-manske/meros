@@ -7,7 +7,7 @@ from collections.abc import Callable
 from meros.project import Project
 from pathlib import Path
 
-from meros.domain.prediction import VideoPredictor
+from meros.domain import VideoPredictor
 from meros.external import build_sam2_predictor
 from meros.processing.extract_tracks import tracks_complete
 from meros.processing.frame_sequence import frame_batches, sam2_frame_sequence

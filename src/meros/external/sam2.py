@@ -6,7 +6,7 @@ from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Protocol, cast
 
-from meros.domain.prediction import BinaryMask, Prediction, SeedBox
+from meros.domain import BinaryMask, Prediction, SeedBox
 
 
 # just for type checking

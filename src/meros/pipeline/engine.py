@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 
-from meros.domain.prediction import VideoPredictor
+from meros.domain import VideoPredictor
 from meros.external import build_sam2_predictor
 from meros.project import Project
 from meros.processing import (

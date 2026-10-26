@@ -19,8 +19,7 @@ import cv2 as cv
 
 from meros.experiments.common import experiment_output, git_revision
 from meros.project import Project
-from meros.domain import Individual, TrackSelection
-from meros.domain.prediction import VideoPredictor
+from meros.domain import Individual, TrackSelection, VideoPredictor
 from meros.external import build_sam2_predictor
 from meros.pipeline import create_pipeline
 from meros.processing.match_images import match_images

@@ -7,8 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from meros.domain import BBox, Track, TrackMetadata, TrackObservation
-from meros.domain.prediction import Prediction, VideoPredictor
+from meros.domain import BBox, Track, TrackMetadata, TrackObservation, Prediction, VideoPredictor
 from meros.external import build_sam2_predictor
 from meros.processing.frame_sequence import frame_batches, sam2_frame_sequence
 from meros.project import Project
