@@ -28,6 +28,8 @@ type SampleKey = tuple[str, FrameLabel]
 pairs = {
     "h01": ("170", "510"),
     "h02": ("1000", "1140"),
+    "h03": ("3290", "3416"),
+    "h04": ("2817", "2937"),
 }
 
 # Sample selection

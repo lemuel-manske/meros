@@ -13,23 +13,59 @@ from meros.processing.extract_tracks import tracks_complete
 from meros.processing.frame_sequence import frame_batches, sam2_frame_sequence
 
 
+def video_masked_crops_complete(project: Project, video_id: str) -> bool:
+    try:
+        track_metadata = project.metadata.read_track(video_id)
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+
+    if not track_metadata.tracks:
+        return False
+
+    for track_id, track in track_metadata.tracks.items():
+        for frame_idx, observation in track.frames.items():
+            x1, y1, x2, y2 = observation.bbox
+
+            shape = (y2 - y1 + 1, x2 - x1 + 1)
+
+            path = project.media.paths.masked_crop(video_id, track_id, int(frame_idx))
+
+            if not project.media.valid_image(path, 4, shape, mask_area=observation.mask_area):
+                return False
+
+    return True
+
+
 def masked_crops_complete(project: Project) -> bool:
     if not tracks_complete(project):
         return False
 
-    for video in project.metadata.read_videos():
-        track_metadata = project.metadata.read_track(video.video_id)
+    return all(
+        video_masked_crops_complete(project, video.video_id)
+        for video in project.metadata.read_videos()
+    )
 
-        for track_id, track in track_metadata.tracks.items():
-            for frame_idx, observation in track.frames.items():
-                x1, y1, x2, y2 = observation.bbox
 
-                shape = (y2 - y1 + 1, x2 - x1 + 1)
+def batch_masked_crops_complete(
+    project: Project,
+    video_id: str,
+    tracks: dict,
+    batch: list[int],
+) -> bool:
+    for frame_idx in batch:
+        for track_id, track in tracks.items():
+            observation = track.frames.get(str(frame_idx))
 
-                path = project.media.paths.masked_crop(video.video_id, track_id, int(frame_idx))
+            if observation is None:
+                continue
 
-                if not project.media.valid_image(path, 4, shape, mask_area=observation.mask_area):
-                    return False
+            x1, y1, x2, y2 = observation.bbox
+            shape = (y2 - y1 + 1, x2 - x1 + 1)
+
+            path = project.media.paths.masked_crop(video_id, track_id, frame_idx)
+
+            if not project.media.valid_image(path, 4, shape, mask_area=observation.mask_area):
+                return False
 
     return True
 
@@ -39,14 +75,26 @@ def run(
     *,
     predictor_factory: Callable[[Path], VideoPredictor] = build_sam2_predictor,
 ) -> None:
-    predictor = predictor_factory(project.checkpoint)
+    predictor = None
+    count = 0
 
-    count = sum(
-        extract_masked_crops(video.video_id, predictor, project=project)
-        for video in project.metadata.read_videos()
-    )
+    for video in project.metadata.read_videos():
+        video_id = video.video_id
 
-    print(f"Saved {count} masked crops.")
+        if video_masked_crops_complete(project, video_id):
+            print(f"{video_id}: masked crops already complete, skipping.")
+            continue
+
+        if predictor is None:
+            predictor = predictor_factory(project.checkpoint)
+
+        count += extract_masked_crops(
+            video_id,
+            predictor,
+            project=project,
+        )
+
+    print(f"Saved {count} new masked crops.")
 
 
 def build_masked_crop(
@@ -96,6 +144,10 @@ def extract_masked_crops(video_id: str, predictor: VideoPredictor, *, project: P
     written_frames: set[int] = set()
 
     for batch in frame_batches(frame_ids):
+        if batch_masked_crops_complete(project, video_id, tracks, list(batch)):
+            print(f"{video_id}: batch already complete, skipping.")
+            continue
+
         with sam2_frame_sequence(project, video_id, batch) as sequence:
             state = predictor.init_state(video_path=str(sequence.path))
 
@@ -125,7 +177,23 @@ def extract_masked_crops(video_id: str, predictor: VideoPredictor, *, project: P
                 for track_id, mask in prediction.masks.items():
                     track = tracks[track_id]
 
-                    if str(frame_idx) not in track.frames:
+                    observation = track.frames.get(str(frame_idx))
+
+                    if observation is None:
+                        continue
+
+                    # Skip existing valid crops before building them
+                    x1, y1, x2, y2 = observation.bbox
+                    shape = (y2 - y1 + 1, x2 - x1 + 1)
+
+                    path = project.media.paths.masked_crop(video_id, track_id, frame_idx)
+
+                    if project.media.valid_image(
+                        path,
+                        4,
+                        shape,
+                        mask_area=observation.mask_area,
+                    ):
                         continue
 
                     crop = build_masked_crop(frame, mask)
@@ -147,3 +215,7 @@ def extract_masked_crops(video_id: str, predictor: VideoPredictor, *, project: P
         print(f"{video_id}: saved {count} crops.", flush=True)
 
     return count
+
+
+if __name__ == "__main__":
+    run(Project.open())

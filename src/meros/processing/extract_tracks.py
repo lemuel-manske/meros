@@ -19,7 +19,6 @@ def video_tracks_complete(
     video_id: str,
     seeds: dict,
 ) -> bool:
-    print(f"{video_id}: checking if tracks are complete...")
     try:
         saved = project.metadata.read_track(video_id)
         frame_ids = project.media.frame_ids(video_id)
