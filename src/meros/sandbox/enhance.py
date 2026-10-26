@@ -55,9 +55,7 @@ def mantiuk(image: np.ndarray, scale: float) -> np.ndarray:
     if not np.isfinite(mapped).all():
         raise ValueError("Mantiuk produced non-finite pixels")
 
-    rgb8 = np.rint(
-        np.clip(mapped, 0, 1) ** (1 / 2.2) * 255
-    ).astype(np.uint8)
+    rgb8 = np.rint(np.clip(mapped, 0, 1) ** (1 / 2.2) * 255).astype(np.uint8)
 
     result = image.copy()
     result[:, :, :3] = cv.cvtColor(rgb8, cv.COLOR_RGB2BGR)
@@ -76,10 +74,9 @@ def clahe(image: np.ndarray) -> np.ndarray:
     filled = gray.copy()
     filled[~valid] = int(np.median(gray[valid]))
 
-    enhanced = cv.createCLAHE(
-        clipLimit=CLAHE_CLIP_LIMIT,
-        tileGridSize=CLAHE_TILE_GRID_SIZE
-    ).apply(filled)
+    enhanced = cv.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=CLAHE_TILE_GRID_SIZE).apply(
+        filled
+    )
 
     result = cv.cvtColor(enhanced, cv.COLOR_GRAY2BGRA)
     result[:, :, 3] = image[:, :, 3]
@@ -109,9 +106,7 @@ if __name__ == "__main__":
         ]
 
         for scale in SCALES:
-            images.append(
-                (f"Mantiuk (scale={scale})", mantiuk(image, scale))
-            )
+            images.append((f"Mantiuk (scale={scale})", mantiuk(image, scale)))
 
         fig, axes = plt.subplots(2, 3, figsize=(15, 9))
 

@@ -4,8 +4,8 @@ import cv2 as cv
 import numpy as np
 
 from collections.abc import Callable
-from pathlib import Path
 from meros.project import Project
+from pathlib import Path
 
 from meros.domain.prediction import VideoPredictor
 from meros.external import build_sam2_predictor

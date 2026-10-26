@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import csv
-import json
 
 import cv2 as cv
 import numpy as np
@@ -513,35 +512,8 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
 
     with (output / "metrics.csv").open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=list(ComparisonRow.__annotations__))
-
         writer.writeheader()
-
         writer.writerows(rows)
-
-    provenance: dict[str, object] = {
-        "source_commit": git_revision(),
-        "viewpoint": "frontal",
-        "minimum_quality": MIN_QUALITY,
-        "frame_delta": FRAME_DELTA,
-        "max_spots": MAX_SPOTS,
-        "spot_region_radius_px": SPOT_REGION_RADIUS_PX,
-        "sift_features": SIFT_FEATURES,
-        "sift_match_ratio": SIFT_MATCH_RATIO,
-        "ransac_threshold_px": SIFT_RANSAC_THRESHOLD_PX,
-        "identity_score": "ransac_inliers / min(source_features, target_features)",
-        "selections": [
-            {
-                "individual_id": selection.individual_id,
-                "selection_id": selection.track.selection_id,
-                "annotation_start": selection.annotation.start_frame,
-                "annotation_end": selection.annotation.end_frame,
-                "reference_frame": selection.reference_frame,
-            }
-            for selection in selections
-        ],
-    }
-
-    (output / "run.json").write_text(json.dumps(provenance, indent=2) + "\n")
 
     print(f"Wrote {len(rows)} comparisons to {output}")
 

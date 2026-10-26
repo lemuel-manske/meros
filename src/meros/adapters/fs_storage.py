@@ -6,6 +6,7 @@ import tempfile
 
 import numpy as np
 
+from collections import defaultdict
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -179,9 +180,6 @@ class MetadataPaths:
     def bboxes(self) -> Path:
         return (self.root / "metadata/videos") / "bboxes.json"
 
-    def individuals(self) -> Path:
-        return (self.root / "metadata/individuals") / "individuals.json"
-
     def track(self, video_id: str) -> Path:
         return (self.root / "metadata/tracks") / video_id / "metadata.json"
 
@@ -236,15 +234,31 @@ class LocalFsMetadataStore:
         ]
 
     def read_individuals(self) -> list[Individual]:
-        with self.paths.individuals().open("r", encoding="utf-8") as f:
+        with self.paths.videos().open("r", encoding="utf-8") as f:
             metadata = json.load(f)
+
+        individual_tracks = defaultdict(list)
+
+        for video in metadata:
+            for individual in video.get("individuals", []):
+                individual_id = individual["individual_id"]
+
+                individual_tracks[individual_id].append(
+                    TrackSelection(
+                        video_id=video["video_id"],
+                        track_id=individual["track_id"],
+                        start_frame=individual["start_frame"],
+                        end_frame=individual["end_frame"],
+                        reference_frame=individual["reference_frame"],
+                    )
+                )
 
         return [
             Individual(
-                individual_id=item["individual_id"],
-                tracks=[TrackSelection(**track) for track in item["tracks"]],
+                individual_id=individual_id,
+                tracks=tracks,
             )
-            for item in metadata
+            for individual_id, tracks in individual_tracks.items()
         ]
 
     def read_track(self, video_id: str) -> TrackMetadata:

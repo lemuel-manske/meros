@@ -12,7 +12,7 @@ The experiment uses the existing `Project` metadata API and BGRA masked crops.
 
 Eligible observations:
 
-- Belong to a track in `individuals.json`.
+- Belong to a track in `videos.json`.
 - Overlap an annotation with `viewpoint="frontal"` and `quality >= 3`.
 - Match the annotation's `track_id`.
 

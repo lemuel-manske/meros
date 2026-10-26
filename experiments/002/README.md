@@ -50,15 +50,6 @@ affine RANSAC inliers
 
 `inliers` are mutual matches that are also geometrically consistent with the affine transformation estimated by RANSAC.
 
-## Data and selection criteria
-
-The experiment uses the individual track selections defined in `individuals.json`
-through the `Project` metadata API. The existing processing pipeline generates
-masked reference crops, aligned composites, and enhanced composites.
-
-Same-individual labels come from the annotated individual manifest. Comparison
-pairs may share video or encounter conditions; see the limitations below.
-
 ## Running the experiment
 
 From the repository root, with the project dependencies and source media prepared:

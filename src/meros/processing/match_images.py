@@ -3,6 +3,7 @@ import numpy as np
 
 from dataclasses import dataclass
 
+
 SIFT_FEATURES = 4000
 DEFAULT_RATIO = 0.9
 DEFAULT_ERODE = 7

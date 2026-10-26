@@ -1,9 +1,8 @@
-import numpy as np
 import cv2 as cv
-
-from meros.project import Project
+import numpy as np
 
 from meros.domain import TrackSelection
+from meros.project import Project
 
 
 def composites_complete(project: Project) -> bool:

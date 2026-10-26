@@ -4,9 +4,8 @@ import numpy as np
 from dataclasses import dataclass, replace
 from collections.abc import Sequence
 
-from meros.project import Project
-
 from meros.domain import AlignmentMetadata, TrackSelection
+from meros.project import Project
 
 SIFT_FEATURES = 4000
 MATCH_RATIO = 0.75  # best candidate is clearly the best

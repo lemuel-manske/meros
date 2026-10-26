@@ -1,10 +1,11 @@
 import cv2 as cv
 import numpy as np
+
 from scipy.ndimage import distance_transform_edt
 
+from meros.domain import TrackSelection
 from meros.project import Project
 
-from meros.domain import TrackSelection
 
 CLIP_LIMIT = 1.5
 STRENGTH = 0.5

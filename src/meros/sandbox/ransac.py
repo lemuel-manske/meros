@@ -42,7 +42,7 @@ def read_pairs() -> list[Pair]:
             Pair(
                 source=cv.cvtColor(source_img, cv.COLOR_BGR2BGRA),
                 target=cv.cvtColor(target_img, cv.COLOR_BGR2BGRA),
-                is_same_individual=pair[2]
+                is_same_individual=pair[2],
             )
         )
 
