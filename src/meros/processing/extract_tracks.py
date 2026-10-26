@@ -14,10 +14,62 @@ from meros.processing.frame_sequence import frame_batches, sam2_frame_sequence
 from meros.project import Project
 
 
+def video_tracks_complete(
+    project: Project,
+    video_id: str,
+    seeds: dict,
+) -> bool:
+    print(f"{video_id}: checking if tracks are complete...")
+    try:
+        saved = project.metadata.read_track(video_id)
+        frame_ids = project.media.frame_ids(video_id)
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+
+    if (
+        not frame_ids
+        or not saved.tracks
+        or saved.video_id != video_id
+        or saved.processed_frame_count != len(frame_ids)
+    ):
+        return False
+
+    try:
+        height, width = project.media.read_frame(video_id, frame_ids[0]).shape[:2]
+    except (OSError, ValueError, cv.error):
+        return False
+
+    video_seeds = seeds.get(video_id, {})
+
+    if set(saved.tracks) != set(video_seeds):
+        return False
+
+    for track_id, track in saved.tracks.items():
+        if not track.frames:
+            return False
+
+        if track.initial_frame != frame_ids[0] or track.initial_bbox != video_seeds[track_id]:
+            return False
+
+        try:
+            for idx, observation in track.frames.items():
+                if str(int(idx)) != idx or int(idx) not in frame_ids:
+                    return False
+
+                x1, y1, x2, y2 = observation.bbox
+
+                if not 0 <= x1 <= x2 < width or not 0 <= y1 <= y2 < height:
+                    return False
+
+        except (ValueError, TypeError):
+            return False
+
+    return True
+
+
 def tracks_complete(project: Project) -> bool:
     try:
         videos = project.metadata.read_videos()
-
         seeds = project.metadata.read_bboxes()
     except (OSError, ValueError, KeyError, TypeError):
         return False
@@ -25,52 +77,7 @@ def tracks_complete(project: Project) -> bool:
     if not videos:
         return False
 
-    for video in videos:
-        try:
-            saved = project.metadata.read_track(video.video_id)
-
-            frame_ids = project.media.frame_ids(video.video_id)
-        except (OSError, ValueError, KeyError, TypeError):
-            return False
-
-        if (
-            not frame_ids
-            or not saved.tracks
-            or saved.video_id != video.video_id
-            or saved.processed_frame_count != len(frame_ids)
-        ):
-            return False
-
-        try:
-            height, width = project.media.read_frame(video.video_id, frame_ids[0]).shape[:2]
-        except (OSError, ValueError, cv.error):
-            return False
-
-        video_seeds = seeds.get(video.video_id, {})
-
-        if set(saved.tracks) != set(video_seeds):
-            return False
-
-        for track_id, track in saved.tracks.items():
-            if not track.frames:
-                return False
-
-            if track.initial_frame != frame_ids[0] or track.initial_bbox != video_seeds[track_id]:
-                return False
-
-            try:
-                for idx, observation in track.frames.items():
-                    if str(int(idx)) != idx or int(idx) not in frame_ids:
-                        return False
-
-                    x1, y1, x2, y2 = observation.bbox
-
-                    if not 0 <= x1 <= x2 < width or not 0 <= y1 <= y2 < height:
-                        return False
-            except (ValueError, TypeError):
-                return False
-
-    return True
+    return all(video_tracks_complete(project, video.video_id, seeds) for video in videos)
 
 
 def run(
@@ -78,10 +85,20 @@ def run(
     *,
     predictor_factory: Callable[[Path], VideoPredictor] = build_sam2_predictor,
 ) -> None:
-    predictor = predictor_factory(project.checkpoint)
+    predictor = None
 
     for video in project.metadata.read_videos():
         video_id = video.video_id
+
+        # Reload seeds to avoid stale metadata
+        seeds = project.metadata.read_bboxes()
+
+        if video_tracks_complete(project, video_id, seeds):
+            print(f"{video_id}: already tracked, skipping.")
+            continue
+
+        if predictor is None:
+            predictor = predictor_factory(project.checkpoint)
 
         tracks = select_track_seeds(video_id, project=project)
 
@@ -344,3 +361,7 @@ def process_frame(
             bbox=bbox,
             mask_area=int(mask.sum()),
         )
+
+
+if __name__ == "__main__":
+    run(Project.open())
