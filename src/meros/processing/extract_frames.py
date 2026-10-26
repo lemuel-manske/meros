@@ -75,26 +75,23 @@ def run(project: Project) -> None:
         if not capture.isOpened():
             raise RuntimeError(f"Could not open video: {video.path}")
 
-        existing_frames_ids = [
+        existing_frame_ids = {
             f.stem for f in project.media.frames_path(video.video_id).glob("*.jpg")
-        ]
+        }
 
         frame_idx = 0
+        extracted_count = 0
 
         try:
-            frames_to_extract = []
-
             intervals = video.intervals
 
-            if len(intervals) > 0:
-                # keep just the frames that are in the intervals, and skip the rest
+            if intervals:
+                frames_to_extract = set()
 
                 for interval in intervals:
-                    frames_to_extract.extend(range(interval.start, interval.end + 1))
+                    frames_to_extract.update(range(interval.start, interval.end + 1))
             else:
-                # no intervals, so extract all frames
-
-                frames_to_extract = list(range(int(capture.get(cv.CAP_PROP_FRAME_COUNT))))
+                frames_to_extract = set(range(int(capture.get(cv.CAP_PROP_FRAME_COUNT))))
 
             while True:
                 ok, frame = capture.read()
@@ -102,27 +99,28 @@ def run(project: Project) -> None:
                 if not ok:
                     break
 
-                if video.mirrored:
-                    frame = cv.flip(frame, 1)
+                if frame_idx in frames_to_extract and str(frame_idx) not in existing_frame_ids:
+                    if video.mirrored:
+                        frame = cv.flip(frame, 1)
 
-                if frame_idx in frames_to_extract and str(frame_idx) not in existing_frames_ids:
                     project.media.write_frame(
                         video.video_id,
                         frame_idx,
                         frame,
                     )
 
+                    extracted_count += 1
+
                 frame_idx += 1
 
         finally:
             capture.release()
 
-        count = len(frames_to_extract)
-
-        if count == 0:
-            raise RuntimeError(f"{video.video_id}: no frames extracted.")
-
-        print(f"{video.video_id}: extracted {count} frames.")
+        print(
+            f"{video.video_id}: "
+            f"{extracted_count} new frames extracted, "
+            f"{len(frames_to_extract)} requested."
+        )
 
 
 if __name__ == "__main__":

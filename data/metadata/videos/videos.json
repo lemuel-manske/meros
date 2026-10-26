@@ -41,6 +41,48 @@
     ]
   },
   {
+    "video_id": "h03",
+    "fname": "h03.webm",
+    "mirrored": true,
+    "path": "data/media/videos/h03.webm",
+    "intervals": [
+      {
+        "start": 3290,
+        "end": 3416
+      }
+    ],
+    "annotations": [
+      {
+        "track_id": "0",
+        "start_frame": 3290,
+        "end_frame": 3416,
+        "viewpoint": "frontal",
+        "quality": 3
+      }
+    ]
+  },
+  {
+    "video_id": "h04",
+    "fname": "h04.mkv",
+    "mirrored": true,
+    "path": "data/media/videos/h04.mkv",
+    "intervals": [
+      {
+        "start": 2817,
+        "end": 2937
+      }
+    ],
+    "annotations": [
+      {
+        "track_id": "0",
+        "start_frame": 2817,
+        "end_frame": 2937,
+        "viewpoint": "frontal",
+        "quality": 3
+      }
+    ]
+  },
+  {
     "video_id": "25_1",
     "fname": "25_1.mov",
     "path": "data/media/videos/25_1.mov"

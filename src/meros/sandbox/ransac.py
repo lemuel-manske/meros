@@ -112,47 +112,49 @@ def draw_matches(
     ax.axis("off")
 
 
-pairs = read_pairs()
+if __name__ == "__main__":
+    pairs = read_pairs()
 
-for pair in pairs:
-    source_img = pair.source
-    target_img = pair.target
+    for pair in pairs:
+        source_img = pair.source
+        target_img = pair.target
 
-    result = match_images(
-        source=source_img,
-        target=target_img,
-    )
+        result = match_images(
+            source=source_img,
+            target=target_img,
+        )
 
-    mutual = result.mutual_matches
-    inliers = result.inliers
-    outliers = mutual - inliers
+        mutual = result.mutual_matches
+        inliers = result.inliers
+        outliers = mutual - inliers
 
-    inlier_ratio = inliers / mutual if mutual > 0 else 0.0
+        inlier_ratio = inliers / mutual if mutual > 0 else 0.0
 
-    print(f"Inlier ratio: {inlier_ratio:.2%}")
+        print(f"Inlier ratio: {inlier_ratio:.2%}")
 
-    fig, axes = plt.subplots(2, 1, figsize=(16, 12))
+        fig, axes = plt.subplots(2, 1, figsize=(16, 12))
 
-    draw_matches(
-        axes[0],
-        source_img,
-        target_img,
-        result,
-    )
+        draw_matches(
+            axes[0],
+            source_img,
+            target_img,
+            result,
+        )
 
-    axes[0].set_title(f"All Mutual Matches: {mutual} | Inliers: {inliers} | Outliers: {outliers}")
+        axes[0].set_title(
+            f"All Mutual Matches: {mutual} | Inliers: {inliers} | Outliers: {outliers}"
+        )
 
-    draw_matches(
-        axes[1],
-        source_img,
-        target_img,
-        result,
-        inliers_only=True,
-    )
+        draw_matches(
+            axes[1],
+            source_img,
+            target_img,
+            result,
+            inliers_only=True,
+        )
 
-    axes[1].set_title(f"RANSAC Inliers: {inliers} | Inlier Ratio: {inlier_ratio:.2%}")
+        axes[1].set_title(f"RANSAC Inliers: {inliers} | Inlier Ratio: {inlier_ratio:.2%}")
 
-    plt.tight_layout()
+        plt.tight_layout()
 
-
-plt.show()
+    plt.show()
