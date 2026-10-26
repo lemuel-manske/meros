@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Literal, TypedDict, cast
 
 from meros.domain import TrackSelection, VideoAnnotation
-from meros.experiments.common import debug_img, experiment_output, git_revision
+from meros.experiments.common import debug_img, experiment_output
 from meros.project import Project
 from meros.types import Image, Points
 

@@ -28,7 +28,7 @@ def mantiuk(image: np.ndarray, scale: float) -> np.ndarray:
         return_indices=True,
     )
 
-    filled = image[:, :, :3][tuple(indices)]
+    filled = image[:, :, :3][indices]
 
     rgb = cv.cvtColor(filled, cv.COLOR_BGR2RGB).astype(np.float32) / 255.0
 
