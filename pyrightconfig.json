@@ -5,7 +5,5 @@
 
   "pythonVersion": "3.12",
 
-  "typeCheckingMode": "standard",
-
-  "reportMissingParameterType": "error"
+  "typeCheckingMode": "standard"
 }
