@@ -30,13 +30,16 @@ def extract_spot_sift(
     min_contrast: float = 8.0,
     region_radius: int = 12,
     max_features: int = 4000,
+    max_descriptors: int = 2500,
     mode: str = "flexible",
     scale_tolerance: float = 1.5,
 ) -> SpotSiftResult:
     """Detect plausible dark spots, then restrict SIFT features to their centers.
 
     Pass a head-only mask to exclude other anatomical regions. The returned
-    descriptors correspond one-to-one with the filtered keypoints.
+    descriptors correspond one-to-one with the filtered keypoints. In flexible
+    mode, SIFT runs over the whole valid mask; spot-associated features are
+    ranked first, and the remainder may fill the descriptor budget.
     """
     if image.dtype != np.uint8 or image.ndim not in (2, 3):
         raise ValueError("Expected a uint8 grayscale, BGR or BGRA image")
@@ -50,7 +53,7 @@ def extract_spot_sift(
     if not 0 <= min_circularity <= 1 or min_contrast < 0 or region_radius < 1:
         raise ValueError("Invalid spot morphology parameters")
 
-    if max_features < 1 or scale_tolerance <= 0:
+    if max_features < 1 or max_descriptors < 1 or scale_tolerance <= 0:
         raise ValueError("Invalid SIFT extraction parameters")
 
     if mode not in ("strict", "flexible"):
@@ -166,6 +169,8 @@ def extract_spot_sift(
             for index, point in enumerate(keypoints)
             if np.any(np.sum((coordinates - point.pt) ** 2, axis=1) <= region_radius**2)
         ]
+
+    keep = keep[:max_descriptors]
 
     filtered = tuple(keypoints[index] for index in keep)
     selected = descriptors[keep] if descriptors is not None and keep else None
