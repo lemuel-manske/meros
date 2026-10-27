@@ -28,7 +28,7 @@ MIN_QUALITY = 3
 
 # Visual feature matching
 MIN_GEOMETRY_MATCHES = 4
-SIFT_SPOT_MODE = "flexible"  # use "strict" to compare against the previous filter
+SIFT_SPOT_PERMISSIVENESS = 0.3  # 0 = only spots; 1 = allow all extra features
 SIFT_MATCH_RATIO = 0.7  # best SIFT match must be clearly better than the second-best
 SIFT_RANSAC_THRESHOLD_PX = 4.0
 
@@ -267,7 +267,7 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
                 )
 
                 clean = cast(Image, cv.cvtColor(frame, cv.COLOR_BGRA2BGR))
-                features = extract_spot_sift(frame, mask, mode=SIFT_SPOT_MODE)
+                features = extract_spot_sift(frame, mask, permissiveness=SIFT_SPOT_PERMISSIVENESS)
 
                 annotated = clean.copy()
 
