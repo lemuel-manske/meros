@@ -9,6 +9,8 @@ from meros.project import Project
 
 
 if __name__ == "__main__":
+    permissiveness = 0.3  # 0.0 = only spots; 1.0 = allow all extra features
+
     project = Project.open()
 
     for vid in project.metadata.read_videos():
@@ -39,7 +41,7 @@ if __name__ == "__main__":
             gray = cv.cvtColor(bgr, cv.COLOR_BGR2GRAY)
             sift = cv.SIFT.create(nfeatures=2500)
             baseline, _ = sift.detectAndCompute(gray, mask)
-            result = extract_spot_sift(image, mask)
+            result = extract_spot_sift(image, mask, permissiveness=permissiveness)
 
             before = cv.drawKeypoints(
                 bgr,
