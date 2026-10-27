@@ -13,7 +13,8 @@ from pathlib import Path
 from typing import Literal, TypedDict, cast
 
 from meros.domain import VideoAnnotation
-from meros.experiments.common import debug_img, experiment_output, Image, Points
+from meros.experiments.common import experiment_output, Image, Points
+from meros.ml.spot_sift import extract_spot_sift
 from meros.project import Project
 
 
@@ -25,15 +26,8 @@ type SampleKey = tuple[str, FrameLabel]
 FRAME_DELTA = 30  # how many frames forward/backward to look for a comparison frame?
 MIN_QUALITY = 3
 
-# Spot detection
-MAX_SPOTS = 320  # how many spots to consider per image?
-SPOT_THRESHOLD_BLOCK_SIZE = 35
-SPOT_THRESHOLD_C = 8
-
 # Visual feature matching
 MIN_GEOMETRY_MATCHES = 4
-SPOT_REGION_RADIUS_PX = 16
-SIFT_FEATURES = 2500  # how many SIFT features to extract per image?
 SIFT_MATCH_RATIO = 0.7  # best SIFT match must be clearly better than the second-best
 SIFT_RANSAC_THRESHOLD_PX = 4.0
 
@@ -74,149 +68,6 @@ class MatchResult:
     statistics: ComparisonRow
     pairs: list[tuple[int, int]]
     accepted: list[bool]
-
-
-# returns possible spots
-def detect_spots(image: Image) -> tuple[Points, Image]:
-    if image.ndim != 3 or image.shape[2] != 4 or image.dtype != np.uint8:
-        raise ValueError("Expected a uint8 BGRA masked crop")
-
-    height, width = image.shape[:2]
-
-    # erode the mask to avoid edge artifacts; only consider fully valid pixels for spot detection
-    valid = cv.erode(
-        (image[:, :, 3] == 255).astype(np.uint8),
-        np.ones((5, 5), dtype=np.uint8),
-        iterations=1,
-    ).astype(bool)
-
-    gray = cv.cvtColor(image[:, :, :3], cv.COLOR_BGR2GRAY)  # gray scale
-    gray_active = gray[valid]  # only consider pixels inside the valid mask
-
-    debug_img(gray)
-
-    # draw the annotated image in BGR, ignoring the alpha channel
-    # for demonstration purposes
-    annotated = cast(Image, cv.cvtColor(image, cv.COLOR_BGRA2BGR))
-
-    if gray_active.size == 0:  # no valid pixels to detect spots
-        return np.empty((0, 2), dtype=np.float32), annotated
-
-    filled = gray.copy()
-    filled[~valid] = int(
-        np.median(gray_active)
-    )  # fill invalid pixels with the median of valid pixels
-
-    debug_img(filled)
-
-    # enhance the gray image contrast
-    enhanced = cv.createCLAHE(clipLimit=4.0, tileGridSize=(8, 8)).apply(filled)
-
-    debug_img(enhanced)
-
-    # adaptative limiar so that spots are detected even in low-contrast regions
-    binary = cv.adaptiveThreshold(
-        enhanced,
-        255,  # maxValue
-        cv.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv.THRESH_BINARY_INV,
-        SPOT_THRESHOLD_BLOCK_SIZE,  # blockSize
-        SPOT_THRESHOLD_C,  # C
-    )
-
-    # filter out invalid; never let invalid or transparent pixels become candidate spots.
-    binary[~valid] = 0
-
-    debug_img(binary)
-
-    count, _, stats, centroids = cv.connectedComponentsWithStats(binary, connectivity=8)
-
-    found: list[tuple[float, float, int]] = []
-
-    for index in range(1, count):  # skip the background
-        left, top, component_width, component_height, area = map(int, stats[index])
-
-        # remove tiny spots and spots that are too large relative to the image size
-        if not (5 <= area <= max(10, int(width * height * 0.001))):
-            continue
-
-        # remove spots that are too close to the image edge, which are likely artifacts
-        if component_width < 2 or component_height < 2:
-            continue
-
-        # remove spots that are too close to the image edge, which are likely artifacts
-        if (
-            left == 0
-            or top == 0
-            or left + component_width >= width
-            or top + component_height >= height
-        ):
-            continue
-
-        aspect = component_width / component_height
-        density = area / (component_width * component_height)
-
-        # heuristics: should not be too elongated or sparse
-        if not (0.35 <= aspect <= 2.8 and 0.25 <= density <= 0.94):
-            continue
-
-        # filter out spots that are not fully valid; this avoids spots that are partially occluded or on the edge of the mask
-        if not np.all(valid[top : top + component_height, left : left + component_width]):
-            continue
-
-        center_x, center_y = centroids[index]
-
-        found.append((float(center_x), float(center_y), area))
-
-    # sort out and get MAX_SPOTS best spots
-    found.sort(key=lambda item: (-item[2], item[1], item[0]))
-    points = np.asarray(
-        [(center_x, center_y) for center_x, center_y, _ in found[:MAX_SPOTS]],
-        dtype=np.float32,
-    ).reshape(-1, 2)
-
-    for center_x, center_y in points:
-        center = (round(float(center_x)), round(float(center_y)))
-
-        cv.circle(annotated, center, 4, (0, 255, 255), 1)
-
-    return points, annotated
-
-
-def extract_features(
-    image: Image, mask: Image, points: Points
-) -> tuple[tuple[cv.KeyPoint, ...], Points | None]:
-    region_mask = np.zeros_like(mask)
-
-    for x, y in points:
-        cv.circle(
-            region_mask,
-            (round(float(x)), round(float(y))),
-            SPOT_REGION_RADIUS_PX,
-            255,
-            -1,
-        )
-
-    region_mask = cv.bitwise_and(region_mask, mask)
-
-    gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
-
-    sift = cv.SIFT.create(nfeatures=SIFT_FEATURES)
-    keypoints, descriptions = sift.detectAndCompute(gray, region_mask)
-
-    debug_img(
-        cv.drawKeypoints(
-            image,
-            keypoints,
-            outImage=None,  # pyright: ignore
-            color=None,  # pyright: ignore
-            flags=cv.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS,
-        )  # pyright: ignore
-    )
-
-    return tuple(keypoints), (
-        np.asarray(descriptions, dtype=np.float32) if descriptions is not None else None
-    )
 
 
 def ratio_matches(source: Points, target: Points) -> dict[int, int]:
@@ -409,22 +260,37 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
                     ),
                 )
 
-                points, annotated = detect_spots(frame)
+                mask = np.asarray(
+                    (frame[:, :, 3] == 255).astype(np.uint8) * 255,
+                    dtype=np.uint8,
+                )
+
+                clean = cast(Image, cv.cvtColor(frame, cv.COLOR_BGRA2BGR))
+                features = extract_spot_sift(frame, mask)
+
+                annotated = clean.copy()
+
+                for x, y in features.spots:
+                    cv.circle(
+                        annotated,
+                        (round(float(x)), round(float(y))),
+                        4,
+                        (0, 255, 255),
+                        1,
+                    )
 
                 name = f"{selection.sample_id}--spots.png"
-
                 p = output / name
+
                 if not cv.imwrite(p, annotated):
                     raise OSError(f"Could not write {p}")
 
-                mask = np.asarray((frame[:, :, 3] == 255).astype(np.uint8) * 255, dtype=np.uint8)
-
-                clean = cast(Image, cv.cvtColor(frame, cv.COLOR_BGRA2BGR))
-
-                keypoints, descriptions = extract_features(clean, mask, points)
-
                 samples[selection.sample_id, label] = Sample(
-                    clean, points, mask, keypoints, descriptions
+                    clean,
+                    features.spots,
+                    mask,
+                    features.keypoints,
+                    features.descriptors,
                 )
 
     comparisons: list[tuple[EligibleSelection, FrameLabel, EligibleSelection, FrameLabel]] = []
