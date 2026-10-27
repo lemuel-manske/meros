@@ -1,4 +1,5 @@
-"""Morphology-guided SIFT extraction for dark spots on a grouper head.
+"""
+Morphology-guided SIFT extraction for dark spots on a grouper head.
 
 This module implements heuristic candidate selection; scores are not calibrated
 probabilities and therefore cannot guarantee 90% precision.
@@ -34,7 +35,8 @@ def extract_spot_sift(
     mode: str = "flexible",
     scale_tolerance: float = 1.5,
 ) -> SpotSiftResult:
-    """Detect plausible dark spots, then restrict SIFT features to their centers.
+    """
+    Detect plausible dark spots, then restrict SIFT features to their centers.
 
     Pass a head-only mask to exclude other anatomical regions. The returned
     descriptors correspond one-to-one with the filtered keypoints. In flexible
@@ -147,7 +149,7 @@ def extract_spot_sift(
     if mode == "strict" and len(coordinates) == 0:
         return SpotSiftResult(coordinates, (), None, spot_mask)
 
-    sift = cv.SIFT_create(nfeatures=max_features, contrastThreshold=0.025)
+    sift = cv.SIFT.create(nfeatures=max_features, contrastThreshold=0.025)
     detection_mask = spot_mask if mode == "strict" else valid
     keypoints, descriptors = sift.detectAndCompute(gray, detection_mask)
 

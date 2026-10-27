@@ -325,10 +325,7 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
 
         figure = draw_matches(source, target, result)
 
-        name = (
-            f"{source_selection.sample_id}--vs--"
-            f"{target_selection.sample_id}.png"
-        )
+        name = f"{source_selection.sample_id}--vs--{target_selection.sample_id}.png"
 
         p = output / name
         if not cv.imwrite(str(p), figure):

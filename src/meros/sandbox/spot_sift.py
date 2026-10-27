@@ -37,7 +37,7 @@ if __name__ == "__main__":
                 bgr = image
 
             gray = cv.cvtColor(bgr, cv.COLOR_BGR2GRAY)
-            sift = cv.SIFT_create(nfeatures=2500)
+            sift = cv.SIFT.create(nfeatures=2500)
             baseline, _ = sift.detectAndCompute(gray, mask)
             result = extract_spot_sift(image, mask)
 

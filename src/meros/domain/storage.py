@@ -7,9 +7,7 @@ type BBoxMap = dict[str, BBox]
 
 type Viewpoint = Literal["frontal", "left", "right", "back"]
 
-type TrackSelectionKey = tuple[
-    str, str, int, int
-]  # (video_id, track_id, start_frame, end_frame)
+type TrackSelectionKey = tuple[str, str, int, int]  # (video_id, track_id, start_frame, end_frame)
 
 
 @dataclass(frozen=True)

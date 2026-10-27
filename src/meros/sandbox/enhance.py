@@ -51,7 +51,7 @@ if __name__ == "__main__":
             frame = project.media.masked_crop_path(
                 vid.video_id,
                 annotation.track_id,
-                (annotation.start_frame + annotation.end_frame) // 2
+                (annotation.start_frame + annotation.end_frame) // 2,
             )
 
             image = cv.imread(frame, cv.IMREAD_UNCHANGED)
