@@ -29,7 +29,9 @@ def extract_spot_sift(
     min_circularity: float = 0.55,
     min_contrast: float = 8.0,
     region_radius: int = 12,
-    max_features: int = 2500,
+    max_features: int = 4000,
+    mode: str = "flexible",
+    scale_tolerance: float = 1.5,
 ) -> SpotSiftResult:
     """Detect plausible dark spots, then restrict SIFT features to their centers.
 
@@ -48,8 +50,11 @@ def extract_spot_sift(
     if not 0 <= min_circularity <= 1 or min_contrast < 0 or region_radius < 1:
         raise ValueError("Invalid spot morphology parameters")
 
-    if max_features < 1:
-        raise ValueError("max_features must be positive")
+    if max_features < 1 or scale_tolerance <= 0:
+        raise ValueError("Invalid SIFT extraction parameters")
+
+    if mode not in ("strict", "flexible"):
+        raise ValueError("mode must be strict or flexible")
 
     gray = (
         image
@@ -136,17 +141,31 @@ def extract_spot_sift(
 
     spot_mask = cv.bitwise_and(spot_mask, valid)
 
-    if len(coordinates) == 0:
+    if mode == "strict" and len(coordinates) == 0:
         return SpotSiftResult(coordinates, (), None, spot_mask)
 
-    sift = cv.SIFT_create(nfeatures=max_features)
-    keypoints, descriptors = sift.detectAndCompute(gray, spot_mask)
+    sift = cv.SIFT_create(nfeatures=max_features, contrastThreshold=0.025)
+    detection_mask = spot_mask if mode == "strict" else valid
+    keypoints, descriptors = sift.detectAndCompute(gray, detection_mask)
 
-    keep = [
-        index
-        for index, point in enumerate(keypoints)
-        if np.any(np.sum((coordinates - point.pt) ** 2, axis=1) <= region_radius**2)
-    ]
+    if mode == "flexible":
+        # Prioritize features associated with spots without throwing away
+        # other descriptors that might remain repeatable in poor imagery.
+        def priority(point: cv.KeyPoint) -> tuple[bool, float]:
+            if len(coordinates) == 0:
+                return (True, -point.response)
+
+            nearest = float(np.min(np.linalg.norm(coordinates - point.pt, axis=1)))
+            tolerance = max(region_radius, scale_tolerance * point.size)
+            return (nearest > tolerance, -point.response)
+
+        keep = sorted(range(len(keypoints)), key=lambda index: priority(keypoints[index]))
+    else:
+        keep = [
+            index
+            for index, point in enumerate(keypoints)
+            if np.any(np.sum((coordinates - point.pt) ** 2, axis=1) <= region_radius**2)
+        ]
 
     filtered = tuple(keypoints[index] for index in keep)
     selected = descriptors[keep] if descriptors is not None and keep else None
