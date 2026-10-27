@@ -32,7 +32,7 @@ def extract_spot_sift(
     region_radius: int = 12,
     max_features: int = 4000,
     max_descriptors: int = 2500,
-    mode: str = "flexible",
+    permissiveness: float = 0.3,
     scale_tolerance: float = 1.5,
 ) -> SpotSiftResult:
     """
@@ -40,8 +40,9 @@ def extract_spot_sift(
 
     Pass a head-only mask to exclude other anatomical regions. The returned
     descriptors correspond one-to-one with the filtered keypoints. In flexible
-    mode, SIFT runs over the whole valid mask; spot-associated features are
-    ranked first, and the remainder may fill the descriptor budget.
+    extraction, SIFT runs over the valid mask; spot-associated features are
+    ranked first. Permissiveness (0 to 1) controls the fraction of the descriptor
+    budget available to features not associated with spots.
     """
     if image.dtype != np.uint8 or image.ndim not in (2, 3):
         raise ValueError("Expected a uint8 grayscale, BGR or BGRA image")
@@ -58,8 +59,8 @@ def extract_spot_sift(
     if max_features < 1 or max_descriptors < 1 or scale_tolerance <= 0:
         raise ValueError("Invalid SIFT extraction parameters")
 
-    if mode not in ("strict", "flexible"):
-        raise ValueError("mode must be strict or flexible")
+    if not 0 <= permissiveness <= 1:
+        raise ValueError("permissiveness must be between 0 and 1")
 
     gray = (
         image
@@ -146,33 +147,45 @@ def extract_spot_sift(
 
     spot_mask = cv.bitwise_and(spot_mask, valid)
 
-    if mode == "strict" and len(coordinates) == 0:
+    if permissiveness == 0 and len(coordinates) == 0:
         return SpotSiftResult(coordinates, (), None, spot_mask)
 
     sift = cv.SIFT.create(nfeatures=max_features, contrastThreshold=0.025)
-    detection_mask = spot_mask if mode == "strict" else valid
+    detection_mask = spot_mask if permissiveness == 0 else valid
     keypoints, descriptors = sift.detectAndCompute(gray, detection_mask)
 
-    if mode == "flexible":
-        # Prioritize features associated with spots without throwing away
-        # other descriptors that might remain repeatable in poor imagery.
-        def priority(point: cv.KeyPoint) -> tuple[bool, float]:
-            if len(coordinates) == 0:
-                return (True, -point.response)
-
-            nearest = float(np.min(np.linalg.norm(coordinates - point.pt, axis=1)))
-            tolerance = max(region_radius, scale_tolerance * point.size)
-            return (nearest > tolerance, -point.response)
-
-        keep = sorted(range(len(keypoints)), key=lambda index: priority(keypoints[index]))
-    else:
+    if permissiveness == 0:
         keep = [
             index
             for index, point in enumerate(keypoints)
             if np.any(np.sum((coordinates - point.pt) ** 2, axis=1) <= region_radius**2)
-        ]
+        ][:max_descriptors]
+    else:
+        # Keep spot-associated features first and cap unrelated features
+        # according to the manually selected permissiveness.
+        associated: list[int] = []
+        other: list[int] = []
 
-    keep = keep[:max_descriptors]
+        for index, point in enumerate(keypoints):
+            nearest = (
+                float(np.min(np.linalg.norm(coordinates - point.pt, axis=1)))
+                if len(coordinates)
+                else float("inf")
+            )
+            tolerance = max(region_radius, scale_tolerance * point.size)
+
+            if nearest <= tolerance:
+                associated.append(index)
+            else:
+                other.append(index)
+
+        associated.sort(key=lambda index: -keypoints[index].response)
+        other.sort(key=lambda index: -keypoints[index].response)
+
+        keep = associated[:max_descriptors]
+        remaining = max_descriptors - len(keep)
+        extra_budget = int(permissiveness * max_descriptors)
+        keep.extend(other[: min(remaining, extra_budget)])
 
     filtered = tuple(keypoints[index] for index in keep)
     selected = descriptors[keep] if descriptors is not None and keep else None
