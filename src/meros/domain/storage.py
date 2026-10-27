@@ -8,8 +8,8 @@ type BBoxMap = dict[str, BBox]
 type Viewpoint = Literal["frontal", "left", "right", "back"]
 
 type TrackSelectionKey = tuple[
-    str, str, int, int, int
-]  # (video_id, track_id, start_frame, end_frame, reference_frame)
+    str, str, int, int
+]  # (video_id, track_id, start_frame, end_frame)
 
 
 @dataclass(frozen=True)
@@ -38,7 +38,6 @@ class TrackSelection:
     track_id: str
     start_frame: int
     end_frame: int
-    reference_frame: int
 
     @property
     def id(self) -> TrackSelectionKey:
@@ -47,12 +46,11 @@ class TrackSelection:
             self.track_id,
             self.start_frame,
             self.end_frame,
-            self.reference_frame,
         )
 
     @property
     def selection_id(self) -> str:
-        return f"{self.video_id}--{self.track_id}--{self.reference_frame}"
+        return f"{self.video_id}--{self.track_id}"
 
 
 @dataclass(frozen=True)
@@ -61,7 +59,6 @@ class Individual:
     track_id: str
     start_frame: int
     end_frame: int
-    reference_frame: int
 
 
 @dataclass(frozen=True)

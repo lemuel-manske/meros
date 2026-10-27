@@ -74,6 +74,9 @@ class LocalFsMediaStore:
     def write_frame(self, video_id: str, frame_idx: int, frame: np.ndarray) -> None:
         write_image(media_paths.frame(video_id, frame_idx), frame)
 
+    def masked_crop_path(self, video_id: str, track_id: str, frame_idx: int) -> Path:
+        return media_paths.masked_crop(video_id, track_id, frame_idx)
+
     def read_masked_crop(self, video_id: str, track_id: str, frame_idx: int) -> np.ndarray:
         return read_image(
             media_paths.masked_crop(video_id, track_id, frame_idx), cv.IMREAD_UNCHANGED
@@ -121,6 +124,31 @@ class LocalFsMetadataStore:
 
     def write_bboxes(self, boxes: dict[str, BBoxMap]) -> None:
         write_json_atomic(metadata_paths.bboxes(), boxes)
+
+    def read_video(self, video_id: str) -> Video:
+        with metadata_paths.videos().open("r", encoding="utf-8") as f:
+            metadata = json.load(f)
+
+        for video_metadata in metadata:
+            if video_metadata.get("video_id") == video_id:
+                return Video(
+                    **{
+                        **video_metadata,
+                        "intervals": [
+                            Interval(**interval) for interval in video_metadata.get("intervals", [])
+                        ],
+                        "annotations": [
+                            VideoAnnotation(**annotation)
+                            for annotation in video_metadata.get("annotations", [])
+                        ],
+                        "individuals": [
+                            Individual(**individual)
+                            for individual in video_metadata.get("individuals", [])
+                        ],
+                    }
+                )
+
+        raise ValueError(f"Video {video_id} not found")
 
     def read_videos(self) -> list[Video]:
         with metadata_paths.videos().open("r", encoding="utf-8") as f:

@@ -23,8 +23,7 @@
         "individual_id": "11",
         "track_id": "0",
         "start_frame": 170,
-        "end_frame": 510,
-        "reference_frame": 340
+        "end_frame": 510
       }
     ]
   },
@@ -53,8 +52,7 @@
         "individual_id": "12",
         "track_id": "0",
         "start_frame": 1000,
-        "end_frame": 1340,
-        "reference_frame": 1170
+        "end_frame": 1340
       }
     ]
   },
@@ -83,8 +81,7 @@
         "individual_id": "13",
         "track_id": "0",
         "start_frame": 3290,
-        "end_frame": 3416,
-        "reference_frame": 3353
+        "end_frame": 3416
       }
     ]
   },
@@ -113,16 +110,9 @@
         "individual_id": "14",
         "track_id": "0",
         "start_frame": 2817,
-        "end_frame": 2937,
-        "reference_frame": 2877
+        "end_frame": 2937
       }
     ]
-  },
-  {
-    "video_id": "25_1",
-    "fname": "25_1.mov",
-    "path": "data/media/videos/25_1.mov",
-    "individuals": []
   },
   {
     "video_id": "26_4",
@@ -177,8 +167,7 @@
         "individual_id": "3",
         "track_id": "0",
         "start_frame": 20,
-        "end_frame": 130,
-        "reference_frame": 75
+        "end_frame": 130
       }
     ]
   },
@@ -242,15 +231,13 @@
         "individual_id": "4",
         "track_id": "0",
         "start_frame": 55,
-        "end_frame": 63,
-        "reference_frame": 59
+        "end_frame": 63
       },
       {
         "individual_id": "5",
         "track_id": "1",
         "start_frame": 48,
-        "end_frame": 76,
-        "reference_frame": 59
+        "end_frame": 76
       }
     ]
   },
@@ -286,15 +273,13 @@
         "individual_id": "4",
         "track_id": "0",
         "start_frame": 82,
-        "end_frame": 98,
-        "reference_frame": 90
+        "end_frame": 98
       },
       {
         "individual_id": "5",
         "track_id": "1",
         "start_frame": 0,
-        "end_frame": 8,
-        "reference_frame": 2
+        "end_frame": 8
       }
     ]
   },
@@ -351,15 +336,13 @@
         "individual_id": "6",
         "track_id": "0",
         "start_frame": 200,
-        "end_frame": 220,
-        "reference_frame": 210
+        "end_frame": 220
       },
       {
         "individual_id": "6",
         "track_id": "0",
         "start_frame": 158,
-        "end_frame": 180,
-        "reference_frame": 170
+        "end_frame": 180
       }
     ]
   },
@@ -381,8 +364,7 @@
         "individual_id": "7",
         "track_id": "0",
         "start_frame": 10,
-        "end_frame": 70,
-        "reference_frame": 40
+        "end_frame": 70
       }
     ]
   },
@@ -425,8 +407,7 @@
         "individual_id": "8",
         "track_id": "0",
         "start_frame": 70,
-        "end_frame": 140,
-        "reference_frame": 100
+        "end_frame": 140
       }
     ]
   },
@@ -491,8 +472,7 @@
         "individual_id": "9",
         "track_id": "0",
         "start_frame": 230,
-        "end_frame": 270,
-        "reference_frame": 250
+        "end_frame": 270
       }
     ]
   },
@@ -543,15 +523,8 @@
         "individual_id": "10",
         "track_id": "0",
         "start_frame": 80,
-        "end_frame": 125,
-        "reference_frame": 100
+        "end_frame": 125
       }
     ]
-  },
-  {
-    "video_id": "147_16",
-    "fname": "147_16.mov",
-    "path": "data/media/videos/147_16.mov",
-    "individuals": []
   }
 ]

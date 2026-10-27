@@ -6,7 +6,7 @@ import numpy as np
 
 from matplotlib.axes import Axes
 
-from src.meros.sandbox.sources import sources
+from src.meros.project import Project
 
 
 SIFT_FEATURES = 4000
@@ -17,14 +17,6 @@ RANSAC_MIN_MATCHES = 8
 RANSAC_ERROR = 3.0
 RANSAC_MAX_ITERS = 5000
 RANSAC_CONFIDENCE = 0.999
-
-
-@dataclass(frozen=True)
-class Pair:
-    source: np.ndarray
-    target: np.ndarray
-
-    is_same_individual: bool
 
 
 @dataclass(frozen=True)
@@ -155,37 +147,6 @@ def match_images(
     return stats
 
 
-def read_pairs() -> list[Pair]:
-    r = []
-
-    pairs = []
-    for s in sources:
-        for t in sources:
-            if s.path == t.path:
-                continue
-
-            is_same_individual = s.individual_id == t.individual_id
-
-            pairs.append((s.path, t.path, is_same_individual))
-
-    for pair in pairs:
-        source_img = cv.imread(pair[0], cv.IMREAD_UNCHANGED)
-        assert source_img is not None, f"Could not load {pair[0]}"
-
-        target_img = cv.imread(pair[1], cv.IMREAD_UNCHANGED)
-        assert target_img is not None, f"Could not load {pair[1]}"
-
-        r.append(
-            Pair(
-                source=cv.cvtColor(source_img, cv.COLOR_BGR2BGRA),
-                target=cv.cvtColor(target_img, cv.COLOR_BGR2BGRA),
-                is_same_individual=pair[2],
-            )
-        )
-
-    return r
-
-
 def draw_matches(
     ax: Axes,
     source: np.ndarray,
@@ -248,48 +209,71 @@ def draw_matches(
 
 
 if __name__ == "__main__":
-    pairs = read_pairs()
+    project = Project.open()
 
-    for pair in pairs:
-        source_img = pair.source
-        target_img = pair.target
+    for vid in project.metadata.read_videos():
+        individuals = vid.individuals
 
-        result = match_images(
-            source=source_img,
-            target=target_img,
+        annotations = vid.matching_annotations(
+            viewpoint="frontal",
+            min_quality=3,
         )
 
-        mutual = result.mutual_matches
-        inliers = result.inliers
-        outliers = mutual - inliers
+        for annotation in annotations:
+            source_path = project.media.masked_crop_path(
+                vid.video_id,
+                annotation.track_id,
+                annotation.start_frame,
+            )
 
-        inlier_ratio = inliers / mutual if mutual > 0 else 0.0
+            target_path = project.media.masked_crop_path(
+                vid.video_id,
+                annotation.track_id,
+                annotation.end_frame,
+            )
 
-        print(f"Inlier ratio: {inlier_ratio:.2%}")
+            source_img = cv.imread(source_path, cv.IMREAD_UNCHANGED)
+            target_img = cv.imread(target_path, cv.IMREAD_UNCHANGED)
 
-        fig, axes = plt.subplots(2, 1, figsize=(16, 12))
+            assert source_img is not None, f"Failed to read source image: {source_path}"
+            assert target_img is not None, f"Failed to read target image: {target_path}"
 
-        draw_matches(
-            axes[0],
-            source_img,
-            target_img,
-            result,
-        )
+            result = match_images(
+                source=source_img,
+                target=target_img,
+            )
 
-        axes[0].set_title(
-            f"All Mutual Matches: {mutual} | Inliers: {inliers} | Outliers: {outliers}"
-        )
+            mutual = result.mutual_matches
+            inliers = result.inliers
+            outliers = mutual - inliers
 
-        draw_matches(
-            axes[1],
-            source_img,
-            target_img,
-            result,
-            inliers_only=True,
-        )
+            inlier_ratio = inliers / mutual if mutual > 0 else 0.0
 
-        axes[1].set_title(f"RANSAC Inliers: {inliers} | Inlier Ratio: {inlier_ratio:.2%}")
+            print(f"Inlier ratio: {inlier_ratio:.2%}")
 
-        plt.tight_layout()
+            fig, axes = plt.subplots(2, 1, figsize=(16, 12))
+
+            draw_matches(
+                axes[0],
+                source_img,
+                target_img,
+                result,
+            )
+
+            axes[0].set_title(
+                f"All Mutual Matches: {mutual} | Inliers: {inliers} | Outliers: {outliers}"
+            )
+
+            draw_matches(
+                axes[1],
+                source_img,
+                target_img,
+                result,
+                inliers_only=True,
+            )
+
+            axes[1].set_title(f"RANSAC Inliers: {inliers} | Inlier Ratio: {inlier_ratio:.2%}")
+
+            plt.tight_layout()
 
     plt.show()

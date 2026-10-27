@@ -18,18 +18,8 @@ from meros.project import Project
 
 
 type FrameLabel = Literal["reference", "target"]
-
 type SampleKey = tuple[str, FrameLabel]
 
-# hard-set pairs for comparison,
-# for example, to test very distant frames
-# TODO: replace by metadata.videos()
-pairs = {
-    "h01": ("170", "510"),
-    "h02": ("1000", "1140"),
-    "h03": ("3290", "3416"),
-    "h04": ("2817", "2937"),
-}
 
 # Sample selection
 FRAME_DELTA = 30  # how many frames forward/backward to look for a comparison frame?
@@ -52,17 +42,10 @@ class ComparisonRow(TypedDict):
     source: str
     target: str
     same_individual: bool
-    source_features: int
-    target_features: int
-    forward_matches: int
-    reverse_matches: int
     mutual_matches: int
-    ransac_attempted: bool
     inliers: int
     inlier_ratio: float | None
-    feature_coverage: float | None
     identity_score: float
-    median_residual_px: float | None
 
 
 @dataclass(frozen=True)
@@ -80,7 +63,6 @@ class EligibleSelection:
     track_id: str
     video_id: str
     annotation: VideoAnnotation
-    reference_frame: int
 
     @property
     def sample_id(self) -> str:
@@ -128,7 +110,7 @@ def detect_spots(image: Image) -> tuple[Points, Image]:
     debug_img(filled)
 
     # enhance the gray image contrast
-    enhanced = cv.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(filled)
+    enhanced = cv.createCLAHE(clipLimit=4.0, tileGridSize=(8, 8)).apply(filled)
 
     debug_img(enhanced)
 
@@ -270,17 +252,10 @@ def compare(source: Sample, target: Sample) -> MatchResult:
         "source": "",
         "target": "",
         "same_individual": False,
-        "source_features": source_count,
-        "target_features": target_count,
-        "forward_matches": len(forward),
-        "reverse_matches": len(reverse),
         "mutual_matches": len(pairs),
-        "ransac_attempted": False,
         "inliers": 0,
         "inlier_ratio": None,
-        "feature_coverage": None,
         "identity_score": 0.0,
-        "median_residual_px": None,
     }
 
     accepted = [False] * len(pairs)
@@ -302,29 +277,17 @@ def compare(source: Sample, target: Sample) -> MatchResult:
         confidence=0.99,
     )
 
-    statistics["ransac_attempted"] = True
-
     if matrix is None or mask is None:
         return MatchResult(statistics, pairs, accepted)
 
     accepted = mask.ravel().astype(bool).tolist()
-    inliers = sum(accepted)
 
-    residuals = np.linalg.norm(
-        source_points @ matrix[:, :2].T + matrix[:, 2] - target_points,
-        axis=1,
-    )
+    inliers = sum(accepted)
 
     statistics["inliers"] = inliers
     statistics["inlier_ratio"] = inliers / len(pairs)
-    statistics["feature_coverage"] = (
-        inliers / min(source_count, target_count) if source_count and target_count else None
-    )
     statistics["identity_score"] = (
         inliers / min(source_count, target_count) if source_count and target_count else 0.0
-    )
-    statistics["median_residual_px"] = (
-        float(np.median(residuals[np.asarray(accepted, dtype=bool)])) if inliers else None
     )
 
     return MatchResult(statistics, pairs, accepted)
@@ -375,9 +338,6 @@ def draw_matches(source: Sample, target: Sample, result: MatchResult) -> Image:
     return output
 
 
-# return a list of all eligible selections for comparison:
-# - frontal viewpoint
-# - quality >= MIN_QUALITY
 def eligible_selections(project: Project) -> list[EligibleSelection]:
     videos = {video.video_id: video for video in project.metadata.read_videos()}
 
@@ -397,24 +357,12 @@ def eligible_selections(project: Project) -> list[EligibleSelection]:
             )
 
             for annotation in annotations:
-                start = max(ind.start_frame, annotation.start_frame)
-                end = min(ind.end_frame, annotation.end_frame)
-
-                if start > end:
-                    continue
-
-                reference = ind.reference_frame
-
-                if not start <= reference <= end:
-                    reference = (start + end) // 2
-
                 eligible.append(
                     EligibleSelection(
                         individual_id=ind.individual_id,
                         track_id=ind.track_id,
                         video_id=vid.video_id,
                         annotation=annotation,
-                        reference_frame=reference,
                     )
                 )
 
@@ -437,38 +385,47 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
     for selection in selections:
         frames: list[tuple[FrameLabel, int]] = []
 
-        reference, target = pairs[selection.video_id]
+        vid = project.metadata.read_video(selection.video_id)
 
-        frames.append(("reference", int(reference)))
-        frames.append(("target", int(target)))
+        annotations = vid.matching_annotations(
+            viewpoint="frontal",
+            min_quality=3,
+        )
 
-        for label, frame_index in frames:
-            frame = cast(
-                Image,
-                project.media.read_masked_crop(
-                    selection.video_id,
-                    selection.track_id,
-                    frame_index,
-                ),
-            )
+        for annotation in annotations:
+            reference = annotation.start_frame
+            target = annotation.end_frame
 
-            points, annotated = detect_spots(frame)
+            frames.append(("reference", int(reference)))
+            frames.append(("target", int(target)))
 
-            name = f"{selection.sample_id}--{label}--spots.png"
+            for label, frame_index in frames:
+                frame = cast(
+                    Image,
+                    project.media.read_masked_crop(
+                        selection.video_id,
+                        selection.track_id,
+                        frame_index,
+                    ),
+                )
 
-            p = output / name
-            if not cv.imwrite(p, annotated):
-                raise OSError(f"Could not write {p}")
+                points, annotated = detect_spots(frame)
 
-            mask = np.asarray((frame[:, :, 3] == 255).astype(np.uint8) * 255, dtype=np.uint8)
+                name = f"{selection.sample_id}--spots.png"
 
-            clean = cast(Image, cv.cvtColor(frame, cv.COLOR_BGRA2BGR))
+                p = output / name
+                if not cv.imwrite(p, annotated):
+                    raise OSError(f"Could not write {p}")
 
-            keypoints, descriptions = extract_features(clean, mask, points)
+                mask = np.asarray((frame[:, :, 3] == 255).astype(np.uint8) * 255, dtype=np.uint8)
 
-            samples[selection.sample_id, label] = Sample(
-                clean, points, mask, keypoints, descriptions
-            )
+                clean = cast(Image, cv.cvtColor(frame, cv.COLOR_BGRA2BGR))
+
+                keypoints, descriptions = extract_features(clean, mask, points)
+
+                samples[selection.sample_id, label] = Sample(
+                    clean, points, mask, keypoints, descriptions
+                )
 
     comparisons: list[tuple[EligibleSelection, FrameLabel, EligibleSelection, FrameLabel]] = []
 
@@ -502,8 +459,8 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
         figure = draw_matches(source, target, result)
 
         name = (
-            f"{source_selection.sample_id}--{source_label}--vs--"
-            f"{target_selection.sample_id}--{target_label}.png"
+            f"{source_selection.sample_id}--vs--"
+            f"{target_selection.sample_id}.png"
         )
 
         p = output / name
@@ -523,11 +480,7 @@ def run(project: Project, output: Path) -> list[ComparisonRow]:
 
 
 def main() -> None:
-    project = Project.open()
-
-    output = experiment_output("003")
-
-    run(project, output)
+    run(Project.open(), experiment_output("003"))
 
 
 if __name__ == "__main__":

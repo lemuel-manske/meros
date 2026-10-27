@@ -2,66 +2,11 @@ import cv2 as cv
 import matplotlib.pyplot as plt
 import numpy as np
 
-from scipy.ndimage import distance_transform_edt
+from meros.project import Project
 
-from meros.sandbox.sources import sources
-
-
-SCALES = (0.6, 0.7, 0.8, 0.9)
-
-MANTIUK_GAMMA = 1.0
-MANTIUK_SATURATION = 1.0
 
 CLAHE_CLIP_LIMIT = 4.0
 CLAHE_TILE_GRID_SIZE = (8, 8)
-
-
-def mantiuk(image: np.ndarray, scale: float) -> np.ndarray:
-    valid = image[:, :, 3] > 0
-
-    if not valid.any():
-        return image.copy()
-
-    indices = distance_transform_edt(
-        ~valid,
-        return_distances=False,
-        return_indices=True,
-    )
-
-    filled = image[:, :, :3][indices]
-
-    rgb = cv.cvtColor(filled, cv.COLOR_BGR2RGB).astype(np.float32) / 255.0
-
-    linear = np.where(
-        rgb <= 0.04045,
-        rgb / 12.92,
-        ((rgb + 0.055) / 1.055) ** 2.4,
-    ).astype(np.float32)
-
-    if np.ptp(cv.cvtColor(linear, cv.COLOR_RGB2GRAY)) == 0:
-        return image.copy()
-
-    black = np.all(linear == linear.min(), axis=2)
-
-    mapper = cv.createTonemapMantiuk(
-        gamma=MANTIUK_GAMMA,
-        scale=scale,
-        saturation=MANTIUK_SATURATION,
-    )
-
-    mapped = mapper.process(linear)
-    mapped[black] = 0
-
-    if not np.isfinite(mapped).all():
-        raise ValueError("Mantiuk produced non-finite pixels")
-
-    rgb8 = np.rint(np.clip(mapped, 0, 1) ** (1 / 2.2) * 255).astype(np.uint8)
-
-    result = image.copy()
-    result[:, :, :3] = cv.cvtColor(rgb8, cv.COLOR_RGB2BGR)
-    result[~valid, :3] = 0
-
-    return result
 
 
 def clahe(image: np.ndarray) -> np.ndarray:
@@ -94,25 +39,36 @@ def show(ax, image: np.ndarray, title: str) -> None:
 
 
 if __name__ == "__main__":
-    for s in sources:
-        image = cv.imread(s.path, cv.IMREAD_UNCHANGED)
+    project = Project.open()
 
-        assert image is not None
-        assert image.ndim == 3 and image.shape[2] == 4
+    for vid in project.metadata.read_videos():
+        annotations = vid.matching_annotations(
+            viewpoint="frontal",
+            min_quality=3,
+        )
 
-        images = [
-            ("Original", image),
-            ("CLAHE", clahe(image)),
-        ]
+        for annotation in annotations:
+            frame = project.media.masked_crop_path(
+                vid.video_id,
+                annotation.track_id,
+                (annotation.start_frame + annotation.end_frame) // 2
+            )
 
-        for scale in SCALES:
-            images.append((f"Mantiuk (scale={scale})", mantiuk(image, scale)))
+            image = cv.imread(frame, cv.IMREAD_UNCHANGED)
 
-        fig, axes = plt.subplots(2, 3, figsize=(15, 9))
+            assert image is not None
+            assert image.ndim == 3 and image.shape[2] == 4
 
-        for ax, (title, processed) in zip(axes.flat, images):
-            show(ax, processed, title)
+            images = [
+                ("Original", image),
+                ("CLAHE", clahe(image)),
+            ]
 
-        fig.suptitle("Mantiuk tone mapping comparison")
-        plt.tight_layout()
-        plt.show()
+            fig, axes = plt.subplots(1, 2, figsize=(15, 9))
+
+            for ax, (title, processed) in zip(axes.flat, images):
+                show(ax, processed, title)
+
+            fig.suptitle("Mantiuk tone mapping comparison")
+            plt.tight_layout()
+            plt.show()
