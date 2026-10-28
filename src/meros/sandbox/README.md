@@ -72,3 +72,19 @@ the selected spots; precision cannot be determined. Results may be sensitive to
 normalization parameters, and comparisons on the same small development set
 should not be mistaken for held-out generalization. No model is trained and
 no experiment or metadata files are modified.
+
+## Adaptive LoG sensitivity sweep
+
+Run `python -m src.meros.sandbox.sweep_log` to compare the original LoG,
+the current adaptive LoG, and one-factor-at-a-time variations of response
+threshold, local-contrast threshold, and scale-aware NMS radius. Edit
+`RESPONSE_VALUES`, `CONTRAST_VALUES`, and `NMS_VALUES` at the top
+of the script. Reports the number of candidates, **full selected-label
+recall** (all candidates), and top-100/250/500/1000 recall per video and
+as macro averages. Empty `h04` annotations are excluded.
+
+Do not interpret candidate count or recall as anatomical specificity:
+unlabeled detections may be legitimate spots. The sweep does not automatically
+choose parameters, change existing defaults, or train a model. Review eye,
+mouth, and shadow errors visually with `compare_log.py` before deciding
+on a detector configuration.
