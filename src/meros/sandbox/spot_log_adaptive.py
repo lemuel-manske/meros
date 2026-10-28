@@ -60,7 +60,8 @@ def detect_with_details(
 
     valid = mask != 0
     peaks = responses == maximum_filter(responses, size=(3, 3, 3), mode="nearest")
-    peaks &= responses >= MIN_RESPONSE
+    response_threshold = MIN_RESPONSE if PREPROCESS == "local" else MIN_RESPONSE / 255.0
+    peaks &= responses >= response_threshold
     peaks &= valid[None, :, :]
 
     scales, ys, xs = np.nonzero(peaks)
@@ -74,7 +75,10 @@ def detect_with_details(
     # A dark blob should be locally darker than its broader neighborhood.
     local_mean = gaussian_filter(enhanced, 2.0 * max(SIGMAS))
     contrast = local_mean[ys, xs] - enhanced[ys, xs]
-    accepted = contrast >= MIN_RELATIVE_CONTRAST
+    contrast_threshold = (
+        MIN_RELATIVE_CONTRAST if PREPROCESS == "local" else MIN_RELATIVE_CONTRAST / 255.0
+    )
+    accepted = contrast >= contrast_threshold
     scores = response_values[accepted]
     sigma_values = sigma_values[accepted]
     positions = np.column_stack((xs[accepted], ys[accepted])).astype(np.float32)
@@ -82,7 +86,7 @@ def detect_with_details(
 
     selected: list[int] = []
     # Spatial hash grid bounds work compared with pairwise quadratic suppression.
-    cell_size = max(1.0, MIN_SPACING_PX)
+    cell_size = max(1.0, NMS_RADIUS_FACTOR * max(SIGMAS))
     cells: dict[tuple[int, int], list[int]] = {}
 
     for index in ranking:
