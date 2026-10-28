@@ -1,5 +1,3 @@
-"""Manually annotate centers of visible head spots on frontal masked crops."""
-
 from __future__ import annotations
 
 import cv2 as cv
@@ -8,18 +6,19 @@ import matplotlib.pyplot as plt
 from meros.project import Project
 
 
-# Change these to select which annotations to review.
 MIN_QUALITY = 3
-VIDEO_ID: str | None = None
-TRACK_ID: str | None = None
 
 
 def select_spots(image, initial: list[list[int]], title: str) -> list[list[int]] | None:
     points = [point.copy() for point in initial]
+
     figure, axis = plt.subplots(figsize=(13, 8))
+
     axis.imshow(cv.cvtColor(image, cv.COLOR_BGR2RGB))
+
     axis.set_title(title)
     axis.set_axis_off()
+
     markers = axis.scatter([], [], s=38, facecolors="none", edgecolors="yellow")
 
     def refresh() -> None:
@@ -63,7 +62,9 @@ def select_spots(image, initial: list[list[int]], title: str) -> list[list[int]]
 
     figure.canvas.mpl_connect("button_press_event", on_click)
     figure.canvas.mpl_connect("key_press_event", on_key)
+
     refresh()
+
     plt.show(block=True)
 
     return result
@@ -71,13 +72,9 @@ def select_spots(image, initial: list[list[int]], title: str) -> list[list[int]]
 
 def run(project: Project) -> None:
     for video in project.metadata.read_videos():
-        if VIDEO_ID is not None and video.video_id != VIDEO_ID:
-            continue
-
         for annotation in video.matching_annotations(
             viewpoint="frontal",
             min_quality=MIN_QUALITY,
-            track_id=TRACK_ID,
         ):
             frame = (annotation.start_frame + annotation.end_frame) // 2
             path = project.media.masked_crop_path(video.video_id, annotation.track_id, frame)

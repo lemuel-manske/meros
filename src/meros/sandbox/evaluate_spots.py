@@ -15,9 +15,10 @@ from meros.project import Project
 from meros.sandbox import spot_blobs, spot_log, spot_segmentation
 
 
-# Edit these constants directly; no additional annotations or CLI arguments.
 TOLERANCES_PX = (5.0, 10.0, 15.0)
+
 DISPLAY_TOLERANCE_PX = 10.0
+
 ROI_RADIUS_PX = 25  # Neighborhood around each manually selected spot.
 ROI_CLOSING_PX = 9  # Join nearby neighborhoods without filling the whole head.
 
