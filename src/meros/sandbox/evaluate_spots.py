@@ -97,7 +97,11 @@ def plot_results(
         extra = [predicted[j] for j in result.extra]
         missing = [truth[i] for i in result.missing]
 
-        for points, color, marker in ((good, "lime", "o"), (extra, "red", "x"), (missing, "cyan", "+")):
+        for points, color, marker in (
+            (good, "lime", "o"),
+            (extra, "red", "x"),
+            (missing, "cyan", "+"),
+        ):
             if points:
                 coords = np.asarray(points)
                 axis.scatter(coords[:, 0], coords[:, 1], c=color, marker=marker, s=25)
@@ -121,8 +125,10 @@ def run(project: Project) -> None:
         "Blobs": spot_blobs.detect,
         "Segmentation": spot_segmentation.detect,
     }
-    totals = {
-        tolerance: {name: [0, 0, 0, []] for name in detectors}
+    totals: dict[float, dict[str, dict[str, object]]] = {
+        tolerance: {
+            name: {"tp": 0, "fp": 0, "fn": 0, "errors": []} for name in detectors
+        }
         for tolerance in TOLERANCES_PX
     }
     count = 0
@@ -153,10 +159,12 @@ def run(project: Project) -> None:
             for name, predicted in detected.items():
                 result = evaluate(truth, predicted, tolerance)
                 stats = totals[tolerance][name]
-                stats[0] += len(result.matched)
-                stats[1] += len(result.extra)
-                stats[2] += len(result.missing)
-                stats[3].extend(result.errors)
+                stats["tp"] = int(stats["tp"]) + len(result.matched)
+                stats["fp"] = int(stats["fp"]) + len(result.extra)
+                stats["fn"] = int(stats["fn"]) + len(result.missing)
+                errors = stats["errors"]
+                assert isinstance(errors, list)
+                errors.extend(result.errors)
                 print(
                     f"    {name:<14} detected={len(predicted):4} "
                     f"TP={len(result.matched):4} FP={len(result.extra):4} "
@@ -180,7 +188,12 @@ def run(project: Project) -> None:
     for tolerance, methods in totals.items():
         print(f"  Tolerance: {tolerance:g}px")
 
-        for name, (tp, fp, fn, errors) in methods.items():
+        for name, stats in methods.items():
+            tp = int(stats["tp"])
+            fp = int(stats["fp"])
+            fn = int(stats["fn"])
+            errors = stats["errors"]
+            assert isinstance(errors, list)
             precision = tp / (tp + fp) if tp + fp else 0.0
             recall = tp / (tp + fn) if tp + fn else 0.0
             f1 = 2 * tp / (2 * tp + fp + fn) if 2 * tp + fp + fn else 0.0
