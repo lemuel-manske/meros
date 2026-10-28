@@ -52,3 +52,23 @@ computed using reference labels are diagnostic only, not a deployable
 inference policy; detector output order is not a learned quality score.
 These statistics should guide a later independently evaluated multiscale
 detector, not be used to rescale a held-out image using its labels.
+
+## Adaptive LoG comparison
+
+Run `python -m src.meros.sandbox.compare_log` to compare original and adaptive
+LoG at the same fixed candidate budgets (100, 250, 500, 1000) with each image
+weighted equally. This avoids using the number of annotations to choose an
+inference budget. The sandbox comparison displays a side-by-side preview and
+prints per-video recall and macro recall. The original LoG remains unchanged.
+
+The experimental implementation is in `spot_log_adaptive.py`. Edit
+`PREPROCESS` (`local`, `clahe`, or `none`), `SIGMAS`, response/contrast
+thresholds, and nonmaximum-suppression settings directly in that file.
+The detector can return positions, estimated scales and response scores.
+`python -m src.meros.sandbox.spot_log_adaptive` shows the standalone preview.
+
+**Caveats:** these are partial positive annotations, so recall is only for
+the selected spots; precision cannot be determined. Results may be sensitive to
+normalization parameters, and comparisons on the same small development set
+should not be mistaken for held-out generalization. No model is trained and
+no experiment or metadata files are modified.
