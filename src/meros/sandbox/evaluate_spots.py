@@ -80,6 +80,7 @@ def plot_results(
     detections: dict[str, np.ndarray],
     evaluations: dict[str, Evaluation],
     title: str,
+    complete: bool,
 ) -> None:
     figure, axes = plt.subplots(2, 2, figsize=(15, 11))
     rgb = cv.cvtColor(image, cv.COLOR_BGR2RGB)
@@ -107,16 +108,45 @@ def plot_results(
                 axis.scatter(coords[:, 0], coords[:, 1], c=color, marker=marker, s=25)
 
         axis.set_title(
-            f"{name}: P={result.precision:.3f}, R={result.recall:.3f}, F1={result.f1:.3f}"
+            f"{name}: selected recall={result.recall:.3f}"
+            + (f", P={result.precision:.3f}, F1={result.f1:.3f}" if complete else "")
         )
 
     for axis in axes.flat:
         axis.axis("off")
 
-    figure.suptitle(title + " | green=TP, red=FP, cyan=FN")
+    figure.suptitle(title + (
+        " | green=TP, red=FP, cyan=FN" if complete
+        else " | green=matched, red=unlabeled, cyan=missed"
+    ))
     figure.tight_layout()
     plt.show()
     plt.close(figure)
+
+
+def region_mask(shape: tuple[int, int], regions: dict) -> np.ndarray:
+    roi = np.zeros(shape, dtype=np.uint8)
+
+    for polygon in regions["include"]:
+        cv.fillPoly(roi, [np.asarray(polygon, dtype=np.int32)], 255)
+
+    for polygon in regions["exclude"]:
+        cv.fillPoly(roi, [np.asarray(polygon, dtype=np.int32)], 0)
+
+    return roi
+
+
+def filter_points(points: np.ndarray, roi: np.ndarray) -> np.ndarray:
+    if not len(points):
+        return points
+
+    xs = np.rint(points[:, 0]).astype(int)
+    ys = np.rint(points[:, 1]).astype(int)
+    valid = (xs >= 0) & (xs < roi.shape[1]) & (ys >= 0) & (ys < roi.shape[0])
+    keep = np.zeros(len(points), dtype=bool)
+    keep[valid] = roi[ys[valid], xs[valid]] != 0
+
+    return points[keep]
 
 
 def run(project: Project) -> None:
@@ -132,6 +162,7 @@ def run(project: Project) -> None:
         for tolerance in TOLERANCES_PX
     }
     count = 0
+    complete_count = 0
 
     for video_id, track_id, frame in project.metadata.list_spot_annotations():
         image = project.media.read_masked_crop(video_id, track_id, frame)
@@ -148,7 +179,18 @@ def run(project: Project) -> None:
         truth = np.asarray(
             project.metadata.read_spots(video_id, track_id, frame), dtype=np.float32
         ).reshape(-1, 2)
-        detected = {name: detector(gray, mask) for name, detector in detectors.items()}
+        regions = project.metadata.read_spot_regions(video_id, track_id, frame)
+
+        if not regions["include"]:
+            print(f"Skipping {video_id}/{track_id}/{frame}: missing evaluation ROI")
+            continue
+
+        roi = region_mask(gray.shape, regions)
+        truth = filter_points(truth, roi)
+        detected = {
+            name: filter_points(detector(gray, mask), roi)
+            for name, detector in detectors.items()
+        }
         preview: dict[str, Evaluation] = {}
 
         print(f"\n{video_id}/{track_id}/{frame}: {len(truth)} annotated spots")
@@ -160,7 +202,10 @@ def run(project: Project) -> None:
                 result = evaluate(truth, predicted, tolerance)
                 stats = totals[tolerance][name]
                 stats["tp"] = int(stats["tp"]) + len(result.matched)
-                stats["fp"] = int(stats["fp"]) + len(result.extra)
+                if regions["complete"]:
+                    stats["fp"] = int(stats["fp"]) + len(result.extra)
+                    stats["complete_tp"] = int(stats.get("complete_tp", 0)) + len(result.matched)
+                    stats["complete_fn"] = int(stats.get("complete_fn", 0)) + len(result.missing)
                 stats["fn"] = int(stats["fn"]) + len(result.missing)
                 errors = stats["errors"]
                 assert isinstance(errors, list)
@@ -168,16 +213,21 @@ def run(project: Project) -> None:
                 print(
                     f"    {name:<14} detected={len(predicted):4} "
                     f"TP={len(result.matched):4} FP={len(result.extra):4} "
-                    f"FN={len(result.missing):4} F1={result.f1:.3f}"
+                    f"FN={len(result.missing):4} "
+                    + (f"F1={result.f1:.3f}" if regions["complete"] else "F1=N/A")
                 )
 
                 if tolerance == DISPLAY_TOLERANCE_PX:
                     preview[name] = result
 
         if len(preview) == len(detectors):
-            plot_results(bgr, truth, detected, preview, f"{video_id}/{track_id}/{frame}")
+            plot_results(
+                bgr, truth, detected, preview, f"{video_id}/{track_id}/{frame}",
+                regions["complete"],
+            )
 
         count += 1
+        complete_count += int(regions["complete"])
 
     if not count:
         print("No manual spot annotations found.")
@@ -194,13 +244,19 @@ def run(project: Project) -> None:
             fn = int(stats["fn"])
             errors = stats["errors"]
             assert isinstance(errors, list)
-            precision = tp / (tp + fp) if tp + fp else 0.0
+            complete_tp = int(stats.get("complete_tp", 0))
+            complete_fn = int(stats.get("complete_fn", 0))
+            precision = complete_tp / (complete_tp + fp) if complete_tp + fp else 0.0
             recall = tp / (tp + fn) if tp + fn else 0.0
-            f1 = 2 * tp / (2 * tp + fp + fn) if 2 * tp + fp + fn else 0.0
+            f1 = (
+                2 * complete_tp / (2 * complete_tp + fp + complete_fn)
+                if 2 * complete_tp + fp + complete_fn else 0.0
+            )
             mae = float(np.mean(errors)) if errors else float("nan")
             print(
-                f"    {name:<14} P={precision:.3f} R={recall:.3f} "
-                f"F1={f1:.3f} mean_error={mae:.2f}px"
+                f"    {name:<14} selected_recall={recall:.3f} "
+                + (f"P={precision:.3f} F1={f1:.3f} " if complete_count else "P=N/A F1=N/A ")
+                + f"mean_error={mae:.2f}px"
             )
 
 
