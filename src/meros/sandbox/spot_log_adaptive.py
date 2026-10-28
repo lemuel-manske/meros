@@ -49,9 +49,17 @@ def normalized_image(gray: np.ndarray) -> np.ndarray:
 
 
 def detect_with_details(
-    gray: np.ndarray, mask: np.ndarray
+    gray: np.ndarray,
+    mask: np.ndarray,
+    *,
+    min_response: float = MIN_RESPONSE,
+    min_relative_contrast: float = MIN_RELATIVE_CONTRAST,
+    nms_radius_factor: float = NMS_RADIUS_FACTOR,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Return positions, scale estimates, and saliency scores in descending order."""
+    if min_response < 0 or min_relative_contrast < 0 or nms_radius_factor <= 0:
+        raise ValueError("Response and contrast must be nonnegative; NMS factor positive")
+
     enhanced = normalized_image(gray)
     responses = np.stack([
         sigma**2 * gaussian_laplace(enhanced, sigma=sigma)
@@ -60,7 +68,7 @@ def detect_with_details(
 
     valid = mask != 0
     peaks = responses == maximum_filter(responses, size=(3, 3, 3), mode="nearest")
-    response_threshold = MIN_RESPONSE if PREPROCESS == "local" else MIN_RESPONSE / 255.0
+    response_threshold = min_response if PREPROCESS == "local" else min_response / 255.0
     peaks &= responses >= response_threshold
     peaks &= valid[None, :, :]
 
@@ -76,7 +84,7 @@ def detect_with_details(
     local_mean = gaussian_filter(enhanced, 2.0 * max(SIGMAS))
     contrast = local_mean[ys, xs] - enhanced[ys, xs]
     contrast_threshold = (
-        MIN_RELATIVE_CONTRAST if PREPROCESS == "local" else MIN_RELATIVE_CONTRAST / 255.0
+        min_relative_contrast if PREPROCESS == "local" else min_relative_contrast / 255.0
     )
     accepted = contrast >= contrast_threshold
     scores = response_values[accepted]
@@ -86,14 +94,14 @@ def detect_with_details(
 
     selected: list[int] = []
     # Spatial hash grid bounds work compared with pairwise quadratic suppression.
-    cell_size = max(1.0, NMS_RADIUS_FACTOR * max(SIGMAS))
+    cell_size = max(1.0, nms_radius_factor * max(SIGMAS))
     cells: dict[tuple[int, int], list[int]] = {}
 
     for index in ranking:
         x, y = positions[index]
-        radius = max(MIN_SPACING_PX, NMS_RADIUS_FACTOR * sigma_values[index])
+        radius = max(MIN_SPACING_PX, nms_radius_factor * sigma_values[index])
         cell_x, cell_y = int(x // cell_size), int(y // cell_size)
-        reach = int(np.ceil((radius + NMS_RADIUS_FACTOR * max(SIGMAS)) / cell_size))
+        reach = int(np.ceil((radius + nms_radius_factor * max(SIGMAS)) / cell_size))
         duplicate = False
 
         for ny in range(cell_y - reach, cell_y + reach + 1):
@@ -106,7 +114,7 @@ def detect_with_details(
                     separation = max(
                         radius,
                         MIN_SPACING_PX,
-                        NMS_RADIUS_FACTOR * sigma_values[previous],
+                        nms_radius_factor * sigma_values[previous],
                     )
 
                     if distance_squared < separation**2:
