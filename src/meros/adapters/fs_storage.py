@@ -99,6 +99,9 @@ class MetadataPaths:
     def videos(self) -> Path:
         return METADATA_ROOT / "videos" / "videos.json"
 
+    def spot_regions(self, video_id: str, track_id: str, frame_idx: int) -> Path:
+        return METADATA_ROOT / "spot_regions" / video_id / track_id / f"{frame_idx}.json"
+
     def spots(self, video_id: str, track_id: str, frame_idx: int) -> Path:
         return METADATA_ROOT / "spots" / video_id / track_id / f"{frame_idx}.json"
 
@@ -267,3 +270,58 @@ class LocalFsMetadataStore:
             annotations.append((path.parent.parent.name, path.parent.name, int(path.stem)))
 
         return annotations
+
+    def read_spot_regions(self, video_id: str, track_id: str, frame_idx: int) -> dict:
+        path = metadata_paths.spot_regions(video_id, track_id, frame_idx)
+
+        try:
+            with path.open("r", encoding="utf-8") as stream:
+                data = json.load(stream)
+        except FileNotFoundError:
+            return {"include": [], "exclude": [], "complete": False}
+
+        if (
+            data.get("video_id") != video_id
+            or data.get("track_id") != track_id
+            or data.get("frame") != frame_idx
+        ):
+            raise ValueError(f"Invalid region metadata: {path}")
+
+        return {
+            "include": data["include"],
+            "exclude": data["exclude"],
+            "complete": data["complete"],
+        }
+
+    def write_spot_regions(
+        self, video_id: str, track_id: str, frame_idx: int, regions: dict
+    ) -> None:
+        if not isinstance(regions.get("complete"), bool):
+            raise ValueError("Region completeness must be a boolean")
+
+        for key in ("include", "exclude"):
+            polygons = regions.get(key)
+
+            if not isinstance(polygons, list) or any(
+                not isinstance(polygon, list)
+                or len(polygon) < 3
+                or any(
+                    not isinstance(point, list)
+                    or len(point) != 2
+                    or any(type(value) is not int or value < 0 for value in point)
+                    for point in polygon
+                )
+                for polygon in polygons
+            ):
+                raise ValueError(f"Invalid {key} polygons")
+
+        write_json_atomic(
+            metadata_paths.spot_regions(video_id, track_id, frame_idx),
+            {
+                "video_id": video_id,
+                "track_id": track_id,
+                "frame": frame_idx,
+                "coordinate_system": "masked_crop_pixels",
+                **regions,
+            },
+        )
