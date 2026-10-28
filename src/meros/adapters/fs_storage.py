@@ -99,6 +99,9 @@ class MetadataPaths:
     def videos(self) -> Path:
         return METADATA_ROOT / "videos" / "videos.json"
 
+    def spots(self, video_id: str, track_id: str, frame_idx: int) -> Path:
+        return METADATA_ROOT / "spots" / video_id / track_id / f"{frame_idx}.json"
+
 
 metadata_paths = MetadataPaths()
 
@@ -209,3 +212,50 @@ class LocalFsMetadataStore:
         path = metadata_paths.track(video_id)
 
         write_json_atomic(path, asdict(metadata))
+
+    def read_spots(self, video_id: str, track_id: str, frame_idx: int) -> list[list[int]]:
+        path = metadata_paths.spots(video_id, track_id, frame_idx)
+
+        try:
+            with path.open("r", encoding="utf-8") as stream:
+                metadata = json.load(stream)
+        except FileNotFoundError:
+            return []
+
+        if (
+            metadata.get("video_id") != video_id
+            or metadata.get("track_id") != track_id
+            or metadata.get("frame") != frame_idx
+            or metadata.get("coordinate_system") != "masked_crop_pixels"
+        ):
+            raise ValueError(f"Invalid spot annotation metadata: {path}")
+
+        points = metadata.get("points")
+
+        if not isinstance(points, list) or any(
+            not isinstance(point, list)
+            or len(point) != 2
+            or any(type(coordinate) is not int or coordinate < 0 for coordinate in point)
+            for point in points
+        ):
+            raise ValueError(f"Invalid spot coordinates: {path}")
+
+        return points
+
+    def write_spots(
+        self, video_id: str, track_id: str, frame_idx: int, points: list[list[int]]
+    ) -> None:
+        path = metadata_paths.spots(video_id, track_id, frame_idx)
+        image = media_paths.masked_crop(video_id, track_id, frame_idx)
+
+        write_json_atomic(
+            path,
+            {
+                "video_id": video_id,
+                "track_id": track_id,
+                "frame": frame_idx,
+                "image": str(image),
+                "coordinate_system": "masked_crop_pixels",
+                "points": points,
+            },
+        )
