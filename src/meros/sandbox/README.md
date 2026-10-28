@@ -20,3 +20,9 @@ spots. No outputs are saved automatically.
 
 The current metadata contains only a small number of annotated crops. Metrics
 are descriptive and do not establish detector generalization to new videos.
+
+## Evaluation regions
+
+Run `python -m meros.processing.annotate_spot_regions` to draw polygonal ROIs for saved spot annotations. Use I to draw included regions (around eyes and above mouth), E for excluded regions (eye/eyelid), left click to add vertices, Enter to finish each polygon, Backspace to undo a vertex or last polygon, C to toggle whether all spots inside included areas were annotated, S to save, and Q to skip. Regions are stored via the metadata store in `data/metadata/spot_regions/<video_id>/<track_id>/<frame>.json`.
+
+The spot evaluator skips images without saved inclusion regions. Only annotations and detector candidates inside the included polygons, and outside exclusions, are assessed. For incomplete annotations, recall means coverage of the selected spots; unmatched detections are **not** presumed false positives and precision/F1 are unavailable. When marked complete, precision/F1 are reported for exhaustively annotated regions.
