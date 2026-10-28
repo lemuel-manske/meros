@@ -259,3 +259,11 @@ class LocalFsMetadataStore:
                 "points": points,
             },
         )
+
+    def list_spot_annotations(self) -> list[tuple[str, str, int]]:
+        annotations: list[tuple[str, str, int]] = []
+
+        for path in sorted((METADATA_ROOT / "spots").glob("*/*/*.json")):
+            annotations.append((path.parent.parent.name, path.parent.name, int(path.stem)))
+
+        return annotations
