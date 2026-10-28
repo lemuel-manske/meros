@@ -17,7 +17,7 @@ def detect(gray: np.ndarray, mask: np.ndarray) -> np.ndarray:
     normalized = cv.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
     responses = np.stack(
         [
-            -(sigma**2) * gaussian_laplace(normalized.astype(np.float32), sigma=sigma)
+            (sigma**2) * gaussian_laplace(normalized.astype(np.float32), sigma=sigma)
             for sigma in SIGMAS
         ]
     )
