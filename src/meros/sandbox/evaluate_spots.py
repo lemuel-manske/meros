@@ -204,17 +204,23 @@ def run(project: Project) -> None:
                 stats["tp"] = int(stats["tp"]) + len(result.matched)
                 if regions["complete"]:
                     stats["fp"] = int(stats["fp"]) + len(result.extra)
-                    stats["complete_tp"] = int(stats.get("complete_tp", 0)) + len(result.matched)
-                    stats["complete_fn"] = int(stats.get("complete_fn", 0)) + len(result.missing)
+                    stats["complete_tp"] = (
+                        int(stats.get("complete_tp", 0)) + len(result.matched)
+                    )
+                    stats["complete_fn"] = (
+                        int(stats.get("complete_fn", 0)) + len(result.missing)
+                    )
                 stats["fn"] = int(stats["fn"]) + len(result.missing)
                 errors = stats["errors"]
                 assert isinstance(errors, list)
                 errors.extend(result.errors)
                 print(
                     f"    {name:<14} detected={len(predicted):4} "
-                    f"TP={len(result.matched):4} FP={len(result.extra):4} "
-                    f"FN={len(result.missing):4} "
-                    + (f"F1={result.f1:.3f}" if regions["complete"] else "F1=N/A")
+                    f"matched={len(result.matched):4} missed={len(result.missing):4} "
+                    + (
+                        f"unmatched={len(result.extra):4} F1={result.f1:.3f}"
+                        if regions["complete"] else "unlabeled=unknown F1=N/A"
+                    )
                 )
 
                 if tolerance == DISPLAY_TOLERANCE_PX:
