@@ -18,3 +18,20 @@ exhaustive. Precision and F1 are intentionally not reported. This ROI is
 defined by the selected points, not by inferred anatomical eye/mouth landmarks;
 therefore it does not claim to identify anatomy automatically. No generated
 masks or evaluation results are saved.
+
+## Positive-unlabeled spot candidate ranking
+
+Run `python -m meros.sandbox.spot_pu_ranker` for an exploratory ranking model.
+It combines LoG, Blob and Segmentation candidates, computes multiscale
+intensity/texture features, and learns to prioritize candidates near manually
+marked spot centers over a sample of distant **unlabeled** candidates.
+Unlabeled candidates are *not* confirmed negatives: this is a noisy contrastive
+PU heuristic, not calibrated probability estimation.
+
+The script trains using other annotated videos and evaluates on one held-out
+video at a time (leave-one-video-out), reporting recall at fixed candidate
+budgets and showing an optional visualization. It does not calculate precision
+or F1, save a trained model, change experiments, or write annotations. Tune
+configuration constants in the script directly. The existing six annotated
+images remain a small exploratory dataset; more independent encounters will
+be necessary to estimate generalization.
