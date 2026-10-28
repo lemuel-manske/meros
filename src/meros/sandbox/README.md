@@ -35,3 +35,20 @@ or F1, save a trained model, change experiments, or write annotations. Tune
 configuration constants in the script directly. The existing six annotated
 images remain a small exploratory dataset; more independent encounters will
 be necessary to estimate generalization.
+
+## Scale and density diagnostics
+
+Run `python -m meros.sandbox.spot_diagnostics` before training a new
+detector. It reads all existing spot metadata through `project.metadata`,
+skips empty annotations such as `h04`, and reports per-image annotated
+nearest-neighbor spacing (pixels), annotated points per 10,000 fish-mask
+pixels, grayscale variation, and detector recall at budgets scaled to the
+number of manually selected spots. Macro recall gives each image equal
+weight. Adjust constants at the top of the script and optionally show plots.
+
+**Interpretation:** spacing between annotated centers is *not* spot diameter,
+and the density of incomplete labels is *not* true spot density. Budgets
+computed using reference labels are diagnostic only, not a deployable
+inference policy; detector output order is not a learned quality score.
+These statistics should guide a later independently evaluated multiscale
+detector, not be used to rescale a held-out image using its labels.
