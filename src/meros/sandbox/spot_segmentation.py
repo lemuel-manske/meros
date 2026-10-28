@@ -29,7 +29,7 @@ def detect(gray: np.ndarray, mask: np.ndarray) -> np.ndarray:
     binary = cv.morphologyEx(binary, cv.MORPH_OPEN, kernel)
     binary = cv.bitwise_and(binary, mask)
 
-    _, labels, stats, centers = cv.connectedComponentsWithStats(binary)
+    _, _, stats, centers = cv.connectedComponentsWithStats(binary)
     points = []
 
     for index in range(1, len(stats)):
@@ -40,7 +40,7 @@ def detect(gray: np.ndarray, mask: np.ndarray) -> np.ndarray:
 
         x, y = centers[index]
 
-        if mask[round(y), round(x)] != 0:
+        if mask[min(round(y), mask.shape[0] - 1), min(round(x), mask.shape[1] - 1)] != 0:
             points.append((float(x), float(y)))
 
     return np.asarray(points, dtype=np.float32).reshape(-1, 2)
