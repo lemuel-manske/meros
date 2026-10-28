@@ -2,14 +2,9 @@
 
 from __future__ import annotations
 
-import json
-
 import cv2 as cv
 import matplotlib.pyplot as plt
 
-from pathlib import Path
-
-from meros.adapters.fs_storage import METADATA_ROOT, write_json_atomic
 from meros.project import Project
 
 
@@ -86,13 +81,6 @@ def run(project: Project) -> None:
         ):
             frame = (annotation.start_frame + annotation.end_frame) // 2
             path = project.media.masked_crop_path(video.video_id, annotation.track_id, frame)
-            output = (
-                METADATA_ROOT
-                / "spots"
-                / video.video_id
-                / annotation.track_id
-                / f"{frame}.json"
-            )
 
             image = cv.imread(str(path), cv.IMREAD_UNCHANGED)
 
@@ -107,12 +95,7 @@ def run(project: Project) -> None:
                 mask = None
                 bgr = image if image.ndim == 3 else cv.cvtColor(image, cv.COLOR_GRAY2BGR)
 
-            existing: list[list[int]] = []
-
-            if output.exists():
-                with output.open("r", encoding="utf-8") as stream:
-                    data = json.load(stream)
-                existing = data["points"]
+            existing = project.metadata.read_spots(video.video_id, annotation.track_id, frame)
 
             title = (
                 f"{video.video_id} / track {annotation.track_id} / frame {frame} "
@@ -136,18 +119,10 @@ def run(project: Project) -> None:
                     print(f"Warning: {len(invalid)} points outside fish mask; not saved.")
                     continue
 
-            write_json_atomic(
-                output,
-                {
-                    "video_id": video.video_id,
-                    "track_id": annotation.track_id,
-                    "frame": frame,
-                    "image": str(path),
-                    "coordinate_system": "masked_crop_pixels",
-                    "points": selected,
-                },
+            project.metadata.write_spots(
+                video.video_id, annotation.track_id, frame, selected
             )
-            print(f"Saved {len(selected)} spot centers to {output}")
+            print(f"Saved {len(selected)} spot centers for {video.video_id}/{annotation.track_id}/{frame}")
 
 
 if __name__ == "__main__":
