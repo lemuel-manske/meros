@@ -131,6 +131,9 @@ class LocalFsMediaStore:
 
 @dataclass(frozen=True)
 class MetadataPaths:
+    def subject_spot_reviews(self, subject_id: str, first_id: int, second_id: int) -> Path:
+        return METADATA_ROOT / "subjects" / subject_id / "spot_reviews" / f"{first_id}-{second_id}.json"
+
     def subject_spot_correspondences(
         self, subject_id: str, first_id: int, second_id: int
     ) -> Path:
@@ -361,5 +364,31 @@ class LocalFsMetadataStore:
                 "image_ids": [first_id, second_id],
                 "coordinate_system": "subject_image_pixels",
                 "pairs": pairs,
+            },
+        )
+
+    def read_subject_spot_reviews(
+        self, subject_id: str, first_id: int, second_id: int
+    ) -> list[dict]:
+        try:
+            with metadata_paths.subject_spot_reviews(subject_id, first_id, second_id).open(
+                "r", encoding="utf-8"
+            ) as stream:
+                payload = json.load(stream)
+        except FileNotFoundError:
+            return []
+
+        return payload["reviews"]
+
+    def write_subject_spot_reviews(
+        self, subject_id: str, first_id: int, second_id: int, reviews: list[dict]
+    ) -> None:
+        write_json_atomic(
+            metadata_paths.subject_spot_reviews(subject_id, first_id, second_id),
+            {
+                "subject_id": subject_id,
+                "image_ids": [first_id, second_id],
+                "coordinate_system": "subject_image_pixels",
+                "reviews": reviews,
             },
         )
