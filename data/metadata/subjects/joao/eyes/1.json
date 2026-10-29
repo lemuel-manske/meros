@@ -1,0 +1,15 @@
+{
+  "subject_id": "joao",
+  "image_id": 1,
+  "side": "left",
+  "coordinate_system": "subject_image_pixels",
+  "eye": {
+    "center": [
+      584.7782324956024,
+      500.21341833633363
+    ],
+    "radius_x": 40.04059280994562,
+    "radius_y": 37.73793891033216,
+    "angle_degrees": 0.0
+  }
+}

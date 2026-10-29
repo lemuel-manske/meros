@@ -1,0 +1,15 @@
+{
+  "subject_id": "rafael",
+  "image_id": 0,
+  "side": "left",
+  "coordinate_system": "subject_image_pixels",
+  "eye": {
+    "center": [
+      729.291712647626,
+      265.6592328244838
+    ],
+    "radius_x": 69.5256764383472,
+    "radius_y": 56.65055117198659,
+    "angle_degrees": 0.0
+  }
+}
