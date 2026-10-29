@@ -131,6 +131,14 @@ class LocalFsMediaStore:
 
 @dataclass(frozen=True)
 class MetadataPaths:
+    def subject_spot_correspondences(
+        self, subject_id: str, first_id: int, second_id: int
+    ) -> Path:
+        return (
+            METADATA_ROOT / "subjects" / subject_id / "spot_correspondences"
+            / f"{first_id}-{second_id}.json"
+        )
+
     def subject_mouth(self, subject_id: str, image_id: int) -> Path:
         return METADATA_ROOT / "subjects" / subject_id / "mouths" / f"{image_id}.json"
 
@@ -323,5 +331,35 @@ class LocalFsMetadataStore:
                 "image_id": image_id,
                 "side": "left",
                 "point": list(point),
+            },
+        )
+
+    def read_subject_spot_correspondences(
+        self, subject_id: str, first_id: int, second_id: int
+    ) -> list[dict]:
+        path = metadata_paths.subject_spot_correspondences(subject_id, first_id, second_id)
+
+        try:
+            with path.open("r", encoding="utf-8") as stream:
+                payload = json.load(stream)
+        except FileNotFoundError:
+            return []
+
+        return payload["pairs"]
+
+    def write_subject_spot_correspondences(
+        self,
+        subject_id: str,
+        first_id: int,
+        second_id: int,
+        pairs: list[dict],
+    ) -> None:
+        write_json_atomic(
+            metadata_paths.subject_spot_correspondences(subject_id, first_id, second_id),
+            {
+                "subject_id": subject_id,
+                "image_ids": [first_id, second_id],
+                "coordinate_system": "subject_image_pixels",
+                "pairs": pairs,
             },
         )
