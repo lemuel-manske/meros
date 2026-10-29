@@ -7,6 +7,10 @@ import numpy as np
 from meros.project import Project
 
 
+SUBJECT_ID = "luana"
+IMAGE_ID = 1
+
+
 def select_spots(image: np.ndarray, initial: list[list[int]], title: str) -> list[list[int]] | None:
     points = [point.copy() for point in initial]
 
@@ -71,7 +75,13 @@ def select_spots(image: np.ndarray, initial: list[list[int]], title: str) -> lis
 
 def run(project: Project) -> None:
     for subject in project.media.list_subjects():
+        if subject.subject_id != SUBJECT_ID:
+            continue
+
         for photo in subject.images:
+            if photo.image_id != IMAGE_ID:
+                continue
+
             image = project.media.read_subject_image(subject.subject_id, photo.image_id)
 
             existing = project.metadata.read_subject_spots(subject.subject_id, photo.image_id)
