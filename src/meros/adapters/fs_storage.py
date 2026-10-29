@@ -69,10 +69,8 @@ media_paths = MediaPaths()
 
 
 class LocalFsMediaStore:
-    paths: MediaPaths = media_paths
-
     def list_subjects(self) -> list[Subject]:
-        root = self.paths.subjects()
+        root = media_paths.subjects()
 
         if not root.exists():
             return []
@@ -97,7 +95,7 @@ class LocalFsMediaStore:
         return sorted(records, key=lambda item: item.image_id)
 
     def subject_image_path(self, subject_id: str, image_id: int) -> Path:
-        return self.paths.subject_image(subject_id, image_id)
+        return media_paths.subject_image(subject_id, image_id)
 
     def read_subject_image(self, subject_id: str, image_id: int) -> np.ndarray:
         return read_image(self.subject_image_path(subject_id, image_id))
@@ -153,8 +151,6 @@ metadata_paths = MetadataPaths()
 
 
 class LocalFsMetadataStore:
-    paths: MetadataPaths = metadata_paths
-
     def read_bboxes(self) -> dict[str, BBoxMap]:
         try:
             with metadata_paths.bboxes().open("r", encoding="utf-8") as f:
@@ -246,7 +242,7 @@ class LocalFsMetadataStore:
         write_json_atomic(path, asdict(metadata))
 
     def read_subject_spots(self, subject_id: str, image_id: int) -> list[list[int]]:
-        path = self.paths.subject_spots(subject_id, image_id)
+        path = metadata_paths.subject_spots(subject_id, image_id)
 
         try:
             with path.open("r", encoding="utf-8") as stream:
@@ -259,7 +255,7 @@ class LocalFsMetadataStore:
     def write_subject_spots(self, subject_id: str, image_id: int, points: list[list[int]]) -> None:
         image_path = media_paths.subject_image(subject_id, image_id)
         write_json_atomic(
-            self.paths.subject_spots(subject_id, image_id),
+            metadata_paths.subject_spots(subject_id, image_id),
             {
                 "subject_id": subject_id,
                 "image_id": image_id,
@@ -271,7 +267,7 @@ class LocalFsMetadataStore:
 
     def read_subject_eye(self, subject_id: str, image_id: int) -> EyeAnnotation | None:
         try:
-            with self.paths.subject_eye(subject_id, image_id).open(
+            with metadata_paths.subject_eye(subject_id, image_id).open(
                 "r", encoding="utf-8"
             ) as stream:
                 payload = json.load(stream)
@@ -290,7 +286,7 @@ class LocalFsMetadataStore:
         self, subject_id: str, image_id: int, eye: EyeAnnotation
     ) -> None:
         write_json_atomic(
-            self.paths.subject_eye(subject_id, image_id),
+            metadata_paths.subject_eye(subject_id, image_id),
             {
                 "subject_id": subject_id,
                 "image_id": image_id,
