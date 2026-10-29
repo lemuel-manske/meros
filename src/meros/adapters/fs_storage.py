@@ -10,6 +10,7 @@ from pathlib import Path
 
 from meros.domain import (
     BBoxMap,
+    EyeAnnotation,
     Subject,
     SubjectImage,
     Individual,
@@ -138,6 +139,9 @@ class LocalFsMediaStore:
 
 @dataclass(frozen=True)
 class MetadataPaths:
+    def subject_eye(self, subject_id: str, image_id: int) -> Path:
+        return METADATA_ROOT / "subjects" / subject_id / "eyes" / f"{image_id}.json"
+
     def subject_spots(self, subject_id: str, image_id: int) -> Path:
         return METADATA_ROOT / "subjects" / subject_id / "spots" / f"{image_id}.json"
 
@@ -309,5 +313,87 @@ class LocalFsMetadataStore:
                 "image": str(image_path),
                 "coordinate_system": "subject_image_pixels",
                 "points": points,
+            },
+        )
+
+    def read_subject_eye(self, subject_id: str, image_id: int) -> EyeAnnotation | None:
+        LocalFsMediaStore().subject_image_path(subject_id, image_id)
+        path = self.paths.subject_eye(subject_id, image_id)
+
+        try:
+            with path.open("r", encoding="utf-8") as stream:
+                payload = json.load(stream)
+        except FileNotFoundError:
+            return None
+
+        if (
+            not isinstance(payload, dict)
+            or payload.get("subject_id") != subject_id
+            or payload.get("image_id") != image_id
+            or payload.get("side") != "left"
+            or payload.get("coordinate_system") != "subject_image_pixels"
+        ):
+            raise ValueError(f"Invalid eye metadata: {path}")
+
+        eye = payload.get("eye")
+
+        if not isinstance(eye, dict):
+            raise ValueError(f"Missing eye ellipse: {path}")
+
+        try:
+            center = eye["center"]
+            radius_x = float(eye["radius_x"])
+            radius_y = float(eye["radius_y"])
+            angle = float(eye["angle_degrees"])
+
+            if not (
+                isinstance(center, list)
+                and len(center) == 2
+                and all(type(v) in (float, int) for v in center)
+            ):
+                raise ValueError("Invalid eye center")
+
+            result = EyeAnnotation(
+                center=(float(center[0]), float(center[1])),
+                radius_x=radius_x,
+                radius_y=radius_y,
+                angle_degrees=angle,
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"Invalid eye ellipse: {path}") from exc
+
+        self._validate_eye(result)
+        return result
+
+    @staticmethod
+    def _validate_eye(eye: EyeAnnotation) -> None:
+        import math
+
+        values = (*eye.center, eye.radius_x, eye.radius_y, eye.angle_degrees)
+
+        if not all(math.isfinite(value) for value in values):
+            raise ValueError("Eye ellipse must have finite coordinates and radii")
+
+        if eye.radius_x <= 0 or eye.radius_y <= 0:
+            raise ValueError("Eye ellipse radii must be positive")
+
+    def write_subject_eye(
+        self, subject_id: str, image_id: int, eye: EyeAnnotation
+    ) -> None:
+        LocalFsMediaStore().subject_image_path(subject_id, image_id)
+        self._validate_eye(eye)
+        write_json_atomic(
+            self.paths.subject_eye(subject_id, image_id),
+            {
+                "subject_id": subject_id,
+                "image_id": image_id,
+                "side": "left",
+                "coordinate_system": "subject_image_pixels",
+                "eye": {
+                    "center": list(eye.center),
+                    "radius_x": eye.radius_x,
+                    "radius_y": eye.radius_y,
+                    "angle_degrees": eye.angle_degrees,
+                },
             },
         )
