@@ -20,10 +20,7 @@ def annotate_pair(
     existing: list[dict],
     title: str,
 ) -> list[dict] | None:
-    pairs = [
-        {"first": list(pair["first"]), "second": list(pair["second"])}
-        for pair in existing
-    ]
+    pairs = [{"first": list(pair["first"]), "second": list(pair["second"])} for pair in existing]
     pending: list[int] | None = None
     result: list[dict] | None = None
 
@@ -42,14 +39,9 @@ def annotate_pair(
 
     figure.suptitle(title)
 
-    markers = [
-        axis.scatter([], [], s=38, facecolors="none", edgecolors="yellow")
-        for axis in axes
-    ]
+    markers = [axis.scatter([], [], s=38, facecolors="none", edgecolors="yellow") for axis in axes]
     labels: list = []
-    pending_marker = first_axis.scatter(
-        [], [], s=100, marker="x", c="cyan", linewidths=2
-    )
+    pending_marker = first_axis.scatter([], [], s=100, marker="x", c="cyan", linewidths=2)
 
     def refresh() -> None:
         nonlocal labels
@@ -162,8 +154,7 @@ def run(project: Project) -> None:
     )
 
     print(
-        f"Saved {len(selected)} correspondences for "
-        f"{SUBJECT_ID}/{FIRST_IMAGE_ID}-{SECOND_IMAGE_ID}"
+        f"Saved {len(selected)} correspondences for {SUBJECT_ID}/{FIRST_IMAGE_ID}-{SECOND_IMAGE_ID}"
     )
 
 

@@ -112,9 +112,7 @@ def run(project: Project) -> None:
             if selected is None:
                 continue
 
-            project.metadata.write_subject_mouth(
-                subject.subject_id, photo.image_id, selected
-            )
+            project.metadata.write_subject_mouth(subject.subject_id, photo.image_id, selected)
             saved += 1
             print(f"Saved mouth landmark for {subject.subject_id}/{photo.image_id}")
 

@@ -131,11 +131,12 @@ class LocalFsMediaStore:
 
 @dataclass(frozen=True)
 class MetadataPaths:
-    def subject_spot_correspondences(
-        self, subject_id: str, first_id: int, second_id: int
-    ) -> Path:
+    def subject_spot_correspondences(self, subject_id: str, first_id: int, second_id: int) -> Path:
         return (
-            METADATA_ROOT / "subjects" / subject_id / "spot_correspondences"
+            METADATA_ROOT
+            / "subjects"
+            / subject_id
+            / "spot_correspondences"
             / f"{first_id}-{second_id}.json"
         )
 
