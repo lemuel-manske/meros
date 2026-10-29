@@ -1,0 +1,15 @@
+{
+  "subject_id": "athila",
+  "image_id": 0,
+  "side": "left",
+  "coordinate_system": "subject_image_pixels",
+  "eye": {
+    "center": [
+      718.2345779220778,
+      753.7126623376621
+    ],
+    "radius_x": 68.46753246753246,
+    "radius_y": 56.6996753246753,
+    "angle_degrees": 0.0
+  }
+}

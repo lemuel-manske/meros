@@ -1,0 +1,15 @@
+{
+  "subject_id": "yam",
+  "image_id": 1,
+  "side": "left",
+  "coordinate_system": "subject_image_pixels",
+  "eye": {
+    "center": [
+      887.20444255086,
+      447.726780444234
+    ],
+    "radius_x": 67.4758642678886,
+    "radius_y": 54.557622595783556,
+    "angle_degrees": 0.0
+  }
+}

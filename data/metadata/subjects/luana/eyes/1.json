@@ -1,0 +1,15 @@
+{
+  "subject_id": "luana",
+  "image_id": 1,
+  "side": "left",
+  "coordinate_system": "subject_image_pixels",
+  "eye": {
+    "center": [
+      781.2747817393408,
+      626.7606723512561
+    ],
+    "radius_x": 82.24743847623114,
+    "radius_y": 59.62350124494691,
+    "angle_degrees": 0.0
+  }
+}

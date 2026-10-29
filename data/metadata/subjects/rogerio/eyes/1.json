@@ -1,0 +1,15 @@
+{
+  "subject_id": "rogerio",
+  "image_id": 1,
+  "side": "left",
+  "coordinate_system": "subject_image_pixels",
+  "eye": {
+    "center": [
+      885.2814780554991,
+      447.3540537155032
+    ],
+    "radius_x": 67.66001805042612,
+    "radius_y": 57.994301186079554,
+    "angle_degrees": 0.0
+  }
+}

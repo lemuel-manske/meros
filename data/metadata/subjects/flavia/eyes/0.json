@@ -1,0 +1,15 @@
+{
+  "subject_id": "flavia",
+  "image_id": 0,
+  "side": "left",
+  "coordinate_system": "subject_image_pixels",
+  "eye": {
+    "center": [
+      581.9971929085327,
+      501.0258963363433
+    ],
+    "radius_x": 39.68519042821629,
+    "radius_y": 35.27572482508117,
+    "angle_degrees": 0.0
+  }
+}
