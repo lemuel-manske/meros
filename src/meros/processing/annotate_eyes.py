@@ -1,9 +1,3 @@
-"""Annotate the visible left eye in subject head photographs.
-
-Drag a rectangle around the outer visible ocular outline. The bounding
-rectangle defines an axis-aligned ellipse in original-image coordinates.
-"""
-
 from __future__ import annotations
 
 import cv2 as cv
@@ -15,16 +9,13 @@ from meros.domain import EyeAnnotation
 from meros.project import Project
 
 
-SUBJECT_ID: str | None = None
-IMAGE_ID: int | None = None
-ONLY_WITH_SPOTS = True
-
-
 def annotate_eye(
     image: np.ndarray, existing: EyeAnnotation | None, title: str
 ) -> EyeAnnotation | None:
     figure, axis = plt.subplots(figsize=(13, 8))
+
     axis.imshow(cv.cvtColor(image, cv.COLOR_BGR2RGB))
+
     axis.set_title(title)
     axis.set_axis_off()
 
@@ -32,11 +23,16 @@ def annotate_eye(
     ellipse = Ellipse(
         (0, 0), 0, 0, edgecolor="yellow", facecolor="none", linewidth=2
     )
+
     axis.add_patch(rectangle)
     axis.add_patch(ellipse)
+
     result: EyeAnnotation | None = None
+
     selection = existing
+
     start: tuple[float, float] | None = None
+
     dragging = False
 
     def paint() -> None:
@@ -44,6 +40,7 @@ def annotate_eye(
             ellipse.set_visible(False)
         else:
             ellipse.set_visible(True)
+
             ellipse.center = selection.center
             ellipse.width = 2 * selection.radius_x
             ellipse.height = 2 * selection.radius_y
@@ -57,7 +54,9 @@ def annotate_eye(
         if event.inaxes is axis and event.button == 1:
             if event.xdata is not None and event.ydata is not None:
                 start = (event.xdata, event.ydata)
+
                 dragging = True
+
                 rectangle.set_visible(True)
                 rectangle.set_xy(start)
                 rectangle.set_width(0)
@@ -73,6 +72,7 @@ def annotate_eye(
         rectangle.set_xy((min(start[0], event.xdata), min(start[1], event.ydata)))
         rectangle.set_width(abs(event.xdata - start[0]))
         rectangle.set_height(abs(event.ydata - start[1]))
+
         figure.canvas.draw_idle()
 
     def on_release(event) -> None:
@@ -89,6 +89,7 @@ def annotate_eye(
             y1 = float(np.clip(start[1], 0, image.shape[0] - 1))
             x2 = float(np.clip(event.xdata, 0, image.shape[1] - 1))
             y2 = float(np.clip(event.ydata, 0, image.shape[0] - 1))
+
             rx, ry = abs(x2 - x1) / 2, abs(y2 - y1) / 2
 
             if rx >= 2 and ry >= 2:
@@ -118,9 +119,12 @@ def annotate_eye(
     figure.canvas.mpl_connect("motion_notify_event", on_motion)
     figure.canvas.mpl_connect("button_release_event", on_release)
     figure.canvas.mpl_connect("key_press_event", on_key)
+
     rectangle.set_visible(False)
+
     paint()
     plt.show(block=True)
+
     return result
 
 
@@ -128,24 +132,16 @@ def run(project: Project) -> None:
     count = 0
 
     for subject in project.media.list_subjects():
-        if SUBJECT_ID is not None and subject.subject_id != SUBJECT_ID:
-            continue
-
         for photo in subject.images:
-            if IMAGE_ID is not None and photo.image_id != IMAGE_ID:
-                continue
-
-            spots = project.metadata.read_subject_spots(subject.subject_id, photo.image_id)
-
-            if ONLY_WITH_SPOTS and not spots:
-                continue
-
             image = project.media.read_subject_image(subject.subject_id, photo.image_id)
+
             existing = project.metadata.read_subject_eye(subject.subject_id, photo.image_id)
+
             title = (
                 f"{subject.subject_id} / {photo.image_id} (left eye)\n"
                 "Drag: outline eye | Enter/S: save | R/Backspace: redraw | Esc/Q: skip"
             )
+
             selected = annotate_eye(image, existing, title)
 
             if selected is None:
@@ -153,7 +149,9 @@ def run(project: Project) -> None:
                 continue
 
             project.metadata.write_subject_eye(subject.subject_id, photo.image_id, selected)
+
             count += 1
+
             print(f"Saved left eye ellipse for {subject.subject_id}/{photo.image_id}")
 
     print(f"Saved {count} eye annotations.")

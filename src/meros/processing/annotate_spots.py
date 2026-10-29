@@ -1,5 +1,3 @@
-"""Interactively annotate spot centers in numbered subject head photographs."""
-
 from __future__ import annotations
 
 import cv2 as cv
@@ -9,21 +7,21 @@ import numpy as np
 from meros.project import Project
 
 
-# Optional filters: leave as None to annotate all subject images.
-SUBJECT_ID: str | None = None
-IMAGE_ID: int | None = None
-
-
 def select_spots(image: np.ndarray, initial: list[list[int]], title: str) -> list[list[int]] | None:
     points = [point.copy() for point in initial]
+
     figure, axis = plt.subplots(figsize=(13, 8))
+
     axis.imshow(cv.cvtColor(image, cv.COLOR_BGR2RGB))
+
     axis.set_title(title)
     axis.set_axis_off()
+
     markers = axis.scatter([], [], s=38, facecolors="none", edgecolors="yellow")
 
     def refresh() -> None:
         markers.set_offsets(points if points else [[-10, -10]])
+
         figure.canvas.draw_idle()
 
     def on_click(event) -> None:
@@ -42,6 +40,7 @@ def select_spots(image: np.ndarray, initial: list[list[int]], title: str) -> lis
                 range(len(points)),
                 key=lambda index: (points[index][0] - x) ** 2 + (points[index][1] - y) ** 2,
             )
+
             points.pop(nearest)
 
         refresh()
@@ -53,6 +52,7 @@ def select_spots(image: np.ndarray, initial: list[list[int]], title: str) -> lis
 
         if event.key in ("enter", "s"):
             result = [point.copy() for point in points]
+
             plt.close(figure)
         elif event.key in ("escape", "q"):
             plt.close(figure)
@@ -62,6 +62,7 @@ def select_spots(image: np.ndarray, initial: list[list[int]], title: str) -> lis
 
     figure.canvas.mpl_connect("button_press_event", on_click)
     figure.canvas.mpl_connect("key_press_event", on_key)
+
     refresh()
     plt.show(block=True)
 
@@ -70,27 +71,25 @@ def select_spots(image: np.ndarray, initial: list[list[int]], title: str) -> lis
 
 def run(project: Project) -> None:
     for subject in project.media.list_subjects():
-        if SUBJECT_ID is not None and subject.subject_id != SUBJECT_ID:
-            continue
-
         for photo in subject.images:
-            if IMAGE_ID is not None and photo.image_id != IMAGE_ID:
-                continue
-
             image = project.media.read_subject_image(subject.subject_id, photo.image_id)
+
             existing = project.metadata.read_subject_spots(subject.subject_id, photo.image_id)
+
             title = (
                 f"{subject.subject_id} / image {photo.image_id} "
                 f"({len(existing)} saved)\n"
                 "Left click: add | Right click: remove nearest | "
                 "Backspace: undo | Enter/S: save | Esc/Q: skip"
             )
+
             selected = select_spots(image, existing, title)
 
             if selected is None:
                 continue
 
             project.metadata.write_subject_spots(subject.subject_id, photo.image_id, selected)
+
             print(f"Saved {len(selected)} spot centers for {subject.subject_id}/{photo.image_id}")
 
 
