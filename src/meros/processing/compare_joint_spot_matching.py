@@ -25,6 +25,8 @@ HYPOTHESIS_COUNT = 600
 CONSENSUS_RADIUS = 0.24  # Eye radii, as in the eye-only baseline.
 KNOWN_PAIR_RADIUS_PX = 15.0
 RANDOM_SEED = 17
+DESCRIPTOR_WEIGHT = 0.45
+TRANSFORM_PENALTY = 0.15
 
 
 def candidate_pairs(source: np.ndarray, target: np.ndarray) -> np.ndarray:
@@ -62,7 +64,7 @@ def consensus(
     return matches, float(distances[matches[:, 0]].sum()) if len(matches) else 0.0
 
 
-def match(first: np.ndarray, second: np.ndarray) -> np.ndarray:
+def match(first: np.ndarray, second: np.ndarray, weighted: bool = False) -> np.ndarray:
     if min(len(first), len(second)) < 3:
         return np.empty((0, 2), dtype=int)
 
@@ -71,6 +73,10 @@ def match(first: np.ndarray, second: np.ndarray) -> np.ndarray:
 
     best = np.empty((0, 2), dtype=int)
     best_error = float("inf")
+    best_quality = float("-inf")
+
+    descriptor_a = neighborhood_descriptors(first) if weighted else None
+    descriptor_b = neighborhood_descriptors(second) if weighted else None
 
     # Two distinct tentative correspondences define a similarity transform.
     # Score each hypothesis against ALL observed spots, not just the proposals.
@@ -103,7 +109,26 @@ def match(first: np.ndarray, second: np.ndarray) -> np.ndarray:
 
         matched, error = consensus(first, second, transform, translation)
 
-        if len(matched) > len(best) or (
+        if weighted:
+            descriptor_distance = (
+                np.linalg.norm(
+                    descriptor_a[matched[:, 0]] - descriptor_b[matched[:, 1]], axis=1
+                )
+                if len(matched)
+                else np.empty(0)
+            )
+            weights = np.exp(-DESCRIPTOR_WEIGHT * descriptor_distance)
+            transform_cost = TRANSFORM_PENALTY * (
+                abs(float(np.log(scale)))
+                + abs(float(np.arctan2(sine, cosine)))
+                + float(np.linalg.norm(translation))
+            )
+            quality = float(weights.sum()) - transform_cost
+
+            if quality > best_quality:
+                best, best_quality = matched, quality
+
+        elif len(matched) > len(best) or (
             len(matched) == len(best) and error < best_error
         ):
             best, best_error = matched, error
@@ -121,12 +146,21 @@ def run(project: Project) -> None:
     eye_scores = np.zeros((len(samples), len(samples)))
     joint_scores = np.zeros_like(eye_scores)
     selected_pairs = {}
+    weighted_pairs = {}
+    weighted_scores = np.zeros_like(eye_scores)
 
     for i, j in combinations(range(len(samples)), 2):
         eye_scores[i, j] = eye_scores[j, i] = eye_score(samples[i], samples[j], False)
 
         pairs = match(samples[i].normalized, samples[j].normalized)
         selected_pairs[i, j] = pairs
+
+        refined = match(samples[i].normalized, samples[j].normalized, weighted=True)
+        weighted_pairs[i, j] = refined
+        weighted_scores[i, j] = weighted_scores[j, i] = (
+            len(refined) / min(len(samples[i].spots), len(samples[j].spots))
+        )
+
         joint_scores[i, j] = joint_scores[j, i] = (
             len(pairs) / min(len(samples[i].spots), len(samples[j].spots))
         )
@@ -139,6 +173,7 @@ def run(project: Project) -> None:
     for label, scores in (
         ("Eye-only baseline", eye_scores),
         ("Joint geometric consensus", joint_scores),
+        ("Weighted descriptor + eye prior", weighted_scores),
     ):
         positives = [
             scores[i, j] for i, j in combinations(range(len(samples)), 2)
@@ -217,6 +252,14 @@ def run(project: Project) -> None:
     print(f"  confirmed proposals: {len(confirmed)}")
     print(f"  conflicting proposals: {len(conflicts)}")
     print(f"  unverified proposals: {len(unverified)}")
+
+    refined = weighted_pairs[i, j]
+    refined_oriented = refined if first_index == i else refined[:, ::-1]
+    refined_set = {tuple(row) for row in refined_oriented}
+    print(
+        f"  weighted proposals: {len(refined_set)}, "
+        f"verified: {len(refined_set & verified_set)}"
+    )
     print(
         "  Note: unverified does not mean incorrect; conflicts assume "
         "one-to-one spot identity."
