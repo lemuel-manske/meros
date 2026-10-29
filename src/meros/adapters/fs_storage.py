@@ -96,7 +96,12 @@ class LocalFsMediaStore:
         return sorted(records, key=lambda item: item.image_id)
 
     def subject_image_path(self, subject_id: str, image_id: int) -> Path:
-        if not subject_id or subject_id in {".", ".."} or "/" in subject_id or "\\" in subject_id:
+        if (
+            not subject_id
+            or subject_id in {".", ".."}
+            or "/" in subject_id
+            or "\\" in subject_id
+        ):
             raise ValueError("Invalid subject ID")
 
         if image_id < 0:
