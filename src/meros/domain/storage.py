@@ -113,3 +113,13 @@ class SubjectImage:
 class Subject:
     subject_id: str
     images: list[SubjectImage] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class EyeAnnotation:
+    """Visible left-eye outline in original subject-image pixels."""
+
+    center: tuple[float, float]
+    radius_x: float
+    radius_y: float
+    angle_degrees: float = 0.0
