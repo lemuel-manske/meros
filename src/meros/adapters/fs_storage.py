@@ -262,6 +262,7 @@ class LocalFsMetadataStore:
         write_json_atomic(path, asdict(metadata))
 
     def read_subject_spots(self, subject_id: str, image_id: int) -> list[list[int]]:
+        LocalFsMediaStore().subject_image_path(subject_id, image_id)
         path = self.paths.subject_spots(subject_id, image_id)
 
         try:
@@ -295,7 +296,8 @@ class LocalFsMetadataStore:
         # Reuse media path validation rather than exposing filesystem details to processing.
         image_path = LocalFsMediaStore().subject_image_path(subject_id, image_id)
         if any(
-            len(point) != 2
+            not isinstance(point, list)
+            or len(point) != 2
             or any(type(value) is not int or value < 0 for value in point)
             for point in points
         ):
