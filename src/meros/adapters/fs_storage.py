@@ -97,12 +97,6 @@ class LocalFsMediaStore:
         return sorted(records, key=lambda item: item.image_id)
 
     def subject_image_path(self, subject_id: str, image_id: int) -> Path:
-        if not subject_id or subject_id in {".", ".."} or "/" in subject_id or "\\" in subject_id:
-            raise ValueError("Invalid subject ID")
-
-        if image_id < 0:
-            raise ValueError("Image ID must be nonnegative")
-
         return self.paths.subject_image(subject_id, image_id)
 
     def read_subject_image(self, subject_id: str, image_id: int) -> np.ndarray:
@@ -168,13 +162,6 @@ class LocalFsMetadataStore:
         except FileNotFoundError:
             return {}
 
-        if not isinstance(metadata, dict):
-            raise ValueError("Seed boxes must be keyed by video and track")
-
-        for tracks in metadata.values():
-            if not isinstance(tracks, dict):
-                raise ValueError("Seed boxes must be keyed by track")
-
         return metadata
 
     def write_bboxes(self, boxes: dict[str, BBoxMap]) -> None:
@@ -235,13 +222,6 @@ class LocalFsMetadataStore:
         with path.open("r", encoding="utf-8") as f:
             metadata = json.load(f)
 
-        if not isinstance(metadata, dict) or not isinstance(metadata.get("tracks"), dict):
-            raise ValueError("Tracking metadata must contain a tracks object")
-
-        for track in metadata["tracks"].values():
-            if not isinstance(track, dict) or not isinstance(track.get("frames"), dict):
-                raise ValueError("Track observations must be a frames object")
-
         tracks = {
             track_id: Track(
                 initial_frame=track["initial_frame"],
@@ -266,7 +246,6 @@ class LocalFsMetadataStore:
         write_json_atomic(path, asdict(metadata))
 
     def read_subject_spots(self, subject_id: str, image_id: int) -> list[list[int]]:
-        LocalFsMediaStore().subject_image_path(subject_id, image_id)
         path = self.paths.subject_spots(subject_id, image_id)
 
         try:
@@ -275,36 +254,10 @@ class LocalFsMetadataStore:
         except FileNotFoundError:
             return []
 
-        if (
-            data.get("subject_id") != subject_id
-            or data.get("image_id") != image_id
-            or data.get("coordinate_system") != "subject_image_pixels"
-        ):
-            raise ValueError(f"Invalid subject spot annotation metadata: {path}")
-
-        points = data.get("points")
-
-        if not isinstance(points, list) or any(
-            not isinstance(point, list)
-            or len(point) != 2
-            or any(type(value) is not int or value < 0 for value in point)
-            for point in points
-        ):
-            raise ValueError(f"Invalid spot coordinates: {path}")
-
-        return points
+        return data["points"]
 
     def write_subject_spots(self, subject_id: str, image_id: int, points: list[list[int]]) -> None:
-        # Reuse media path validation rather than exposing filesystem details to processing.
-        image_path = LocalFsMediaStore().subject_image_path(subject_id, image_id)
-        if any(
-            not isinstance(point, list)
-            or len(point) != 2
-            or any(type(value) is not int or value < 0 for value in point)
-            for point in points
-        ):
-            raise ValueError("Invalid spot coordinates")
-
+        image_path = media_paths.subject_image(subject_id, image_id)
         write_json_atomic(
             self.paths.subject_spots(subject_id, image_id),
             {
