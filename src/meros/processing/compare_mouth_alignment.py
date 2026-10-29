@@ -1,4 +1,4 @@
-"""Compare eye-only vs eye-to-mouth anatomical spot alignment.
+"""Compare eye-based scale and mouth-based rotation/scale independently.
 
 Uses manually annotated points only. No model fitting or metadata writes.
 """
@@ -15,7 +15,7 @@ from scipy.spatial import cKDTree
 from meros.project import Project
 
 
-MATCH_TOLERANCE = 0.12  # Fraction of the eye-to-mouth distance.
+MATCH_TOLERANCE_EYE_RADII = 0.24  # Same eye-relative spatial tolerance in every variant.
 SHOW_LUANA_OVERLAY = True
 OVERLAY_SUBJECT = "luana"
 OVERLAY_IMAGES = (0, 1)
@@ -34,20 +34,28 @@ class Sample:
     def name(self) -> str:
         return f"{self.subject_id}/{self.image_id}"
 
-    def points(self, mode: str) -> np.ndarray:
+    def points(self, *, mouth_rotation: bool, mouth_scale: bool) -> np.ndarray:
+        centered = self.spots - self.eye
         delta = self.mouth - self.eye
         distance = float(np.linalg.norm(delta))
 
-        if mode == "eye":
-            return (self.spots - self.eye) / self.radius
+        if mouth_rotation:
+            direction = delta / distance
+            perpendicular = np.array([-direction[1], direction[0]])
+            centered = np.column_stack(
+                (centered @ direction, centered @ perpendicular)
+            )
 
-        direction = delta / distance
-        perpendicular = np.array([-direction[1], direction[0]])
-        centered = self.spots - self.eye
+        scale = distance if mouth_scale else self.radius
 
-        return np.column_stack(
-            (centered @ direction, centered @ perpendicular)
-        ) / distance
+        return centered / scale
+
+    def eye_unit(self, *, mouth_scale: bool) -> float:
+        """Eye radius expressed in the current coordinate system."""
+        if mouth_scale:
+            return self.radius / float(np.linalg.norm(self.mouth - self.eye))
+
+        return 1.0
 
 
 def load(project: Project) -> list[Sample]:
@@ -92,37 +100,38 @@ def mutual_count(a: np.ndarray, b: np.ndarray, tolerance: float) -> int:
     )
 
 
-def report(samples: list[Sample], mode: str) -> None:
-    coords = [sample.points(mode) for sample in samples]
-    score = np.zeros((len(samples), len(samples)))
+def report(
+    samples: list[Sample], label: str, *, mouth_rotation: bool, mouth_scale: bool
+) -> None:
+    coords = [
+        sample.points(mouth_rotation=mouth_rotation, mouth_scale=mouth_scale)
+        for sample in samples
+    ]
+    scores = np.zeros((len(samples), len(samples)))
 
     for i, j in combinations(range(len(samples)), 2):
-        # The eye-only baseline uses the same physical pixel tolerance,
-        # expressed in local eye-radius coordinates for both images.
-        if mode == "eye":
-            normalized_distance = (
-                np.linalg.norm(samples[i].mouth - samples[i].eye)
-                + np.linalg.norm(samples[j].mouth - samples[j].eye)
-            ) / (samples[i].radius + samples[j].radius)
-            tolerance = MATCH_TOLERANCE * normalized_distance
-        else:
-            tolerance = MATCH_TOLERANCE
+        # One physical tolerance convention for every variant: a fraction of
+        # the average apparent eye radius, converted to each normalization.
+        tolerance = MATCH_TOLERANCE_EYE_RADII * (
+            samples[i].eye_unit(mouth_scale=mouth_scale)
+            + samples[j].eye_unit(mouth_scale=mouth_scale)
+        ) / 2
 
         matched = mutual_count(coords[i], coords[j], tolerance)
-        score[i, j] = score[j, i] = matched / min(len(coords[i]), len(coords[j]))
+        scores[i, j] = scores[j, i] = matched / min(len(coords[i]), len(coords[j]))
 
     positive = [
-        score[i, j]
+        scores[i, j]
         for i, j in combinations(range(len(samples)), 2)
         if samples[i].subject_id == samples[j].subject_id
     ]
     negative = [
-        score[i, j]
+        scores[i, j]
         for i, j in combinations(range(len(samples)), 2)
         if samples[i].subject_id != samples[j].subject_id
     ]
 
-    print(f"\n{mode}: positive_pairs={len(positive)} negative_pairs={len(negative)}")
+    print(f"\\n{label}: positive_pairs={len(positive)} negative_pairs={len(negative)}")
     print(f"  mean positive={np.mean(positive):.3f} negative={np.mean(negative):.3f}")
 
     eligible = [
@@ -134,14 +143,14 @@ def report(samples: list[Sample], mode: str) -> None:
     for i in eligible:
         ranking = sorted(
             (j for j in range(len(samples)) if j != i),
-            key=lambda j: (-score[i, j], samples[j].name),
+            key=lambda j: (-scores[i, j], samples[j].name),
         )
         winner = ranking[0]
         ok = samples[i].subject_id == samples[winner].subject_id
         correct += ok
         print(
             f"  {samples[i].name:<16} best={samples[winner].name:<16} "
-            f"score={score[i, winner]:.3f} {'correct' if ok else 'wrong'}"
+            f"score={scores[i, winner]:.3f} {'correct' if ok else 'wrong'}"
         )
 
     if eligible:
@@ -158,15 +167,23 @@ def show_overlay(samples: list[Sample]) -> None:
     if len(selected) != 2:
         return
 
-    figure, axes = plt.subplots(1, 2, figsize=(13, 6))
+    variants = (
+        ("eye", False, False),
+        ("eye + rotation", True, False),
+        ("eye + mouth scale", False, True),
+        ("eye + rotation + mouth scale", True, True),
+    )
+    figure, axes = plt.subplots(2, 2, figsize=(12, 10))
 
-    for axis, mode in zip(axes, ("eye", "eye+mouth"), strict=True):
+    for axis, (label, rotation, scale) in zip(axes.flat, variants, strict=True):
         for sample, color in zip(selected, ("tab:blue", "tab:orange"), strict=True):
-            points = sample.points(mode)
-            axis.scatter(points[:, 0], points[:, 1], s=16, alpha=0.7, label=sample.name, c=color)
+            points = sample.points(mouth_rotation=rotation, mouth_scale=scale)
+            axis.scatter(
+                points[:, 0], points[:, 1], s=16, alpha=0.7, label=sample.name, c=color
+            )
 
         axis.scatter([0], [0], c="black", marker="+", s=100)
-        axis.set_title(mode)
+        axis.set_title(label)
         axis.set_aspect("equal")
         axis.legend()
 
@@ -182,8 +199,15 @@ def run(project: Project) -> None:
     if len(samples) < 2:
         return
 
-    for mode in ("eye", "eye+mouth"):
-        report(samples, mode)
+    variants = (
+        ("eye", False, False),
+        ("eye + rotation", True, False),
+        ("eye + mouth scale", False, True),
+        ("eye + rotation + mouth scale", True, True),
+    )
+
+    for label, rotation, scale in variants:
+        report(samples, label, mouth_rotation=rotation, mouth_scale=scale)
 
     if SHOW_LUANA_OVERLAY:
         show_overlay(samples)
