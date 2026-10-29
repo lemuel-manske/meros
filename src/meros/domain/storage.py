@@ -7,9 +7,7 @@ type BBoxMap = dict[str, BBox]
 
 type Viewpoint = Literal["frontal", "left", "right", "back"]
 
-type TrackSelectionKey = tuple[
-    str, str, int, int
-]  # (video_id, track_id, start_frame, end_frame)
+type TrackSelectionKey = tuple[str, str, int, int]  # (video_id, track_id, start_frame, end_frame)
 
 
 @dataclass(frozen=True)
@@ -102,3 +100,16 @@ class Video:
             and (min_quality is None or annotation.quality >= min_quality)
             and (track_id is None or annotation.track_id == track_id)
         ]
+
+
+@dataclass(frozen=True)
+class SubjectImage:
+    subject_id: str
+    image_id: int
+    path: str
+
+
+@dataclass(frozen=True)
+class Subject:
+    subject_id: str
+    images: list[SubjectImage] = field(default_factory=list)
