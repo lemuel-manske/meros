@@ -14,9 +14,7 @@ SUBJECT_ID: str | None = None
 IMAGE_ID: int | None = None
 
 
-def select_spots(
-    image: np.ndarray, initial: list[list[int]], title: str
-) -> list[list[int]] | None:
+def select_spots(image: np.ndarray, initial: list[list[int]], title: str) -> list[list[int]] | None:
     points = [point.copy() for point in initial]
     figure, axis = plt.subplots(figsize=(13, 8))
     axis.imshow(cv.cvtColor(image, cv.COLOR_BGR2RGB))
@@ -42,9 +40,7 @@ def select_spots(
         elif event.button == 3 and points:
             nearest = min(
                 range(len(points)),
-                key=lambda index: (
-                    (points[index][0] - x) ** 2 + (points[index][1] - y) ** 2
-                ),
+                key=lambda index: (points[index][0] - x) ** 2 + (points[index][1] - y) ** 2,
             )
             points.pop(nearest)
 
@@ -94,13 +90,8 @@ def run(project: Project) -> None:
             if selected is None:
                 continue
 
-            project.metadata.write_subject_spots(
-                subject.subject_id, photo.image_id, selected
-            )
-            print(
-                f"Saved {len(selected)} spot centers for "
-                f"{subject.subject_id}/{photo.image_id}"
-            )
+            project.metadata.write_subject_spots(subject.subject_id, photo.image_id, selected)
+            print(f"Saved {len(selected)} spot centers for {subject.subject_id}/{photo.image_id}")
 
 
 if __name__ == "__main__":

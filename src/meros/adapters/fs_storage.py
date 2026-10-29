@@ -290,9 +290,7 @@ class LocalFsMetadataStore:
 
         return points
 
-    def write_subject_spots(
-        self, subject_id: str, image_id: int, points: list[list[int]]
-    ) -> None:
+    def write_subject_spots(self, subject_id: str, image_id: int, points: list[list[int]]) -> None:
         # Reuse media path validation rather than exposing filesystem details to processing.
         image_path = LocalFsMediaStore().subject_image_path(subject_id, image_id)
         if any(
