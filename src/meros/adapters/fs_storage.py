@@ -49,10 +49,10 @@ class MediaPaths:
         return MEDIA_ROOT / "subjects"
 
     def subject(self, subject_id: str) -> Path:
-        return self.subjects() / subject_id
+        return MEDIA_ROOT / "subjects" / subject_id
 
     def subject_image(self, subject_id: str, image_id: int) -> Path:
-        return self.subject(subject_id) / f"{image_id}.jpg"
+        return MEDIA_ROOT / "subjects" / subject_id / f"{image_id}.jpg"
 
     def frames(self, video_id: str) -> Path:
         return MEDIA_ROOT / "frames" / video_id
