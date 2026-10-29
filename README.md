@@ -2,38 +2,66 @@
 
 Computer-vision research for identifying individual Goliath Groupers (*Epinephelus itajara*) with Instituto Meros do Brasil.
 
+## Subject photographs
+
+The primary data model is a **subject** (individual) with numbered head images:
+
+```text
+data/media/subjects/
+├── athila/
+│   ├── 0.jpg
+│   └── 1.jpg
+└── maria/
+    ├── 0.jpg
+    └── 1.jpg
+```
+
+The directory name is the subject identifier. The basename of each numbered
+JPG is its image identifier. Lists are sorted numerically.
+
+Use `Project.open().media.list_subjects()` to find subjects and their photos;
+`list_subject_images("athila")` for one individual; and
+`read_subject_image("athila", 0)` to read OpenCV BGR pixels.
+The application accesses files through the adapter, not directly.
+
+These photographs live under `data/media` (DVC managed). Run
+`make data-pull` if they have been uploaded to the DVC remote. Spot-center
+annotations for subjects are not yet created; they will be extracted next.
+
 ## Setup
 
-Run commands from the repository root. Python 3.12+ and Make are required.
-
-The Makefile is the shared command entry point for local work, this README, and GitHub Actions. `make help` lists the targets. Commands use `.venv/bin/python` when available; override with `PYTHON=...` for another environment.
+Requires Python 3.12+, Make, and packages declared in `pyproject.toml`.
+From the repository root:
 
 ```sh
 make init
-
 make data-pull
+make subjects
+make check
 ```
 
-DVC access requires credentials for the configured Backblaze S3 remote. No credentials are stored here. Evaluation of existing artifacts needs NumPy, OpenCV, and SciPy; it does not import Torch or SAM2.
+`make subjects` lists locally available individuals/images. The Makefile
+uses `.venv/bin/python` when available, or set `PYTHON=...`.
 
-For rebuilding tracking/masked crops, initialize the pinned SAM2 submodule, install Torch/Torchvision for your CUDA environment, and install SAM2:
+## Architecture
 
-```sh
-make install-sam2
-```
+- `src/meros/domain/`: entities including `Subject` and `SubjectImage`, plus retained video types.
+- `src/meros/adapters/`: filesystem access for photographs, legacy frames, tracking, and metadata.
+- `src/meros/project.py`: application dependency wiring.
+- `src/meros/subjects.py`: inspect the subject-photo dataset.
+- `src/meros/processing/`: optional video extraction/tracking/masked crops.
+- `src/meros/pipeline/`: video preparation orchestration.
+- `src/meros/external/`: optional SAM2 predictor integration.
 
-Obtain the official SAM2.1 Hiera Large checkpoint using the pinned submodule's documented checkpoint download instructions. Place it at `external/sam2/checkpoints/sam2.1_hiera_large.pt`. The predictor uses CUDA and the saved human-provided seed boxes.
+The former `sandbox/` and `experiments/` packages have been removed.
+Subject images are the primary input; the video preparation pipeline is
+retained for generating further media if needed via `make pipeline`.
 
-Tracking reuses each video's boxes from `data/metadata/videos/bboxes.json`. When a video has no boxes (or the file is absent), OpenCV opens its first extracted frame for manual fish selection. Press `a`, drag a box around the fish, and press Enter or Space to confirm it. Confirmed boxes appear green with their fish IDs. Press `a` to add another fish and `q` to save and continue. Esc or closing the window cancels without saving. Fish IDs follow selection order: `0`, `1`, and so on.
-
-Selected boxes are saved immediately to `bboxes.json`, preserving other videos' entries, so subsequent runs reuse them even if inference is interrupted. Finishing without selecting a fish stops the run without saving boxes. Manual selection requires a desktop display and the GUI-enabled `opencv-python` dependency.
-
-`pyproject.toml` declares the runtime dependencies and optional development/data groups. Run provenance records the source commit. The full historical GPU environment has not been recreated.
+SAM2 requires its pinned submodule, a compatible Torch/CUDA installation,
+and the official SAM2.1 Hiera Large checkpoint. Subject listing does not
+require SAM2 or GPU setup.
 
 ## Validation
 
-> `make test`, `make typecheck`, `make lint`, `make format-check`, and `make cli-check` can also run separately. `make format` applies the formatting rules.
-
-```sh
-make check
-```
+Run `make check` for type checking, linting, formatting checks, and a
+CPU-only subject import smoke test. Run `make format` to apply formatting.

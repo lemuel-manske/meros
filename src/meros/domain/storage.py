@@ -102,3 +102,16 @@ class Video:
             and (min_quality is None or annotation.quality >= min_quality)
             and (track_id is None or annotation.track_id == track_id)
         ]
+
+
+@dataclass(frozen=True)
+class SubjectImage:
+    subject_id: str
+    image_id: int
+    path: str
+
+
+@dataclass(frozen=True)
+class Subject:
+    subject_id: str
+    images: list[SubjectImage] = field(default_factory=list)

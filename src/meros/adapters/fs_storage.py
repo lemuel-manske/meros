@@ -10,6 +10,8 @@ from pathlib import Path
 
 from meros.domain import (
     BBoxMap,
+    Subject,
+    SubjectImage,
     Individual,
     Interval,
     Track,
@@ -43,6 +45,15 @@ def write_json_atomic(path: Path, payload: object) -> None:
 
 @dataclass(frozen=True)
 class MediaPaths:
+    def subjects(self) -> Path:
+        return MEDIA_ROOT / "subjects"
+
+    def subject(self, subject_id: str) -> Path:
+        return self.subjects() / subject_id
+
+    def subject_image(self, subject_id: str, image_id: int) -> Path:
+        return self.subject(subject_id) / f"{image_id}.jpg"
+
     def frames(self, video_id: str) -> Path:
         return MEDIA_ROOT / "frames" / video_id
 
@@ -58,6 +69,43 @@ media_paths = MediaPaths()
 
 class LocalFsMediaStore:
     paths: MediaPaths = media_paths
+
+    def list_subjects(self) -> list[Subject]:
+        root = self.paths.subjects()
+
+        if not root.exists():
+            return []
+
+        return [
+            Subject(directory.name, self.list_subject_images(directory.name))
+            for directory in sorted(root.iterdir())
+            if directory.is_dir()
+        ]
+
+    def list_subject_images(self, subject_id: str) -> list[SubjectImage]:
+        directory = self.subject_image_path(subject_id, 0).parent
+
+        if not directory.is_dir():
+            return []
+
+        records = [
+            SubjectImage(subject_id, int(path.stem), str(path))
+            for path in directory.iterdir()
+            if path.is_file() and path.suffix.lower() == ".jpg" and path.stem.isdecimal()
+        ]
+        return sorted(records, key=lambda item: item.image_id)
+
+    def subject_image_path(self, subject_id: str, image_id: int) -> Path:
+        if not subject_id or subject_id in {".", ".."} or "/" in subject_id or "\\" in subject_id:
+            raise ValueError("Invalid subject ID")
+
+        if image_id < 0:
+            raise ValueError("Image ID must be nonnegative")
+
+        return self.paths.subject_image(subject_id, image_id)
+
+    def read_subject_image(self, subject_id: str, image_id: int) -> np.ndarray:
+        return read_image(self.subject_image_path(subject_id, image_id))
 
     def frame_path(self, video_id: str, frame_idx: int) -> Path:
         return media_paths.frame(video_id, frame_idx)

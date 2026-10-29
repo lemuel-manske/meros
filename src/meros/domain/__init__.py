@@ -1,5 +1,7 @@
 from .storage import (
     BBox,
+    Subject,
+    SubjectImage,
     BBoxMap,
     Individual,
     Interval,
@@ -22,6 +24,8 @@ from .prediction import (
 
 __all__ = [
     "BBox",
+    "Subject",
+    "SubjectImage",
     "BBoxMap",
     "BinaryMask",
     "Individual",

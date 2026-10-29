@@ -1,4 +1,4 @@
-"""Explicit storage and execution dependencies for processing and experiments."""
+"""Explicit storage and execution dependencies for subject photos and optional video processing."""
 
 from dataclasses import dataclass
 from pathlib import Path
