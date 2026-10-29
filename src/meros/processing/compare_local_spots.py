@@ -84,7 +84,14 @@ def neighborhoods(points: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarra
     offsets = points[indices[:, 1:]] - points[:, None, :]
     lengths = distances[:, 1:]
 
-    return indices[:, 1:], offsets, lengths
+    # Keep descriptor widths equal when photographs have few marked spots.
+    padded = np.pad(
+        lengths,
+        ((0, 0), (0, LOCAL_NEIGHBORS - lengths.shape[1])),
+        mode="edge",
+    )
+
+    return indices[:, 1:], offsets, padded
 
 
 def local_score(a: Sample, b: Sample) -> float:
@@ -145,7 +152,12 @@ def report(samples: list[Sample], label: str, matcher) -> None:
     pairs = list(combinations(range(len(samples)), 2))
 
     for i, j in pairs:
-        scores[i, j] = scores[j, i] = matcher(samples[i], samples[j])
+        if matcher is local_score:
+            score = max(matcher(samples[i], samples[j]), matcher(samples[j], samples[i]))
+        else:
+            score = matcher(samples[i], samples[j])
+
+        scores[i, j] = scores[j, i] = score
 
     positive = [
         scores[i, j] for i, j in pairs
