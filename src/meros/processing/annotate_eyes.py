@@ -20,9 +20,7 @@ def annotate_eye(
     axis.set_axis_off()
 
     rectangle = Rectangle((0, 0), 0, 0, edgecolor="cyan", facecolor="none", linewidth=2)
-    ellipse = Ellipse(
-        (0, 0), 0, 0, edgecolor="yellow", facecolor="none", linewidth=2
-    )
+    ellipse = Ellipse((0, 0), 0, 0, edgecolor="yellow", facecolor="none", linewidth=2)
 
     axis.add_patch(rectangle)
     axis.add_patch(ellipse)

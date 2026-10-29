@@ -282,9 +282,7 @@ class LocalFsMetadataStore:
             angle_degrees=eye["angle_degrees"],
         )
 
-    def write_subject_eye(
-        self, subject_id: str, image_id: int, eye: EyeAnnotation
-    ) -> None:
+    def write_subject_eye(self, subject_id: str, image_id: int, eye: EyeAnnotation) -> None:
         write_json_atomic(
             metadata_paths.subject_eye(subject_id, image_id),
             {
