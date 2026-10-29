@@ -131,6 +131,9 @@ class LocalFsMediaStore:
 
 @dataclass(frozen=True)
 class MetadataPaths:
+    def subject_mouth(self, subject_id: str, image_id: int) -> Path:
+        return METADATA_ROOT / "subjects" / subject_id / "mouths" / f"{image_id}.json"
+
     def subject_eye(self, subject_id: str, image_id: int) -> Path:
         return METADATA_ROOT / "subjects" / subject_id / "eyes" / f"{image_id}.json"
 
@@ -296,5 +299,29 @@ class LocalFsMetadataStore:
                     "radius_y": eye.radius_y,
                     "angle_degrees": eye.angle_degrees,
                 },
+            },
+        )
+
+    def read_subject_mouth(self, subject_id: str, image_id: int) -> tuple[float, float] | None:
+        try:
+            with metadata_paths.subject_mouth(subject_id, image_id).open(
+                "r", encoding="utf-8"
+            ) as stream:
+                data = json.load(stream)
+        except FileNotFoundError:
+            return None
+
+        return tuple(data["point"])
+
+    def write_subject_mouth(
+        self, subject_id: str, image_id: int, point: tuple[float, float]
+    ) -> None:
+        write_json_atomic(
+            metadata_paths.subject_mouth(subject_id, image_id),
+            {
+                "subject_id": subject_id,
+                "image_id": image_id,
+                "side": "left",
+                "point": list(point),
             },
         )
