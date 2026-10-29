@@ -1,7 +1,7 @@
 {
-  "subject_id": "flavia",
-  "image_id": 0,
-  "image": "data/media/subjects/flavia/0.jpg",
+  "subject_id": "joao",
+  "image_id": 1,
+  "image": "data/media/subjects/joao/1.jpg",
   "coordinate_system": "subject_image_pixels",
   "points": [
     [
