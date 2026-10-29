@@ -27,6 +27,9 @@ KNOWN_PAIR_RADIUS_PX = 15.0
 RANDOM_SEED = 17
 DESCRIPTOR_WEIGHT = 0.45
 TRANSFORM_PENALTY = 0.15
+CHEEK_MIN_Y = 0.5  # Eye radii below the center.
+CHEEK_MAX_Y = 5.0
+CHEEK_MAX_X = 5.0
 
 
 def candidate_pairs(source: np.ndarray, target: np.ndarray) -> np.ndarray:
@@ -64,7 +67,24 @@ def consensus(
     return matches, float(distances[matches[:, 0]].sum()) if len(matches) else 0.0
 
 
-def match(first: np.ndarray, second: np.ndarray, weighted: bool = False) -> np.ndarray:
+def cheek_weights(points: np.ndarray) -> np.ndarray:
+    # Broad eye-relative region: favor cheek, retain other points at lower weight.
+    x, y = points[:, 0], points[:, 1]
+    cheek = (
+        (y >= CHEEK_MIN_Y)
+        & (y <= CHEEK_MAX_Y)
+        & (np.abs(x) <= CHEEK_MAX_X)
+    )
+
+    return np.where(cheek, 1.0, 0.25)
+
+
+def match(
+    first: np.ndarray,
+    second: np.ndarray,
+    weighted: bool = False,
+    cheek: bool = False,
+) -> np.ndarray:
     if min(len(first), len(second)) < 3:
         return np.empty((0, 2), dtype=int)
 
@@ -77,6 +97,8 @@ def match(first: np.ndarray, second: np.ndarray, weighted: bool = False) -> np.n
 
     descriptor_a = neighborhood_descriptors(first) if weighted else None
     descriptor_b = neighborhood_descriptors(second) if weighted else None
+    first_quality = cheek_weights(first) if cheek else None
+    second_quality = cheek_weights(second) if cheek else None
 
     # Two distinct tentative correspondences define a similarity transform.
     # Score each hypothesis against ALL observed spots, not just the proposals.
@@ -109,7 +131,19 @@ def match(first: np.ndarray, second: np.ndarray, weighted: bool = False) -> np.n
 
         matched, error = consensus(first, second, transform, translation)
 
-        if weighted:
+        if cheek:
+            quality = float(
+                np.sqrt(
+                    first_quality[matched[:, 0]]
+                    * second_quality[matched[:, 1]]
+                ).sum()
+            )
+            quality -= 0.02 * error
+
+            if quality > best_quality:
+                best, best_quality = matched, quality
+
+        elif weighted:
             descriptor_distance = (
                 np.linalg.norm(
                     descriptor_a[matched[:, 0]] - descriptor_b[matched[:, 1]], axis=1
@@ -148,6 +182,8 @@ def run(project: Project) -> None:
     selected_pairs = {}
     weighted_pairs = {}
     weighted_scores = np.zeros_like(eye_scores)
+    cheek_scores = np.zeros_like(eye_scores)
+    cheek_pairs = {}
 
     for i, j in combinations(range(len(samples)), 2):
         eye_scores[i, j] = eye_scores[j, i] = eye_score(samples[i], samples[j], False)
@@ -159,6 +195,12 @@ def run(project: Project) -> None:
         weighted_pairs[i, j] = refined
         weighted_scores[i, j] = weighted_scores[j, i] = (
             len(refined) / min(len(samples[i].spots), len(samples[j].spots))
+        )
+
+        cheek_result = match(samples[i].normalized, samples[j].normalized, cheek=True)
+        cheek_pairs[i, j] = cheek_result
+        cheek_scores[i, j] = cheek_scores[j, i] = (
+            len(cheek_result) / min(len(samples[i].spots), len(samples[j].spots))
         )
 
         joint_scores[i, j] = joint_scores[j, i] = (
@@ -174,6 +216,7 @@ def run(project: Project) -> None:
         ("Eye-only baseline", eye_scores),
         ("Joint geometric consensus", joint_scores),
         ("Weighted descriptor + eye prior", weighted_scores),
+        ("Cheek-prior consensus", cheek_scores),
     ):
         positives = [
             scores[i, j] for i, j in combinations(range(len(samples)), 2)
@@ -252,6 +295,14 @@ def run(project: Project) -> None:
     print(f"  confirmed proposals: {len(confirmed)}")
     print(f"  conflicting proposals: {len(conflicts)}")
     print(f"  unverified proposals: {len(unverified)}")
+
+    cheek_result = cheek_pairs[i, j]
+    cheek_oriented = cheek_result if first_index == i else cheek_result[:, ::-1]
+    cheek_set = {tuple(row) for row in cheek_oriented}
+    print(
+        f"  cheek-prior proposals: {len(cheek_set)}, "
+        f"verified: {len(cheek_set & verified_set)}"
+    )
 
     refined = weighted_pairs[i, j]
     refined_oriented = refined if first_index == i else refined[:, ::-1]
