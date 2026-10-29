@@ -184,30 +184,43 @@ def run(project: Project) -> None:
     first_coords = samples[first_index].spots
     second_coords = samples[second_index].spots
 
-    correct = 0
-    eligible_known = 0
-
+    verified = []
     for pair in known:
         left = np.asarray(pair["first"])
         right = np.asarray(pair["second"])
         distance_a, index_a = cKDTree(first_coords).query(left)
         distance_b, index_b = cKDTree(second_coords).query(right)
 
-        if max(distance_a, distance_b) > KNOWN_PAIR_RADIUS_PX:
-            continue
+        if max(distance_a, distance_b) <= KNOWN_PAIR_RADIUS_PX:
+            verified.append((int(index_a), int(index_b)))
 
-        eligible_known += 1
+    oriented = proposed if first_index == i else proposed[:, ::-1]
+    proposed_set = {tuple(row) for row in oriented}
+    verified_set = set(verified)
 
-        candidate = (
-            (int(index_a), int(index_b))
-            if first_index == i else (int(index_b), int(index_a))
+    confirmed = proposed_set & verified_set
+    conflicts = {
+        pair
+        for pair in proposed_set - verified_set
+        if any(
+            (pair[0] == ground[0] and pair[1] != ground[1])
+            or (pair[1] == ground[1] and pair[0] != ground[0])
+            for ground in verified_set
         )
-        correct += any(tuple(row) == candidate for row in proposed)
+    }
+    unverified = proposed_set - confirmed - conflicts
 
     print(f"\\nKnown {SUBJECT_ID} correspondences (not used to fit the matcher):")
-    print(f"  eligible pairs: {eligible_known}/{len(known)}")
-    print(f"  verified pairs retrieved: {correct}/{eligible_known}")
-    print(f"  total proposed pairs: {len(proposed)}")
+    print(f"  eligible verified pairs: {len(verified_set)}/{len(known)}")
+    print(f"  verified pairs retrieved: {len(confirmed)}/{len(verified_set)}")
+    print(f"  proposed pairs: {len(proposed_set)}")
+    print(f"  confirmed proposals: {len(confirmed)}")
+    print(f"  conflicting proposals: {len(conflicts)}")
+    print(f"  unverified proposals: {len(unverified)}")
+    print(
+        "  Note: unverified does not mean incorrect; conflicts assume "
+        "one-to-one spot identity."
+    )
     print(
         "\\nExploratory: a single annotated positive pair cannot establish "
         "generalization to other individuals."
