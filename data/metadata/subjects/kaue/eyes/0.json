@@ -1,0 +1,15 @@
+{
+  "subject_id": "kaue",
+  "image_id": 0,
+  "side": "left",
+  "coordinate_system": "subject_image_pixels",
+  "eye": {
+    "center": [
+      473.8610354763633,
+      364.22180088674804
+    ],
+    "radius_x": 29.44600736203367,
+    "radius_y": 25.121768518658115,
+    "angle_degrees": 0.0
+  }
+}

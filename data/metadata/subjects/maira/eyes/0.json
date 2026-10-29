@@ -1,0 +1,15 @@
+{
+  "subject_id": "maira",
+  "image_id": 0,
+  "side": "left",
+  "coordinate_system": "subject_image_pixels",
+  "eye": {
+    "center": [
+      284.7011918449675,
+      292.2939740998376
+    ],
+    "radius_x": 22.126921257609553,
+    "radius_y": 17.701537006087676,
+    "angle_degrees": 0.0
+  }
+}
