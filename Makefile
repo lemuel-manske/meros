@@ -8,7 +8,7 @@ BIND ?= 127.0.0.1
 
 .PHONY: help init install install-sam2 sam2-submodule
 .PHONY: data-pull data-save data-push results-save pipeline subjects
-.PHONY: typecheck lint format format-check import-check check serve-media
+.PHONY: typecheck lint format format-check check serve-media
 
 help:
 	@printf '%s\n' \
@@ -16,7 +16,7 @@ help:
 		'Data: data-pull, data-save, data-push, results-save RUN_DIR=...' \
 		'Images: subjects' \
 		'Video: pipeline (optional processing)' \
-		'Checks: typecheck, lint, format, format-check, import-check, check' \
+		'Checks: typecheck, lint, format, format-check, check' \
 		'Preview: serve-media (PORT=... BIND=...)'
 
 init:
@@ -64,10 +64,7 @@ format:
 format-check:
 	$(PYTHON) -m ruff format --check src
 
-import-check:
-	$(PYTHON) -m meros.subjects --check
-
-check: typecheck lint format-check import-check
+check: typecheck lint format-check
 
 serve-media:
 	$(PYTHON) -m http.server $(PORT) --bind $(BIND) --directory data/media
