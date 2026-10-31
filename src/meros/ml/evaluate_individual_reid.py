@@ -27,6 +27,7 @@ GEOMETRIC_WEIGHT = 0.35
 RANSAC_RADIUS_RATIO = 0.06
 MIN_SPOTS = 4
 TOP_K = 3
+OPEN_SET_THRESHOLDS = (0.10, 0.15, 0.20, 0.25, 0.30, 0.35)
 
 
 @dataclass(frozen=True)
@@ -283,17 +284,25 @@ def rank_individuals(
     query_label: tuple[str, int],
     query: SpotPhoto,
     gallery: dict[tuple[str, int], SpotPhoto],
+    score_cache: dict[tuple[tuple[str, int], tuple[str, int]], float],
+    *,
+    excluded_subject: str | None = None,
 ) -> list[Candidate]:
     """
-    Rank distinct identities by their highest-scoring reference image.
+    Rank identities by their best reference, optionally hiding one identity.
     """
     best_by_subject: dict[str, Candidate] = {}
 
     for (subject_id, image_id), reference in gallery.items():
-        if (subject_id, image_id) == query_label:
+        if (subject_id, image_id) == query_label or subject_id == excluded_subject:
             continue
 
-        score = pair_score(query, reference)
+        key = (query_label, (subject_id, image_id))
+
+        if key not in score_cache:
+            score_cache[key] = pair_score(query, reference)
+
+        score = score_cache[key]
         previous = best_by_subject.get(subject_id)
 
         if previous is None or score > previous.score:
@@ -302,6 +311,79 @@ def rank_individuals(
     return sorted(
         best_by_subject.values(),
         key=lambda candidate: (-candidate.score, candidate.subject_id),
+    )
+
+
+def report_open_set(
+    gallery: dict[tuple[str, int], SpotPhoto],
+    score_cache: dict[tuple[tuple[str, int], tuple[str, int]], float],
+    known_results: list[tuple[float, bool]],
+) -> None:
+    """
+    Hide each individual's entire gallery and measure false-match scores.
+    """
+    unknown_scores = []
+
+    print("\nOpen-set: every query identity is completely absent from its gallery")
+    print("held-out query | best incorrect identity | max_score | top2_margin")
+
+    for label, photo in gallery.items():
+        ranking = rank_individuals(
+            label,
+            photo,
+            gallery,
+            score_cache,
+            excluded_subject=label[0],
+        )
+
+        if not ranking:
+            print(f"{label[0]}/{label[1]} | no other identities available")
+            continue
+
+        best = ranking[0]
+        margin = (
+            f"{best.score - ranking[1].score:.3f}" if len(ranking) >= 2 else "n/a"
+        )
+        unknown_scores.append(best.score)
+        print(
+            f"{label[0]}/{label[1]} | {best.subject_id}/{best.image_id} | "
+            f"{best.score:.3f} | {margin}"
+        )
+
+    if not unknown_scores or not known_results:
+        return
+
+    known_scores = [score for score, correct in known_results if correct]
+
+    if known_scores:
+        print(
+            f"Correct known-match top scores: min={min(known_scores):.3f}, "
+            f"median={np.median(known_scores):.3f}, max={max(known_scores):.3f}"
+        )
+
+    print(
+        f"Unknown top scores: min={min(unknown_scores):.3f}, "
+        f"median={np.median(unknown_scores):.3f}, max={max(unknown_scores):.3f}"
+    )
+    print("\nIllustrative score thresholds (not calibrated)")
+    print("threshold | known correctly accepted | unknown falsely accepted")
+
+    for threshold in OPEN_SET_THRESHOLDS:
+        true_accepts = sum(
+            correct and score >= threshold for score, correct in known_results
+        )
+        false_accepts = sum(score >= threshold for score in unknown_scores)
+        print(
+            f"{threshold:.2f} | {true_accepts}/{len(known_results)} "
+            f"({true_accepts / len(known_results):.1%}) | "
+            f"{false_accepts}/{len(unknown_scores)} "
+            f"({false_accepts / len(unknown_scores):.1%})"
+        )
+
+    print("Scores are not calibrated; these thresholds are only diagnostics.")
+    print(
+        "Known queries have a true match in the gallery; unknown queries do not. "
+        "Gallery size also varies across held-out identities."
     )
 
 
@@ -329,6 +411,8 @@ def run(project: Project) -> None:
 
     counts = Counter(label[0] for label in gallery)
     queries = [label for label in gallery if counts[label[0]] >= 2]
+    score_cache: dict[tuple[tuple[str, int], tuple[str, int]], float] = {}
+    known_results: list[tuple[float, bool]] = []
 
     print(
         f"Gallery: {len(gallery)} images, {len(counts)} identities; "
@@ -344,7 +428,7 @@ def run(project: Project) -> None:
     ties = 0
 
     for label in queries:
-        ranking = rank_individuals(label, gallery[label], gallery)
+        ranking = rank_individuals(label, gallery[label], gallery, score_cache)
         true_candidate = next(
             (candidate for candidate in ranking if candidate.subject_id == label[0]),
             None,
@@ -363,7 +447,9 @@ def run(project: Project) -> None:
         tied_best = sum(abs(candidate.score - best_score) <= 1e-9 for candidate in ranking)
         is_tied = tied_best > 1
         ties += int(is_tied)
-        correct_rank1 += int(true_rank == 1 and best_score > 0)
+        correct = true_rank == 1 and best_score > 0
+        correct_rank1 += int(correct)
+        known_results.append((best_score, correct))
         correct_rankk += int(true_rank <= TOP_K and true_candidate.score > 0)
         reciprocal_ranks.append(1.0 / true_rank)
 
@@ -391,6 +477,8 @@ def run(project: Project) -> None:
     print(f"Rank-{TOP_K}: {correct_rankk}/{evaluated} ({correct_rankk / evaluated:.1%})")
     print(f"Conservative mean reciprocal rank: {np.mean(reciprocal_ranks):.3f}")
     print(f"Ambiguous best-score ties: {ties}/{evaluated}")
+
+    report_open_set(gallery, score_cache, known_results)
 
 
 if __name__ == "__main__":
