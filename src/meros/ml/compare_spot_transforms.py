@@ -131,7 +131,8 @@ def show_comparison(
         axis.scatter(points[:, 0], points[:, 1], s=35, c="yellow", edgecolors="black")
         axis.set_title(title)
 
-    for axis, (name, matrix, median) in zip(panels[2:], fits, strict=False):
+    for step, (name, matrix, median) in enumerate(fits, start=3):
+        axis = panels[step - 1]
         image = project.media.read_subject_image(subject_id, second_id)
         axis.imshow(cv.cvtColor(image, cv.COLOR_BGR2RGB))
 
@@ -143,10 +144,14 @@ def show_comparison(
 
         axis.scatter(target[:, 0], target[:, 1], c="yellow", s=28, label="Annotated")
         axis.scatter(
-            predicted[valid, 0], predicted[valid, 1],
-            c="cyan", marker="x", s=40, label="Predicted"
+            predicted[valid, 0],
+            predicted[valid, 1],
+            c="cyan",
+            marker="x",
+            s=40,
+            label="Predicted",
         )
-        axis.set_title(f"3. {name}: held-out median {median:.1f}px")
+        axis.set_title(f"{step}. {name}: LOO median {median:.1f}px")
 
     for axis in panels[len(fits) + 2:]:
         axis.set_visible(False)
@@ -164,7 +169,9 @@ def show_comparison(
         axis.set_aspect("equal")
         axis.set_axis_off()
 
-    figure.suptitle(f"{subject_id}/{first_id}-{second_id}: yellow = annotated, cyan = predicted")
+    figure.suptitle(
+        f"{subject_id}/{first_id}-{second_id}: yellow = annotated, cyan = predicted"
+    )
     figure.tight_layout()
 
     if SAVE_PLOTS:
