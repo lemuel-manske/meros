@@ -20,6 +20,7 @@ from meros.project import Project
 SOURCE = ("luana", 0)
 TARGET = ("luana", 1)
 MATCH_RADIUS_EYE_MOUTH = 0.12
+ANNOTATION_RADIUS_PX = 15.0
 SHOW_PLOT = True
 
 
@@ -136,6 +137,72 @@ def match_spots(
     return SpotMatch(matrix=matrix, pairs=pairs, errors=errors)
 
 
+def verified_pairs(
+    project: Project,
+    source_label: tuple[str, int],
+    target_label: tuple[str, int],
+    source: np.ndarray,
+    target: np.ndarray,
+) -> set[tuple[int, int]]:
+    """
+    Map reviewed image coordinates to the closest indexed spot centers.
+    Unmatched annotations are not counted as recoverable references.
+    """
+    if source_label[0] != target_label[0] or source_label[1] == target_label[1]:
+        return set()
+
+    first_id, second_id = sorted((source_label[1], target_label[1]))
+    annotations = project.metadata.read_subject_spot_correspondences(
+        source_label[0], first_id, second_id
+    )
+    reversed_order = source_label[1] > target_label[1]
+    verified = set()
+
+    for annotation in annotations:
+        source_point = annotation["second"] if reversed_order else annotation["first"]
+        target_point = annotation["first"] if reversed_order else annotation["second"]
+        source_distances = np.linalg.norm(source - source_point, axis=1)
+        target_distances = np.linalg.norm(target - target_point, axis=1)
+        source_index = int(np.argmin(source_distances))
+        target_index = int(np.argmin(target_distances))
+
+        if (
+            source_distances[source_index] <= ANNOTATION_RADIUS_PX
+            and target_distances[target_index] <= ANNOTATION_RADIUS_PX
+        ):
+            verified.add((source_index, target_index))
+
+    return verified
+
+
+def report_verified_matches(
+    proposed: tuple[tuple[int, int], ...],
+    verified: set[tuple[int, int]],
+) -> None:
+    """
+    Report recovery of reviewed correspondences without treating unlabeled
+    pairs as negatives: manual correspondences may be incomplete.
+    """
+    if not verified:
+        print("No indexed verified correspondences available for this image pair.")
+        return
+
+    proposed_set = set(proposed)
+    recovered = proposed_set & verified
+    known_sources = {i for i, _ in verified}
+    known_targets = {j for _, j in verified}
+    conflicts = {
+        (i, j)
+        for i, j in proposed_set - verified
+        if i in known_sources or j in known_targets
+    }
+    unverified = proposed_set - recovered - conflicts
+
+    print(f"Verified correspondences recovered: {len(recovered)}/{len(verified)}")
+    print(f"Conflicts with verified links: {len(conflicts)}")
+    print(f"Other proposals (unverified, not presumed false): {len(unverified)}")
+
+
 def show_match(
     project: Project,
     source_label: tuple[str, int],
@@ -224,6 +291,9 @@ def run(project: Project) -> None:
 
     if result.errors:
         print(f"Median reprojection error: {np.median(result.errors):.1f}px")
+
+    references = verified_pairs(project, SOURCE, TARGET, source, target)
+    report_verified_matches(result.pairs, references)
 
     if SHOW_PLOT:
         show_match(project, SOURCE, TARGET, source, target, result)
