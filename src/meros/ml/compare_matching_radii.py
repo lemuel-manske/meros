@@ -72,7 +72,7 @@ def evaluate_pair(
     )
 
     print(
-        f"\\n{source_label} vs {target_label} "
+        f"\n{source_label} vs {target_label} "
         f"({'same' if same_individual else 'different'} individual)"
     )
     print(
