@@ -222,8 +222,8 @@ def run(project: Project) -> None:
 
         print(f"\n{mode.upper()}: {len(labels)} queries")
         print(
-            "query | best | score | margin | spot_counts | density_ratio "
-            "| spatial_difference | decision | reason"
+            "query | best | score | margin | spots | overlap_small/large "
+            "| density_ratio | spatial_difference | decision | reason"
         )
 
         for label in labels:
@@ -243,7 +243,15 @@ def run(project: Project) -> None:
             best = ranking[0]
             margin = best.score - ranking[1].score if len(ranking) > 1 else 0.0
             decision, reason, profile = triage(query, ranking, gallery)
-            correct = mode == "known" and best.subject_id == label[0]
+            unique_winner = (
+                sum(abs(candidate.score - best.score) <= 1e-9 for candidate in ranking) == 1
+            )
+            correct = (
+                mode == "known"
+                and best.subject_id == label[0]
+                and best.score > 0
+                and unique_winner
+            )
             n_correct_baseline += int(correct)
 
             if decision == "AUTO":
@@ -255,13 +263,17 @@ def run(project: Project) -> None:
                 f"{profile.source_spots}+{profile.target_spots}"
                 if profile is not None else "n/a"
             )
+            overlap_text = (
+                f"{profile.overlap_small:.2f}/{profile.overlap_large:.2f}"
+                if profile else "n/a"
+            )
             ratio_text = f"{profile.density_ratio:.2f}" if profile else "n/a"
             spatial_text = f"{profile.spatial_difference:.2f}" if profile else "n/a"
 
             print(
                 f"{label[0]}/{label[1]} | {best.subject_id}/{best.image_id} | "
                 f"{best.score:.3f} | {margin:.3f} | {counts_text} | "
-                f"{ratio_text} | {spatial_text} | {decision} | {reason}"
+                f"{overlap_text} | {ratio_text} | {spatial_text} | {decision} | {reason}"
             )
 
         if mode == "known":
