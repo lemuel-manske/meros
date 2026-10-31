@@ -106,10 +106,11 @@ def match_spots(
     target_mouth: tuple[float, float],
     *,
     refine: bool = True,
+    radius_ratio: float = MATCH_RADIUS_EYE_MOUTH,
 ) -> SpotMatch:
     matrix = initial_similarity(source_eye, source_mouth, target_eye, target_mouth)
     eye_mouth_distance = np.linalg.norm(np.asarray(target_mouth) - np.asarray(target_eye))
-    radius = float(eye_mouth_distance * MATCH_RADIUS_EYE_MOUTH)
+    radius = float(eye_mouth_distance * radius_ratio)
 
     pairs = assign_spots(source, target, matrix, radius)
 
