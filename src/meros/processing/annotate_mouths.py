@@ -9,8 +9,9 @@ import numpy as np
 from meros.project import Project
 
 
-SUBJECT_ID: str | None = None
-IMAGE_ID: int | None = None
+SUBJECT_ID = None
+IMAGE_ID = None
+
 ONLY_WITH_EYE_AND_SPOTS = True
 
 

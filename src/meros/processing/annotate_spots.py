@@ -7,8 +7,8 @@ import numpy as np
 from meros.project import Project
 
 
-SUBJECT_ID = "luana"
-IMAGE_ID = 1
+SUBJECT_ID = None
+IMAGE_ID = None
 
 
 def select_spots(image: np.ndarray, initial: list[list[int]], title: str) -> list[list[int]] | None:

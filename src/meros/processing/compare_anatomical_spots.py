@@ -1,12 +1,3 @@
-"""Evaluate anatomically anchored, perspective-tolerant spot correspondence.
-
-This experiment matches individual spots, not combinatorial constellations.
-Eye and mouth define a repeatable head coordinate frame; a small set of
-horizontal scale factors accounts for foreshortening across viewpoints.
-
-The 13 manually verified Luana pairs are used only for post-hoc evaluation.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -123,18 +114,39 @@ def compare(left: Sample, right: Sample) -> Match:
     return best
 
 
+def evaluate_subject(
+    project: Project,
+    subject_id: str,
+    samples: list[Sample],
+    results: dict[tuple[int, int], Match]
+) -> None:
+    subject_samples = [sample for sample in samples if sample.subject_id == subject_id]
+
+    if len(subject_samples) < 2:
+        return
+
+    print(f"Subject {subject_id} ({len(subject_samples)} images):")
+
+    for i, j in combinations(range(len(subject_samples)), 2):
+        result = results[(min(i, j), max(i, j))]
+        print(
+            f"  {subject_samples[i].label} vs {subject_samples[j].label}: "
+            f"{len(result.pairs)} matches, score={result.score:.3f}, "
+            f"scale={result.scale:.3f}, reversed={result.reversed_direction}",
+        )
+
+
 def evaluate_luana(
     project: Project,
+    subject: str,
     samples: list[Sample],
     results: dict[tuple[int, int], Match],
 ) -> None:
     labels = [sample.label for sample in samples]
 
-    if "luana/0" not in labels or "luana/1" not in labels:
-        return
-
     i, j = labels.index("luana/0"), labels.index("luana/1")
     first, second = samples[i], samples[j]
+
     manual = project.metadata.read_subject_spot_correspondences("luana", 0, 1)
     verified_pairs = set()
 
@@ -149,7 +161,7 @@ def evaluate_luana(
 
     found = len(verified_pairs.intersection(results[(i, j)].pairs))
 
-    print(f"Luana verified correspondences recovered: {found}/{len(verified_pairs)}")
+    print(f"{subject} verified correspondences recovered: {found}/{len(verified_pairs)}")
 
 
 def run(project: Project) -> None:
@@ -220,12 +232,6 @@ def run(project: Project) -> None:
     print(f"Rank-1: {correct}/{queries}")
 
     evaluate_luana(project, samples, results)
-
-    print(
-        "Exploratory in-sample result. Tolerances and permitted horizontal "
-        "scales were investigated on this small dataset; generalization is "
-        "not established. The point matches are not ground truth."
-    )
 
 
 if __name__ == "__main__":

@@ -9,6 +9,9 @@ from meros.domain import EyeAnnotation
 from meros.project import Project
 
 
+SUBJECT_ID = None
+
+
 def annotate_eye(
     image: np.ndarray, existing: EyeAnnotation | None, title: str
 ) -> EyeAnnotation | None:
@@ -130,6 +133,9 @@ def run(project: Project) -> None:
     count = 0
 
     for subject in project.media.list_subjects():
+        if SUBJECT_ID is not None and subject.subject_id != SUBJECT_ID:
+            continue
+
         for photo in subject.images:
             image = project.media.read_subject_image(subject.subject_id, photo.image_id)
 

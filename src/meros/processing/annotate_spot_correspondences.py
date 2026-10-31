@@ -9,12 +9,13 @@ import numpy as np
 from meros.project import Project
 
 
-SUBJECT_ID = "luana"
-FIRST_IMAGE_ID = 0
-SECOND_IMAGE_ID = 1
+SUBJECT_ID = None
 
 
 def annotate_pair(
+    subject_id: str,
+    first_image_id: int,
+    second_image_id: int,
     first_image: np.ndarray,
     second_image: np.ndarray,
     existing: list[dict],
@@ -30,11 +31,11 @@ def annotate_pair(
     for axis, image, image_id in zip(
         axes,
         (first_image, second_image),
-        (FIRST_IMAGE_ID, SECOND_IMAGE_ID),
+        (first_image_id, second_image_id),
         strict=True,
     ):
         axis.imshow(cv.cvtColor(image, cv.COLOR_BGR2RGB))
-        axis.set_title(f"{SUBJECT_ID}/{image_id}")
+        axis.set_title(f"{subject_id}/{image_id}")
         axis.set_axis_off()
 
     figure.suptitle(title)
@@ -73,7 +74,7 @@ def annotate_pair(
         pending_marker.set_offsets([pending] if pending is not None else [[-10, -10]])
 
         first_axis.set_title(
-            f"{SUBJECT_ID}/{FIRST_IMAGE_ID}"
+            f"{subject_id}/{first_image_id}"
             + (" — select matching spot on right" if pending is not None else "")
         )
         figure.canvas.draw_idle()
@@ -127,35 +128,53 @@ def annotate_pair(
 
 
 def run(project: Project) -> None:
-    first_image = project.media.read_subject_image(SUBJECT_ID, FIRST_IMAGE_ID)
-    second_image = project.media.read_subject_image(SUBJECT_ID, SECOND_IMAGE_ID)
+    first_image_id = 0
 
-    existing = project.metadata.read_subject_spot_correspondences(
-        SUBJECT_ID, FIRST_IMAGE_ID, SECOND_IMAGE_ID
-    )
+    for subject in project.media.list_subjects():
+        if SUBJECT_ID is not None and subject.subject_id != SUBJECT_ID:
+            continue
 
-    selected = annotate_pair(
-        first_image,
-        second_image,
-        existing,
-        (
-            "Click a spot on the left, then the SAME spot on the right. "
-            "Repeat to add numbered pairs.\n"
-            "Backspace/R: undo | Enter/S: save | Esc/Q: skip"
-        ),
-    )
+        first_image = project.media.read_subject_image(subject.subject_id, first_image_id)
 
-    if selected is None:
-        print("Skipped without saving.")
-        return
+        m = subject.images[1:]
 
-    project.metadata.write_subject_spot_correspondences(
-        SUBJECT_ID, FIRST_IMAGE_ID, SECOND_IMAGE_ID, selected
-    )
+        if len(m) > 0: # not a single image subject
+            print(f"Annotating subject: {subject.subject_id}, with images count:", len(m))
 
-    print(
-        f"Saved {len(selected)} correspondences for {SUBJECT_ID}/{FIRST_IMAGE_ID}-{SECOND_IMAGE_ID}"
-    )
+        for photo in m:
+            second_image_id = photo.image_id
+
+            second_image = project.media.read_subject_image(subject.subject_id, second_image_id)
+
+            existing = project.metadata.read_subject_spot_correspondences(
+                subject.subject_id, first_image_id, second_image_id
+            )
+
+            selected = annotate_pair(
+                subject.subject_id,
+                first_image_id,
+                second_image_id,
+                first_image,
+                second_image,
+                existing,
+                (
+                    "Click a spot on the left, then the SAME spot on the right. "
+                    "Repeat to add numbered pairs.\n"
+                    "Backspace/R: undo | Enter/S: save | Esc/Q: skip"
+                ),
+            )
+
+            if selected is None:
+                print("Skipped without saving.")
+                return
+
+            project.metadata.write_subject_spot_correspondences(
+                subject.subject_id, first_image_id, second_image_id, selected
+            )
+
+            print(
+                f"Saved {len(selected)} correspondences for {subject.subject_id}/{first_image_id}-{second_image_id}"
+            )
 
 
 if __name__ == "__main__":
