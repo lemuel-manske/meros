@@ -138,7 +138,7 @@ def run(project: Project) -> None:
 
         m = subject.images[1:]
 
-        if len(m) > 0: # not a single image subject
+        if len(m) > 0:  # not a single image subject
             print(f"Annotating subject: {subject.subject_id}, with images count:", len(m))
 
         for photo in m:
