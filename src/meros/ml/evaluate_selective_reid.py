@@ -56,7 +56,7 @@ def evaluate(
     correct_baseline = 0
     evaluated = 0
 
-    print(f"\\n{'KNOWN' if known else 'UNKNOWN'}: {len(labels)} queries")
+    print(f"\n{'KNOWN' if known else 'UNKNOWN'}: {len(labels)} queries")
     print("query | best | score | margin | decision")
 
     for label in labels:
