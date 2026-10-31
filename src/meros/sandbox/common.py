@@ -1,5 +1,3 @@
-"""Small visual playground for 2D geometric transformations."""
-
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -16,9 +14,7 @@ def show(matrix: np.ndarray, name: str) -> None:
 
     figure, axes = plt.subplots(1, 2, figsize=(10, 5))
 
-    for axis, values, title in zip(
-        axes, (points, transformed), ("Original", name), strict=True
-    ):
+    for axis, values, title in zip(axes, (points, transformed), ("Original", name), strict=True):
         for indices in connections:
             axis.plot(values[list(indices), 0], values[list(indices), 1], "-o")
 
@@ -33,5 +29,3 @@ def show(matrix: np.ndarray, name: str) -> None:
 
     figure.tight_layout()
     plt.show()
-
-

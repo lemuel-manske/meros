@@ -43,6 +43,32 @@ These rules apply across the Meros codebase.
   that may not succeed. Remove unused code, data, and artifacts to keep the repository
   manageable and reduce confusion.
 
+# Code style
+
+Python docs should be like
+
+```python
+def my_function(param1: int, param2: str) -> bool:
+    """
+    This function does something important.
+    """
+    # Implementation goes here
+```
+
+Or at module level:
+
+```python
+"""
+This module provides utilities for processing images.
+
+It includes functions for resizing, filtering, and transforming images.
+"""
+```
+
+- Never use `#` for module-level documentation. Use triple quotes instead.
+
+- Never write right after `"""` on the same line. Always start a new line for the docstring content.
+
 # Validation
 
 > `make test`, `make typecheck`, `make lint`, `make format-check`, and `make cli-check` can also run separately. `make format` applies the formatting rules.

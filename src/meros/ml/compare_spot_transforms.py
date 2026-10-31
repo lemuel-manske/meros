@@ -1,4 +1,5 @@
-"""Compare geometric transforms fitted to manually verified spot correspondences.
+"""
+Compare geometric transforms fitted to manually verified spot correspondences.
 
 This measures how well annotated points in one photo predict their locations in
 another. It does not test automatic spot matching or identity recognition.
@@ -16,10 +17,12 @@ import numpy as np
 from meros.project import Project
 
 
+# TODO: consider using a threshold based on the image scale
+# currently, the RANSAC threshold is set to 12px, PIXELS
+# in the future, we should consider using a threshold based on the image scale
 RANSAC_THRESHOLD_PX = 12.0
+
 SHOW_PLOTS = True
-SAVE_PLOTS = False
-OUTPUT_DIR = Path("results/spot_geometry")
 
 
 @dataclass(frozen=True)
@@ -33,20 +36,6 @@ MODELS = (
     TransformModel("affine", 3),
     TransformModel("homography", 4),
 )
-
-
-def estimate(
-    source: np.ndarray,
-    target: np.ndarray,
-    model: TransformModel,
-) -> tuple[np.ndarray, np.ndarray] | None:
-    if len(source) < model.minimum_points:
-        return None
-
-    try:
-        return _estimate_opencv(source, target, model)
-    except cv.error:
-        return None
 
 
 def _estimate_opencv(
@@ -74,6 +63,20 @@ def _estimate_opencv(
     return matrix, mask.ravel().astype(bool)
 
 
+def estimate(
+    source: np.ndarray,
+    target: np.ndarray,
+    model: TransformModel,
+) -> tuple[np.ndarray, np.ndarray] | None:
+    if len(source) < model.minimum_points:
+        return None
+
+    try:
+        return _estimate_opencv(source, target, model)
+    except cv.error:
+        return None
+
+
 def project_points(points: np.ndarray, matrix: np.ndarray) -> np.ndarray:
     with np.errstate(divide="ignore", invalid="ignore"):
         projected = cv.perspectiveTransform(
@@ -88,7 +91,6 @@ def leave_one_out_errors(
     target: np.ndarray,
     model: TransformModel,
 ) -> np.ndarray:
-    # A held-out spot must never contribute to its own transform.
     errors = np.full(len(source), np.nan)
 
     if len(source) <= model.minimum_points:
@@ -101,7 +103,7 @@ def leave_one_out_errors(
         if fit is None:
             continue
 
-        projected = project_points(source[held_out:held_out + 1], fit[0])
+        projected = project_points(source[held_out : held_out + 1], fit[0])
 
         if np.isfinite(projected).all():
             errors[held_out] = np.linalg.norm(projected[0] - target[held_out])
@@ -118,7 +120,6 @@ def show_comparison(
     target: np.ndarray,
     fits: list[tuple[str, np.ndarray, float]],
 ) -> None:
-    """Show annotated points, predicted locations and errors in one figure."""
     figure, axes = plt.subplots(2, 3, figsize=(16, 9))
     panels = axes.ravel()
 
@@ -153,11 +154,10 @@ def show_comparison(
         )
         axis.set_title(f"{step}. {name}: LOO median {median:.1f}px")
 
-    for axis in panels[len(fits) + 2:]:
+    for axis in panels[len(fits) + 2 :]:
         axis.set_visible(False)
 
-    # Limit each view to its annotated region so individual spot errors are visible.
-    for axis in panels[:len(fits) + 2]:
+    for axis in panels[: len(fits) + 2]:
         index = 0 if axis is panels[0] else 1
         points = source if index == 0 else target
         minimum = points.min(axis=0)
@@ -169,16 +169,8 @@ def show_comparison(
         axis.set_aspect("equal")
         axis.set_axis_off()
 
-    figure.suptitle(
-        f"{subject_id}/{first_id}-{second_id}: yellow = annotated, cyan = predicted"
-    )
+    figure.suptitle(f"{subject_id}/{first_id}-{second_id}: yellow = annotated, cyan = predicted")
     figure.tight_layout()
-
-    if SAVE_PLOTS:
-        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        destination = OUTPUT_DIR / f"{subject_id}_{first_id}-{second_id}.png"
-        figure.savefig(destination, dpi=150)
-        print(f"  Plot: {destination}")
 
     if SHOW_PLOTS:
         plt.show()
@@ -228,8 +220,7 @@ def evaluate_pair(
             median = float(np.median(valid))
             p90 = float(np.percentile(valid, 90))
             cross_validation = (
-                f"LOO median={median:.1f}px p90={p90:.1f}px "
-                f"({len(valid)}/{len(source)})"
+                f"LOO median={median:.1f}px p90={p90:.1f}px ({len(valid)}/{len(source)})"
             )
             candidates.append((median, p90, model.name, matrix))
             plots.append((model.name, matrix, median))
@@ -244,15 +235,14 @@ def evaluate_pair(
     if not candidates:
         return
 
-    _, _, best_name, best_matrix = min(candidates)
+    _, _, best_name, _ = min(candidates)
     print(f"  Best held-out median: {best_name}")
 
-    if (SHOW_PLOTS or SAVE_PLOTS) and plots:
+    if SHOW_PLOTS and plots:
         show_comparison(project, subject_id, first_id, second_id, source, target, plots)
 
 
 def run(project: Project) -> None:
-    # Discover all subjects, including those without locally downloaded photos.
     root = Path("data/metadata/subjects")
     paths = sorted(root.glob("*/spot_correspondences/*.json"))
 

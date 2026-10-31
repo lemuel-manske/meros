@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from meros.sandbox._geometry_demo import show
+from meros.sandbox.common import show
 
 
 matrix = np.array(

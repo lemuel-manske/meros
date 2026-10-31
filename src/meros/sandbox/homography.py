@@ -3,11 +3,11 @@
 import cv2 as cv
 import numpy as np
 
-from meros.sandbox._geometry_demo import show
+from meros.sandbox.common import show
 
 
-source = np.float32([[0, 0], [4, 0], [4, 4], [0, 4]])
-target = np.float32([[1, 1], [6, 0], [5, 5], [0, 4]])
+source = np.array([[0, 0], [4, 0], [4, 4], [0, 4]], dtype=np.float32)
+target = np.array([[1, 1], [6, 0], [5, 5], [0, 4]], dtype=np.float32)
 
 matrix = cv.getPerspectiveTransform(source, target)
 
