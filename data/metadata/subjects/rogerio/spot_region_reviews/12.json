@@ -1,10 +1,10 @@
 {
-  "subject_id": "luana",
-  "image_id": 1,
+  "subject_id": "rogerio",
+  "image_id": 12,
   "coordinate_system": "subject_image_pixels",
   "regions": [
     {
-      "region_id": "luana_1_20261102_2",
+      "region_id": "rogerio_12_20261102_2",
       "bounds": [
         420,
         700,

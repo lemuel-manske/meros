@@ -1,8 +1,8 @@
 {
-  "subject_id": "luana",
+  "subject_id": "rogerio",
   "image_ids": [
-    0,
-    1
+    11,
+    12
   ],
   "coordinate_system": "subject_image_pixels",
   "pairs": [

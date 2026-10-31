@@ -1,6 +1,6 @@
 {
-  "subject_id": "luana",
-  "image_id": 1,
+  "subject_id": "rogerio",
+  "image_id": 12,
   "side": "left",
   "coordinate_system": "subject_image_pixels",
   "eye": {
@@ -10,6 +10,6 @@
     ],
     "radius_x": 84.13276657883819,
     "radius_y": 55.38151301408118,
-    "angle_degrees": 0.0
+    "angle_degrees": 0
   }
 }
