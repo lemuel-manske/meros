@@ -105,21 +105,22 @@ def match_spots(
     target_mouth: tuple[float, float],
 ) -> SpotMatch:
     matrix = initial_similarity(source_eye, source_mouth, target_eye, target_mouth)
-    eye_mouth_distance = np.linalg.norm(
-        np.asarray(target_mouth) - np.asarray(target_eye)
-    )
+    eye_mouth_distance = np.linalg.norm(np.asarray(target_mouth) - np.asarray(target_eye))
     radius = float(eye_mouth_distance * MATCH_RADIUS_EYE_MOUTH)
 
     pairs = assign_spots(source, target, matrix, radius)
 
     if len(pairs) >= 3:
         source_ids, target_ids = zip(*pairs, strict=True)
-        refined, inliers = cv.estimateAffine2D(
-            source[list(source_ids)],
-            target[list(target_ids)],
-            method=cv.RANSAC,
-            ransacReprojThreshold=radius,
-        )
+        try:
+            refined, inliers = cv.estimateAffine2D(
+                source[list(source_ids)],
+                target[list(target_ids)],
+                method=cv.RANSAC,
+                ransacReprojThreshold=radius,
+            )
+        except cv.error:
+            refined, inliers = None, None
 
         if refined is not None and inliers is not None and int(inliers.sum()) >= 3:
             candidate = np.vstack((refined, [0.0, 0.0, 1.0]))
@@ -130,10 +131,7 @@ def match_spots(
                 pairs = candidate_pairs
 
     predicted = project_points(source, matrix)
-    errors = tuple(
-        float(np.linalg.norm(predicted[i] - target[j]))
-        for i, j in pairs
-    )
+    errors = tuple(float(np.linalg.norm(predicted[i] - target[j])) for i, j in pairs)
 
     return SpotMatch(matrix=matrix, pairs=pairs, errors=errors)
 
@@ -169,10 +167,21 @@ def show_match(
 
     if match.pairs:
         source_ids, target_ids = zip(*match.pairs, strict=True)
-        axes[1].scatter(target[list(target_ids), 0], target[list(target_ids), 1],
-                        s=36, c="cyan", label="Proposed matches")
-        axes[1].scatter(predicted[list(source_ids), 0], predicted[list(source_ids), 1],
-                        s=40, c="lime", marker="x", label="Projected")
+        axes[1].scatter(
+            target[list(target_ids), 0],
+            target[list(target_ids), 1],
+            s=36,
+            c="cyan",
+            label="Proposed matches",
+        )
+        axes[1].scatter(
+            predicted[list(source_ids), 0],
+            predicted[list(source_ids), 1],
+            s=40,
+            c="lime",
+            marker="x",
+            label="Projected",
+        )
         axes[1].legend(loc="upper right")
 
     figure.suptitle(f"{len(match.pairs)} proposed spot pairs (not verified)")
@@ -186,7 +195,12 @@ def run(project: Project) -> None:
     source_mouth = project.metadata.read_subject_mouth(*SOURCE)
     target_mouth = project.metadata.read_subject_mouth(*TARGET)
 
-    if source_eye is None or target_eye is None or source_mouth is None or target_mouth is None:
+    if (
+        source_eye is None
+        or target_eye is None
+        or source_mouth is None
+        or target_mouth is None
+    ):
         print("Both images need manually annotated eye and mouth landmarks.")
         return
 
@@ -198,9 +212,12 @@ def run(project: Project) -> None:
         return
 
     result = match_spots(
-        source, target,
-        source_eye.center, source_mouth,
-        target_eye.center, target_mouth,
+        source,
+        target,
+        source_eye.center,
+        source_mouth,
+        target_eye.center,
+        target_mouth,
     )
 
     print(f"{SOURCE} vs {TARGET}: {len(result.pairs)} proposed correspondences")
