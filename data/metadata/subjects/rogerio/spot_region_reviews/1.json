@@ -1,0 +1,34 @@
+{
+  "subject_id": "rogerio",
+  "image_id": 1,
+  "coordinate_system": "subject_image_pixels",
+  "regions": [
+    {
+      "region_id": "rogerio_1_20261102_1",
+      "bounds": [
+        1633,
+        673,
+        1823,
+        863
+      ],
+      "purpose": "train",
+      "points": [
+        [
+          1692,
+          692
+        ],
+        [
+          1674,
+          851
+        ],
+        [
+          1785,
+          735
+        ]
+      ],
+      "ambiguous": [],
+      "ambiguous_radius": 15.861918672202115,
+      "image_sha256": "2529b3d87ccf562043d7641de21d837f9eda06dc5cb1b436aba5b14d51d577de"
+    }
+  ]
+}

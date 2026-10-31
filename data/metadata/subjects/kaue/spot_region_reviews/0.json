@@ -1,0 +1,44 @@
+{
+  "subject_id": "kaue",
+  "image_id": 0,
+  "coordinate_system": "subject_image_pixels",
+  "regions": [
+    {
+      "region_id": "kaue_0_20261102_1",
+      "bounds": [
+        713,
+        265,
+        799,
+        351
+      ],
+      "purpose": "train",
+      "points": [
+        [
+          749,
+          346
+        ],
+        [
+          762,
+          289
+        ]
+      ],
+      "ambiguous": [],
+      "ambiguous_radius": 7.196961978566286,
+      "image_sha256": "efacdf16737d02c681c2657b6e744ecb3eb3d923668deaef64fac609d98fe07d"
+    },
+    {
+      "region_id": "kaue_0_20261102_2",
+      "bounds": [
+        741,
+        657,
+        827,
+        743
+      ],
+      "purpose": "train",
+      "points": [],
+      "ambiguous": [],
+      "ambiguous_radius": 7.196961978566286,
+      "image_sha256": "efacdf16737d02c681c2657b6e744ecb3eb3d923668deaef64fac609d98fe07d"
+    }
+  ]
+}

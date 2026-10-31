@@ -1,0 +1,35 @@
+{
+  "subject_id": "rafael",
+  "image_id": 0,
+  "coordinate_system": "subject_image_pixels",
+  "regions": [
+    {
+      "region_id": "rafael_0_20261102_1",
+      "bounds": [
+        1090,
+        418,
+        1279,
+        607
+      ],
+      "purpose": "evaluation",
+      "points": [
+        [
+          1131,
+          535
+        ]
+      ],
+      "ambiguous": [
+        [
+          1166,
+          467
+        ],
+        [
+          1251,
+          540
+        ]
+      ],
+      "ambiguous_radius": 15.772028451291725,
+      "image_sha256": "9e4aba3bc5824d4089a59758d88471864ba4d9c54a5f52feeab409ea5bece124"
+    }
+  ]
+}

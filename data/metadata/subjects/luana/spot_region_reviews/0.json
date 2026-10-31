@@ -1,0 +1,26 @@
+{
+  "subject_id": "luana",
+  "image_id": 0,
+  "coordinate_system": "subject_image_pixels",
+  "regions": [
+    {
+      "region_id": "luana_0_20261102_1",
+      "bounds": [
+        1352,
+        468,
+        1509,
+        625
+      ],
+      "purpose": "train",
+      "points": [
+        [
+          1465,
+          575
+        ]
+      ],
+      "ambiguous": [],
+      "ambiguous_radius": 13.056468447825328,
+      "image_sha256": "8187d6b3d498cf2ec5140993d8bba016137737c0be167cc7fb44c04175f49f07"
+    }
+  ]
+}

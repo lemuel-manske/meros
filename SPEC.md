@@ -361,6 +361,75 @@ For each sufficiently reliable observation, the system should eventually produce
 
 Repeated observations could then be used to reconstruct movement histories and investigate migration, site fidelity, and breeding aggregation behavior of *Epinephelus itajara* along the Brazilian coast.
 
-## Where we are now
+## Findings from exploratory experiments
 
-Currently, we are working on understand the dataset and the challenges of the problem.
+The photo benchmark has 18 images of eight individuals. Four individuals have
+multiple eligible images, yielding 14 queries. Each query excludes its own
+image; identities are ranked by their best gallery image. Eye and mouth
+landmarks remain manual. These results do not establish generalization.
+
+### Identification results
+
+| Method | Rank-1 |
+| --- | --- |
+| Anatomical geometry: manual query / manual gallery | 14/14 |
+| Anatomical geometry: automatic query / manual gallery | 11/14 |
+| Anatomical geometry: manual query / automatic gallery | 9/14 |
+| Anatomical geometry: automatic query / automatic gallery | 7/14 |
+| Frozen MiewID: complete photo | 6/14 |
+| Frozen MiewID: segmented fish | 8/14 |
+
+Manual spots were selected while comparing photos and finding correspondences:
+14/14 includes human matching knowledge, not independent detector performance.
+Automatic/automatic means detected centers in both query and gallery; anatomical
+landmarks are still provided by a human.
+
+A local-pattern experiment kept the same gallery but excluded Luana's two
+queries because her 13 verified correspondences supplied metric training:
+
+| Method, using the same retained automatic centers | Rank-1 |
+| --- | --- |
+| Original anatomical matcher | 4/12 |
+| Frozen local ImageNet ResNet18 features | 10/12 |
+| Same features with a metric trained on Luana | 6/12 |
+
+The encoder stayed frozen; training adjusted feature weights. Inputs were
+small grayscale neighborhoods with normalized contrast, anatomical
+scale/orientation, and a fish-mask coverage filter. Both local
+variants scored 5/7 on Rogerio; training reduced the other individuals from
+5/5 to 1/5. Some decisions relied on only 1–3 proposed correspondences.
+
+### Lessons and implications
+
+- **Detection quality is not identification quality.** Additional centers caused
+  spurious geometric matches despite useful candidate coverage. Evaluate detector
+  and matcher changes separately, retaining the anatomical matcher as a baseline.
+- **Unannotated does not mean negative.** Original labels are selective. Use
+  completely reviewed regions for background supervision, retain ambiguous cases,
+  and keep automatic proposals separate from verified correspondences. Human
+  reviews remain in `data/metadata/subjects/*/spot_region_reviews/`.
+- **Darkness alone is insufficient.** Earlier DoG experiments benefited from
+  center-surround and radial contrast; rigid shape filters removed true spots.
+  Their historical maximum was 8/14, without confirmed reproduction of the
+  consolidated script. Gill/lip shadows remained confounders for the ResNet18/U-Net
+  center detector; a few added negative crops did not resolve them.
+- **Rigid crops lost useful context.** Eye–mouth–gill triangles were sensitive to
+  alignment and hindered human comparison. Boundary expansion was tested only
+  on same-individual pairs, without identification validation. Display full
+  photos when reviewing local evidence.
+- **Restricting inputs helps auditability, not certainty.** Masking improved the
+  frozen MiewID result but does not prove use of stable identity marks. Local
+  matching exposes supporting regions; its neural descriptors remain learned.
+  MiewID was not fine-tuned locally; pretraining overlap with these photos is
+  unknown. Similarity scores are not calibrated identity probabilities.
+- **One annotated pair did not support transfer.** Metric training improved
+  retrieval on its training examples but worsened identification of other fish.
+  Prioritize verified correspondences and reviewed regions across more individuals
+  and independent encounters, including difficult negatives, before further tuning.
+
+The existing photos have been repeatedly explored, and Rogerio participated in
+center-detector training. Separate individuals and recording sessions when
+validating future models; do not rank the 12-query and 14-query protocols together
+as evidence of generalization. Inspect actual supporting matches and permit
+insufficient evidence instead of forcing an identity. Temporal aggregation,
+long-term pattern stability, and unknown-individual rejection remain unvalidated.
