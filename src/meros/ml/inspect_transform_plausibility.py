@@ -98,8 +98,9 @@ def run(project: Project) -> None:
 
     print(f"Gallery: {len(gallery)} images")
     print(
-        "Provisional gate: anisotropy <= 1.8, relative scale 0.7..1.4, "
-        "anchor drift <= 0.12, no reflection"
+        f"Provisional gate: anisotropy <= {MAX_ANISOTROPY}, "
+        f"relative scale {MIN_RELATIVE_SCALE}..{MAX_RELATIVE_SCALE}, "
+        f"anchor drift <= {MAX_ANCHOR_DRIFT}, no reflection"
     )
     print(
         "An unrefined eye-mouth similarity is marked 'base': "
