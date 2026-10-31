@@ -104,6 +104,8 @@ def match_spots(
     source_mouth: tuple[float, float],
     target_eye: tuple[float, float],
     target_mouth: tuple[float, float],
+    *,
+    refine: bool = True,
 ) -> SpotMatch:
     matrix = initial_similarity(source_eye, source_mouth, target_eye, target_mouth)
     eye_mouth_distance = np.linalg.norm(np.asarray(target_mouth) - np.asarray(target_eye))
@@ -111,7 +113,7 @@ def match_spots(
 
     pairs = assign_spots(source, target, matrix, radius)
 
-    if len(pairs) >= 3:
+    if refine and len(pairs) >= 3:
         source_ids, target_ids = zip(*pairs, strict=True)
         try:
             refined, inliers = cv.estimateAffine2D(
@@ -203,6 +205,53 @@ def report_verified_matches(
     print(f"Other proposals (unverified, not presumed false): {len(unverified)}")
 
 
+def report_alignment(
+    name: str,
+    match: SpotMatch,
+    source: np.ndarray,
+    target: np.ndarray,
+    verified: set[tuple[int, int]],
+    radius: float,
+) -> None:
+    """
+    Evaluate fixed verified pairs without using them for estimation.
+    """
+    print(f"\n{name}: {len(match.pairs)} proposed correspondences")
+
+    if match.errors:
+        print(f"  Proposed-pair median error: {np.median(match.errors):.1f}px")
+
+    if not verified:
+        print("  No verified references for this image pair.")
+        return
+
+    proposed = set(match.pairs)
+    recovered = proposed & verified
+    sources = {i for i, _ in verified}
+    targets = {j for _, j in verified}
+    conflicts = {
+        (i, j)
+        for i, j in proposed - verified
+        if i in sources or j in targets
+    }
+    unverified = proposed - recovered - conflicts
+
+    ids = sorted(verified)
+    projected = project_points(source[[i for i, _ in ids]], match.matrix)
+    expected = target[[j for _, j in ids]]
+    errors = np.linalg.norm(projected - expected, axis=1)
+
+    print(f"  Verified recovered: {len(recovered)}/{len(verified)}")
+    print(f"  Conflicts with verified links: {len(conflicts)}")
+    print(f"  Other unverified proposals: {len(unverified)}")
+    print(f"  True-pair projection median: {np.median(errors):.1f}px")
+    print(f"  True-pair projection p90: {np.percentile(errors, 90):.1f}px")
+    print(
+        f"  True pairs within match radius ({radius:.1f}px): "
+        f"{np.count_nonzero(errors <= radius)}/{len(errors)}"
+    )
+
+
 def show_match(
     project: Project,
     source_label: tuple[str, int],
@@ -278,6 +327,15 @@ def run(project: Project) -> None:
         print("Both images need manually annotated spot centers.")
         return
 
+    baseline = match_spots(
+        source,
+        target,
+        source_eye.center,
+        source_mouth,
+        target_eye.center,
+        target_mouth,
+        refine=False,
+    )
     result = match_spots(
         source,
         target,
@@ -287,13 +345,15 @@ def run(project: Project) -> None:
         target_mouth,
     )
 
-    print(f"{SOURCE} vs {TARGET}: {len(result.pairs)} proposed correspondences")
-
-    if result.errors:
-        print(f"Median reprojection error: {np.median(result.errors):.1f}px")
-
     references = verified_pairs(project, SOURCE, TARGET, source, target)
-    report_verified_matches(result.pairs, references)
+    radius = float(
+        np.linalg.norm(np.asarray(target_mouth) - np.asarray(target_eye.center))
+        * MATCH_RADIUS_EYE_MOUTH
+    )
+
+    print(f"{SOURCE} vs {TARGET}")
+    report_alignment("Initial similarity", baseline, source, target, references, radius)
+    report_alignment("Affine + RANSAC", result, source, target, references, radius)
 
     if SHOW_PLOT:
         show_match(project, SOURCE, TARGET, source, target, result)
