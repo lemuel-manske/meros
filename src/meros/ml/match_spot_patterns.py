@@ -177,34 +177,6 @@ def verified_pairs(
     return verified
 
 
-def report_verified_matches(
-    proposed: tuple[tuple[int, int], ...],
-    verified: set[tuple[int, int]],
-) -> None:
-    """
-    Report recovery of reviewed correspondences without treating unlabeled
-    pairs as negatives: manual correspondences may be incomplete.
-    """
-    if not verified:
-        print("No indexed verified correspondences available for this image pair.")
-        return
-
-    proposed_set = set(proposed)
-    recovered = proposed_set & verified
-    known_sources = {i for i, _ in verified}
-    known_targets = {j for _, j in verified}
-    conflicts = {
-        (i, j)
-        for i, j in proposed_set - verified
-        if i in known_sources or j in known_targets
-    }
-    unverified = proposed_set - recovered - conflicts
-
-    print(f"Verified correspondences recovered: {len(recovered)}/{len(verified)}")
-    print(f"Conflicts with verified links: {len(conflicts)}")
-    print(f"Other proposals (unverified, not presumed false): {len(unverified)}")
-
-
 def report_alignment(
     name: str,
     match: SpotMatch,
