@@ -188,20 +188,29 @@ class PairKNN:
 
     def __init__(
         self,
-        samples: list[tuple[np.ndarray, tuple[str, ...], bool]],
+        samples: list[tuple[np.ndarray, tuple[str, ...]]],
     ) -> None:
-        values = np.stack([vector for vector, _, _ in samples])
-        self.center = np.nanmedian(values, axis=0)
-        self.center = np.where(np.isfinite(self.center), self.center, 0.0)
+        values = np.stack([vector for vector, _ in samples])
+        self.center = np.array(
+            [
+                float(np.median(column[np.isfinite(column)]))
+                if np.any(np.isfinite(column)) else 0.0
+                for column in values.T
+            ]
+        )
         filled = np.where(np.isfinite(values), values, self.center)
         q25, q75 = np.percentile(filled, (25, 75), axis=0)
         self.scale = np.where(q75 - q25 > 1e-6, q75 - q25, 1.0)
         self.active = q75 - q25 > 1e-6
+
+        if not np.any(self.active):
+            raise ValueError("No varying evidence features in the verified training pairs")
+
         normalized = np.clip((filled - self.center) / self.scale, -5.0, 5.0)
 
         members: dict[tuple[str, ...], list[int]] = defaultdict(list)
 
-        for i, (_, group, _) in enumerate(samples):
+        for i, (_, group) in enumerate(samples):
             members[group].append(i)
 
         positive = [
@@ -226,10 +235,7 @@ class PairKNN:
         self.weights /= max(float(np.mean(self.weights[self.active])), 1e-9)
 
         self.samples = normalized * np.sqrt(self.weights)
-        self.groups = [
-            (group, indices)
-            for group, indices in members.items()
-        ]
+        self.groups = list(members.items())
 
     def support(self, vector: np.ndarray) -> float:
         """
@@ -353,7 +359,7 @@ def run(project: Project) -> None:
                     ("same", first[0])
                     if same else ("diff", *sorted((first[0], second[0])))
                 )
-                training.append((evidence_cache[(first, second)], group, same))
+                training.append((evidence_cache[(first, second)], group))
 
         try:
             model = PairKNN(training)
