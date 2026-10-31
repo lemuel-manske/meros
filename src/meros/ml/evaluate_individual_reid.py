@@ -137,7 +137,7 @@ def report_method(
     reciprocal_ranks = []
     ties = 0
 
-    print(f"\\n{name}")
+    print(f"\n{name}")
     print("query | prediction | true_rank | top candidates (score)")
 
     for label in queries:
