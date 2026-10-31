@@ -66,16 +66,12 @@ def missing_spot_evidence(
     source_indices = [
         i
         for i, point in enumerate(projected)
-        if cv.pointPolygonTest(
-            intersection, (float(point[0]), float(point[1])), True
-        ) >= border
+        if cv.pointPolygonTest(intersection, (float(point[0]), float(point[1])), True) >= border
     ]
     target_indices = [
         j
         for j, point in enumerate(target.points)
-        if cv.pointPolygonTest(
-            intersection, (float(point[0]), float(point[1])), True
-        ) >= border
+        if cv.pointPolygonTest(intersection, (float(point[0]), float(point[1])), True) >= border
     ]
 
     if min(len(source_indices), len(target_indices)) < MIN_SHARED_SPOTS:
@@ -265,7 +261,7 @@ def run(project: Project) -> None:
                 f"median anisotropy={np.median(anisotropies):.2f}"
             )
 
-    print("\\nEXP-004J summary (only pairs with sufficient annotated overlap):")
+    print("\nEXP-004J summary (only pairs with sufficient annotated overlap):")
 
     for kind, entries in observations.items():
         usable = [measures["missing"] for _, measures in entries if measures["missing"]]
