@@ -194,7 +194,7 @@ def evaluate(
         else set()
     )
 
-    print(f"\\n{source_label} vs {target_label} ({'same' if same else 'different'})")
+    print(f"\n{source_label} vs {target_label} ({'same' if same else 'different'})")
     print("method | proposed | verified | conflicts | unverified | true_med_px")
 
     for name, result in (("proximity", proximity), ("local", local)):
