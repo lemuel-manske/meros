@@ -34,6 +34,27 @@ Goliath Groupers are very large fish and exhibit several visual characteristics 
 
 The head contains numerous spots and irregular markings. Their spatial configuration may provide a useful biometric signature for distinguishing individuals.
 
+#### Observed longitudinal variation in spot appearance
+
+Two photographs from different encounters of the fish now identified as **Rogerio**
+(formerly also labeled **Luana**) show a local difference in the marked skin
+pattern near the eye: one photograph appears to contain a single larger dark
+spot, while the other shows two smaller adjacent marks in the corresponding
+region. The observer confirmed that both photographs depict the same individual.
+
+This is an **observed difference in appearance across encounters**, not proof
+that one biological spot physically split into two. Camera viewpoint, image
+quality, illumination, and mark boundaries may contribute to the appearance;
+the biological mechanism has not been established. Exact recording dates
+and the elapsed interval have not been documented here.
+
+**Implication for future research:** a strict permanent one-to-one mapping of
+individual spots should not be assumed across encounters. An unmatched spot
+or a changed local spot count is not, by itself, evidence of a different fish.
+Longitudinal validation should distinguish genuine pattern changes from
+differences caused by imaging conditions. This observation is recorded as a
+dataset limitation; it does **not** change the current matcher or its evaluation.
+
 ### Body patterns
 
 The body presents irregular combinations of darker and lighter regions, including bands, blotches, and other markings. These patterns may also contain information useful for individual identification.
