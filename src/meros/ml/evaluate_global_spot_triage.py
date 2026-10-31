@@ -84,17 +84,17 @@ def global_profile(source: SpotPhoto, target: SpotPhoto) -> GlobalProfile | None
     border = BORDER_RATIO * target.scale
 
     def shared_points(points: np.ndarray) -> np.ndarray:
-        return np.asarray(
-            [
-                point
-                for point in points
-                if cv.pointPolygonTest(
-                    intersection, (float(point[0]), float(point[1])), True
-                )
-                >= border
-            ],
-            dtype=np.float32,
-        ).reshape(-1, 2)
+        selected = []
+
+        for point in points:
+            distance = cv.pointPolygonTest(
+                intersection, (float(point[0]), float(point[1])), True
+            )
+
+            if distance >= border:
+                selected.append(point)
+
+        return np.asarray(selected, dtype=np.float32).reshape(-1, 2)
 
     source_shared = shared_points(projected)
     target_shared = shared_points(target_points)
@@ -220,7 +220,7 @@ def run(project: Project) -> None:
         n_false_auto = 0
         n_correct_baseline = 0
 
-        print(f"\\n{mode.upper()}: {len(labels)} queries")
+        print(f"\n{mode.upper()}: {len(labels)} queries")
         print(
             "query | best | score | margin | spot_counts | density_ratio "
             "| spatial_difference | decision | reason"
