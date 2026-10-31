@@ -10,13 +10,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import cv2 as cv
+import matplotlib.pyplot as plt
 import numpy as np
 
 from meros.project import Project
 
 
 RANSAC_THRESHOLD_PX = 12.0
-SAVE_OVERLAYS = False
+SHOW_PLOTS = True
+SAVE_PLOTS = False
 OUTPUT_DIR = Path("results/spot_geometry")
 
 
@@ -107,45 +109,74 @@ def leave_one_out_errors(
     return errors
 
 
-def draw_overlay(
+def show_comparison(
     project: Project,
     subject_id: str,
     first_id: int,
     second_id: int,
-    matrix: np.ndarray,
     source: np.ndarray,
     target: np.ndarray,
-    name: str,
+    fits: list[tuple[str, np.ndarray, float]],
 ) -> None:
-    first = project.media.read_subject_image(subject_id, first_id)
-    second = project.media.read_subject_image(subject_id, second_id)
-    height, width = second.shape[:2]
+    """Show annotated points, predicted locations and errors in one figure."""
+    figure, axes = plt.subplots(2, 3, figsize=(16, 9))
+    panels = axes.ravel()
 
-    warped = cv.warpPerspective(first, matrix, (width, height))
-    coverage = cv.warpPerspective(
-        np.full(first.shape[:2], 255, dtype=np.uint8), matrix, (width, height)
-    ) > 0
+    for axis, image_id, points, title in (
+        (panels[0], first_id, source, "1. Source annotations"),
+        (panels[1], second_id, target, "2. Target annotations"),
+    ):
+        image = project.media.read_subject_image(subject_id, image_id)
+        axis.imshow(cv.cvtColor(image, cv.COLOR_BGR2RGB))
+        axis.scatter(points[:, 0], points[:, 1], s=35, c="yellow", edgecolors="black")
+        axis.set_title(title)
 
-    image = second.copy()
-    image[coverage] = cv.addWeighted(second[coverage], 0.5, warped[coverage], 0.5, 0)
+    for axis, (name, matrix, median) in zip(panels[2:], fits, strict=False):
+        image = project.media.read_subject_image(subject_id, second_id)
+        axis.imshow(cv.cvtColor(image, cv.COLOR_BGR2RGB))
 
-    projected = project_points(source, matrix)
+        predicted = project_points(source, matrix)
+        valid = np.isfinite(predicted).all(axis=1)
 
-    for expected, observed in zip(projected, target, strict=True):
-        if not np.isfinite(expected).all():
-            continue
+        for estimate, actual in zip(predicted[valid], target[valid], strict=True):
+            axis.plot([estimate[0], actual[0]], [estimate[1], actual[1]], "r-", alpha=0.6)
 
-        expected_point = tuple(np.rint(expected).astype(int))
-        observed_point = tuple(np.rint(observed).astype(int))
+        axis.scatter(target[:, 0], target[:, 1], c="yellow", s=28, label="Annotated")
+        axis.scatter(
+            predicted[valid, 0], predicted[valid, 1],
+            c="cyan", marker="x", s=40, label="Predicted"
+        )
+        axis.set_title(f"3. {name}: held-out median {median:.1f}px")
 
-        cv.line(image, expected_point, observed_point, (0, 255, 255), 1)
-        cv.circle(image, expected_point, 6, (0, 255, 0), 2)
-        cv.circle(image, observed_point, 4, (0, 0, 255), -1)
+    for axis in panels[len(fits) + 2:]:
+        axis.set_visible(False)
 
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    destination = OUTPUT_DIR / f"{subject_id}_{first_id}-{second_id}_{name}.png"
-    cv.imwrite(str(destination), image)
-    print(f"    Overlay: {destination}")
+    # Limit each view to its annotated region so individual spot errors are visible.
+    for axis in panels[:len(fits) + 2]:
+        index = 0 if axis is panels[0] else 1
+        points = source if index == 0 else target
+        minimum = points.min(axis=0)
+        maximum = points.max(axis=0)
+        margin = max(30.0, float(max(maximum - minimum)) * 0.15)
+
+        axis.set_xlim(minimum[0] - margin, maximum[0] + margin)
+        axis.set_ylim(maximum[1] + margin, minimum[1] - margin)
+        axis.set_aspect("equal")
+        axis.set_axis_off()
+
+    figure.suptitle(f"{subject_id}/{first_id}-{second_id}: yellow = annotated, cyan = predicted")
+    figure.tight_layout()
+
+    if SAVE_PLOTS:
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        destination = OUTPUT_DIR / f"{subject_id}_{first_id}-{second_id}.png"
+        figure.savefig(destination, dpi=150)
+        print(f"  Plot: {destination}")
+
+    if SHOW_PLOTS:
+        plt.show()
+
+    plt.close(figure)
 
 
 def evaluate_pair(
@@ -167,6 +198,7 @@ def evaluate_pair(
     print(f"\n{subject_id}/{first_id}-{second_id}: {len(source)} annotated pairs")
 
     candidates = []
+    plots = []
 
     for model in MODELS:
         fit = estimate(source, target, model)
@@ -193,6 +225,7 @@ def evaluate_pair(
                 f"({len(valid)}/{len(source)})"
             )
             candidates.append((median, p90, model.name, matrix))
+            plots.append((model.name, matrix, median))
         else:
             cross_validation = "LOO unavailable"
 
@@ -207,17 +240,8 @@ def evaluate_pair(
     _, _, best_name, best_matrix = min(candidates)
     print(f"  Best held-out median: {best_name}")
 
-    if SAVE_OVERLAYS:
-        draw_overlay(
-            project,
-            subject_id,
-            first_id,
-            second_id,
-            best_matrix,
-            source,
-            target,
-            best_name,
-        )
+    if (SHOW_PLOTS or SAVE_PLOTS) and plots:
+        show_comparison(project, subject_id, first_id, second_id, source, target, plots)
 
 
 def run(project: Project) -> None:
