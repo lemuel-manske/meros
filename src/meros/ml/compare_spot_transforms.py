@@ -41,6 +41,17 @@ def estimate(
     if len(source) < model.minimum_points:
         return None
 
+    try:
+        return _estimate_opencv(source, target, model)
+    except cv.error:
+        return None
+
+
+def _estimate_opencv(
+    source: np.ndarray,
+    target: np.ndarray,
+    model: TransformModel,
+) -> tuple[np.ndarray, np.ndarray] | None:
     if model.name == "similarity":
         matrix, mask = cv.estimateAffinePartial2D(
             source, target, method=cv.RANSAC, ransacReprojThreshold=RANSAC_THRESHOLD_PX
@@ -50,9 +61,7 @@ def estimate(
             source, target, method=cv.RANSAC, ransacReprojThreshold=RANSAC_THRESHOLD_PX
         )
     else:
-        matrix, mask = cv.findHomography(
-            source, target, cv.RANSAC, RANSAC_THRESHOLD_PX
-        )
+        matrix, mask = cv.findHomography(source, target, cv.RANSAC, RANSAC_THRESHOLD_PX)
 
     if matrix is None or mask is None or not np.isfinite(matrix).all():
         return None
@@ -179,7 +188,10 @@ def evaluate_pair(
         if len(valid):
             median = float(np.median(valid))
             p90 = float(np.percentile(valid, 90))
-            cross_validation = f"LOO median={median:.1f}px p90={p90:.1f}px ({len(valid)}/{len(source)})"
+            cross_validation = (
+                f"LOO median={median:.1f}px p90={p90:.1f}px "
+                f"({len(valid)}/{len(source)})"
+            )
             candidates.append((median, p90, model.name, matrix))
         else:
             cross_validation = "LOO unavailable"
@@ -197,13 +209,19 @@ def evaluate_pair(
 
     if SAVE_OVERLAYS:
         draw_overlay(
-            project, subject_id, first_id, second_id,
-            best_matrix, source, target, best_name
+            project,
+            subject_id,
+            first_id,
+            second_id,
+            best_matrix,
+            source,
+            target,
+            best_name,
         )
 
 
 def run(project: Project) -> None:
-     # Discover all subjects, including those without locally downloaded photos.
+    # Discover all subjects, including those without locally downloaded photos.
     root = Path("data/metadata/subjects")
     paths = sorted(root.glob("*/spot_correspondences/*.json"))
 
