@@ -255,7 +255,7 @@ class PairKNN:
             (positive if group[0] == "same" else negative).append(nearest)
 
         def neighborhood(group_distances: list[float]) -> float:
-            k = max(1, round(len(group_distances) ** 0.5))
+            k = max(1, int(np.ceil(np.sqrt(len(group_distances)))))
             return float(np.mean(sorted(group_distances)[:k]))
 
         near_same = neighborhood(positive)
