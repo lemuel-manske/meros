@@ -1,7 +1,15 @@
+import json
+import os
+import tempfile
+
 from pathlib import Path
+from typing import TypeVar, cast
 
 import cv2 as cv
 import numpy as np
+
+
+T = TypeVar("T")
 
 
 def valid_image(
@@ -51,3 +59,27 @@ def write_image(path: Path, image: np.ndarray) -> None:
 
     if not cv.imwrite(str(path), image):
         raise RuntimeError(f"Could not write image: {path}")
+
+
+def write_json_atomic(path: Path, payload: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    fd, temporary = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(payload, stream, indent=2)
+
+            stream.write("\n")
+
+        os.replace(temporary, path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
+def read_json(path: Path, default: T) -> T:
+    try:
+        with path.open("r", encoding="utf-8") as stream:
+            return cast(T, json.load(stream))
+    except FileNotFoundError:
+        return default

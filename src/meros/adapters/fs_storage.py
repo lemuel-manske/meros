@@ -1,6 +1,5 @@
 import json
-import os
-import tempfile
+import hashlib
 
 import cv2 as cv
 import numpy as np
@@ -11,6 +10,7 @@ from pathlib import Path
 from meros.domain import (
     BBoxMap,
     EyeAnnotation,
+    SpotRegionReview,
     Subject,
     SubjectImage,
     Individual,
@@ -21,54 +21,61 @@ from meros.domain import (
     Video,
     VideoAnnotation,
 )
-from meros.utils import read_image, write_image
+from meros.utils import read_image, read_json, write_image, write_json_atomic
 
 
 MEDIA_ROOT = Path("data/media")
 METADATA_ROOT = Path("data/metadata")
 
+MEDIA_SUBJECTS_ROOT = MEDIA_ROOT / "subjects"
+FRAMES_ROOT = MEDIA_ROOT / "frames"
+MASKED_CROPS_ROOT = MEDIA_ROOT / "masked_crops"
 
-def write_json_atomic(path: Path, payload: object) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+METADATA_SUBJECTS_ROOT = METADATA_ROOT / "subjects"
+VIDEOS_METADATA_ROOT = METADATA_ROOT / "videos"
+TRACKS_METADATA_ROOT = METADATA_ROOT / "tracks"
 
-    fd, temporary = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+SPOT_REGION_REVIEWS_DIR = "spot_region_reviews"
+SPOT_CORRESPONDENCES_DIR = "spot_correspondences"
+MOUTHS_DIR = "mouths"
+EYES_DIR = "eyes"
+SPOTS_DIR = "spots"
 
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as stream:
-            json.dump(payload, stream, indent=2)
-
-            stream.write("\n")
-
-        os.replace(temporary, path)
-    finally:
-        Path(temporary).unlink(missing_ok=True)
+BBOXES_PATH = VIDEOS_METADATA_ROOT / "bboxes.json"
+VIDEOS_PATH = VIDEOS_METADATA_ROOT / "videos.json"
+TRACK_METADATA_FILENAME = "metadata.json"
 
 
 @dataclass(frozen=True)
 class MediaPaths:
     def subjects(self) -> Path:
-        return MEDIA_ROOT / "subjects"
+        return MEDIA_SUBJECTS_ROOT
 
     def subject(self, subject_id: str) -> Path:
-        return MEDIA_ROOT / "subjects" / subject_id
+        return MEDIA_SUBJECTS_ROOT / subject_id
 
     def subject_image(self, subject_id: str, image_id: int) -> Path:
-        return MEDIA_ROOT / "subjects" / subject_id / f"{image_id}.jpg"
+        return MEDIA_SUBJECTS_ROOT / subject_id / f"{image_id}.jpg"
 
     def frames(self, video_id: str) -> Path:
-        return MEDIA_ROOT / "frames" / video_id
+        return FRAMES_ROOT / video_id
 
     def frame(self, video_id: str, frame_idx: int) -> Path:
-        return MEDIA_ROOT / "frames" / video_id / f"{frame_idx}.jpg"
+        return FRAMES_ROOT / video_id / f"{frame_idx}.jpg"
 
     def masked_crop(self, video_id: str, track_id: str, frame_idx: int) -> Path:
-        return MEDIA_ROOT / "masked_crops" / video_id / track_id / f"{frame_idx}.png"
+        return MASKED_CROPS_ROOT / video_id / track_id / f"{frame_idx}.png"
 
 
 media_paths = MediaPaths()
 
 
 class LocalFsMediaStore:
+    def subject_image_hash(self, subject_id: str, image_id: int) -> str:
+        return hashlib.sha256(
+            self.subject_image_path(subject_id, image_id).read_bytes()
+        ).hexdigest()
+
     def list_subjects(self) -> list[Subject]:
         root = media_paths.subjects()
 
@@ -131,46 +138,64 @@ class LocalFsMediaStore:
 
 @dataclass(frozen=True)
 class MetadataPaths:
+    def subject_spot_region_reviews(self, subject_id: str, image_id: int) -> Path:
+        return METADATA_SUBJECTS_ROOT / subject_id / SPOT_REGION_REVIEWS_DIR / f"{image_id}.json"
+
     def subject_spot_correspondences(self, subject_id: str, first_id: int, second_id: int) -> Path:
         return (
-            METADATA_ROOT
-            / "subjects"
+            METADATA_SUBJECTS_ROOT
             / subject_id
-            / "spot_correspondences"
+            / SPOT_CORRESPONDENCES_DIR
             / f"{first_id}-{second_id}.json"
         )
 
     def subject_mouth(self, subject_id: str, image_id: int) -> Path:
-        return METADATA_ROOT / "subjects" / subject_id / "mouths" / f"{image_id}.json"
+        return METADATA_SUBJECTS_ROOT / subject_id / MOUTHS_DIR / f"{image_id}.json"
 
     def subject_eye(self, subject_id: str, image_id: int) -> Path:
-        return METADATA_ROOT / "subjects" / subject_id / "eyes" / f"{image_id}.json"
+        return METADATA_SUBJECTS_ROOT / subject_id / EYES_DIR / f"{image_id}.json"
 
     def subject_spots(self, subject_id: str, image_id: int) -> Path:
-        return METADATA_ROOT / "subjects" / subject_id / "spots" / f"{image_id}.json"
+        return METADATA_SUBJECTS_ROOT / subject_id / SPOTS_DIR / f"{image_id}.json"
 
     def bboxes(self) -> Path:
-        return METADATA_ROOT / "videos" / "bboxes.json"
+        return BBOXES_PATH
 
     def track(self, video_id: str) -> Path:
-        return METADATA_ROOT / "tracks" / video_id / "metadata.json"
+        return TRACKS_METADATA_ROOT / video_id / TRACK_METADATA_FILENAME
 
     def videos(self) -> Path:
-        return METADATA_ROOT / "videos" / "videos.json"
+        return VIDEOS_PATH
 
 
 metadata_paths = MetadataPaths()
 
 
 class LocalFsMetadataStore:
-    def read_bboxes(self) -> dict[str, BBoxMap]:
-        try:
-            with metadata_paths.bboxes().open("r", encoding="utf-8") as f:
-                metadata = json.load(f)
-        except FileNotFoundError:
-            return {}
+    def read_subject_spot_region_reviews(
+        self, subject_id: str, image_id: int
+    ) -> list[SpotRegionReview]:
+        path = metadata_paths.subject_spot_region_reviews(subject_id, image_id)
 
-        return metadata
+        return read_json(path, default={"regions": []})["regions"]
+
+    def write_subject_spot_region_reviews(
+        self, subject_id: str, image_id: int, regions: list[SpotRegionReview]
+    ) -> None:
+        write_json_atomic(
+            metadata_paths.subject_spot_region_reviews(subject_id, image_id),
+            {
+                "subject_id": subject_id,
+                "image_id": image_id,
+                "coordinate_system": "subject_image_pixels",
+                "regions": regions,
+            },
+        )
+
+    def read_bboxes(self) -> dict[str, BBoxMap]:
+        path = metadata_paths.bboxes()
+
+        return read_json(path, default={})
 
     def write_bboxes(self, boxes: dict[str, BBoxMap]) -> None:
         write_json_atomic(metadata_paths.bboxes(), boxes)
@@ -256,11 +281,7 @@ class LocalFsMetadataStore:
     def read_subject_spots(self, subject_id: str, image_id: int) -> list[list[int]]:
         path = metadata_paths.subject_spots(subject_id, image_id)
 
-        try:
-            with path.open("r", encoding="utf-8") as stream:
-                data = json.load(stream)
-        except FileNotFoundError:
-            return []
+        data = read_json(path, default={"points": []})
 
         return data["points"]
 
@@ -278,15 +299,15 @@ class LocalFsMetadataStore:
         )
 
     def read_subject_eye(self, subject_id: str, image_id: int) -> EyeAnnotation | None:
-        try:
-            with metadata_paths.subject_eye(subject_id, image_id).open(
-                "r", encoding="utf-8"
-            ) as stream:
-                payload = json.load(stream)
-        except FileNotFoundError:
-            return None
+        path = metadata_paths.subject_eye(subject_id, image_id)
+
+        payload = read_json(path, default={"eye": None})
 
         eye = payload["eye"]
+
+        if eye is None:
+            return None
+
         return EyeAnnotation(
             center=tuple(eye["center"]),
             radius_x=eye["radius_x"],
@@ -312,15 +333,11 @@ class LocalFsMetadataStore:
         )
 
     def read_subject_mouth(self, subject_id: str, image_id: int) -> tuple[float, float] | None:
-        try:
-            with metadata_paths.subject_mouth(subject_id, image_id).open(
-                "r", encoding="utf-8"
-            ) as stream:
-                data = json.load(stream)
-        except FileNotFoundError:
-            return None
+        path = metadata_paths.subject_mouth(subject_id, image_id)
 
-        return tuple(data["point"])
+        data = read_json(path, default={"point": None})
+
+        return tuple(data["point"]) if data["point"] is not None else None
 
     def write_subject_mouth(
         self, subject_id: str, image_id: int, point: tuple[float, float]
@@ -340,11 +357,7 @@ class LocalFsMetadataStore:
     ) -> list[dict]:
         path = metadata_paths.subject_spot_correspondences(subject_id, first_id, second_id)
 
-        try:
-            with path.open("r", encoding="utf-8") as stream:
-                payload = json.load(stream)
-        except FileNotFoundError:
-            return []
+        payload = read_json(path, default={"pairs": []})
 
         return payload["pairs"]
 

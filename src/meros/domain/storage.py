@@ -1,11 +1,22 @@
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Literal, TypedDict
 
 
 type BBox = list[int]
 type BBoxMap = dict[str, BBox]
 
 type Viewpoint = Literal["frontal", "left", "right", "back"]
+
+
+class SpotRegionReview(TypedDict):
+    region_id: str
+    bounds: list[int]
+    purpose: Literal["train", "evaluation"]
+    points: list[list[int]]
+    ambiguous: list[list[int]]
+    ambiguous_radius: float
+    image_sha256: str
+
 
 type TrackSelectionKey = tuple[str, str, int, int]  # (video_id, track_id, start_frame, end_frame)
 
