@@ -138,26 +138,30 @@ def report_method(
     ties = 0
 
     print(f"\n{name}")
-    print("query | prediction | true_rank | top candidates (score)")
+    print("query | prediction | conservative_true_rank | top candidates (score)")
 
     for label in queries:
         ranking = rank_individuals(label, gallery[label], gallery, name)
-        true_rank = next(
-            (index for index, candidate in enumerate(ranking, 1)
-             if candidate.subject_id == label[0]),
+        true_candidate = next(
+            (candidate for candidate in ranking if candidate.subject_id == label[0]),
             None,
         )
 
-        if not ranking or true_rank is None:
+        if not ranking or true_candidate is None:
             print(f"{label[0]}/{label[1]} | no valid gallery positive")
             continue
 
+        # Worst possible rank within a tie; alphabetical ordering earns no credit.
+        true_rank = sum(
+            candidate.score >= true_candidate.score - 1e-9
+            for candidate in ranking
+        )
         best_score = ranking[0].score
         tied_best = sum(abs(candidate.score - best_score) <= 1e-9 for candidate in ranking)
         is_tied = tied_best > 1
         ties += int(is_tied)
-        correct_rank1 += int(true_rank == 1 and not is_tied)
-        correct_rankk += int(true_rank <= TOP_K)
+        correct_rank1 += int(true_rank == 1 and best_score > 0)
+        correct_rankk += int(true_rank <= TOP_K and true_candidate.score > 0)
         reciprocal_ranks.append(1.0 / true_rank)
 
         top = ", ".join(
@@ -181,7 +185,7 @@ def report_method(
         f"({correct_rank1 / evaluated:.1%})"
     )
     print(f"Rank-{TOP_K}: {correct_rankk}/{evaluated} ({correct_rankk / evaluated:.1%})")
-    print(f"Mean reciprocal rank: {np.mean(reciprocal_ranks):.3f}")
+    print(f"Conservative mean reciprocal rank: {np.mean(reciprocal_ranks):.3f}")
     print(f"Ambiguous best-score ties: {ties}/{evaluated}")
 
 
