@@ -314,7 +314,7 @@ def run(project: Project) -> None:
         combined = geometric_visual_match(source, target)
 
         print(
-            f"\\n{first_label} vs {second_label} "
+            f"\n{first_label} vs {second_label} "
             f"({'same' if first_label[0] == second_label[0] else 'different'})"
         )
         print("  method             | n   | cover  | mean_sim | verified | conflicts")
