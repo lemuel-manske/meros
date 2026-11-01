@@ -34,6 +34,27 @@ Goliath Groupers are very large fish and exhibit several visual characteristics 
 
 The head contains numerous spots and irregular markings. Their spatial configuration may provide a useful biometric signature for distinguishing individuals.
 
+#### Observed longitudinal variation in spot appearance
+
+Two photographs from different encounters of the fish now identified as **Rogerio**
+(formerly also labeled **Luana**) show a local difference in the marked skin
+pattern near the eye: one photograph appears to contain a single larger dark
+spot, while the other shows two smaller adjacent marks in the corresponding
+region. The observer confirmed that both photographs depict the same individual.
+
+This is an **observed difference in appearance across encounters**, not proof
+that one biological spot physically split into two. Camera viewpoint, image
+quality, illumination, and mark boundaries may contribute to the appearance;
+the biological mechanism has not been established. Exact recording dates
+and the elapsed interval have not been documented here.
+
+**Implication for future research:** a strict permanent one-to-one mapping of
+individual spots should not be assumed across encounters. An unmatched spot
+or a changed local spot count is not, by itself, evidence of a different fish.
+Longitudinal validation should distinguish genuine pattern changes from
+differences caused by imaging conditions. This observation is recorded as a
+dataset limitation; it does **not** change the current matcher or its evaluation.
+
 ### Body patterns
 
 The body presents irregular combinations of darker and lighter regions, including bands, blotches, and other markings. These patterns may also contain information useful for individual identification.
@@ -363,10 +384,11 @@ Repeated observations could then be used to reconstruct movement histories and i
 
 ## Findings from exploratory experiments
 
-The photo benchmark has 18 images of eight individuals. Four individuals have
-multiple eligible images, yielding 14 queries. Each query excludes its own
-image; identities are ranked by their best gallery image. Eye and mouth
-landmarks remain manual. These results do not establish generalization.
+The initial photo benchmark listed 18 images under eight catalog identities,
+including names that later proved to represent the same fish. Four catalog
+identities had multiple eligible images, yielding 14 queries. These historical
+results use the original labels and should not be treated as independent tests
+of biological identity. Eye and mouth landmarks were manual.
 
 ### Identification results
 
@@ -398,6 +420,38 @@ small grayscale neighborhoods with normalized contrast, anatomical
 scale/orientation, and a fish-mask coverage filter. Both local
 variants scored 5/7 on Rogerio; training reduced the other individuals from
 5/5 to 1/5. Some decisions relied on only 1–3 proposed correspondences.
+
+### Reconciled spot-based re-identification benchmark
+
+After confirming Luana = Rogério and Yam = Rafael, the same 18 photos represent
+**six biological individuals**. Only Rafael and Rogério have multiple photos.
+The current frozen ImageNet ResNet18 spot-descriptor matcher combines local
+appearance with eye/mouth geometry and affine matching of manually annotated
+spots. On 14 leave-one-image-out queries, its **Rank-1 and Rank-3 are 14/14**;
+this is not validation on independent encounters or newly sampled identities.
+
+Experiments with kNN-based adaptive combinations of score, density, coverage,
+and spatial distribution degraded Rank-1 to 11/14 (12/14 with local features).
+The original matcher remains the retrieval baseline.
+
+A more useful hypothesis was to check the **geometric arrangement of all
+annotated spots surrounding each proposed correspondence**, including spots
+not already matched. On all 306 directed photo pairs, local geometric
+consistency was measurable for 78/92 same-identity and 151/214
+different-identity pairs. Median consistency was 0.474 for same-identity
+pairs and 0.349 for different-identity pairs. Multiplying the original score
+by this consistency preserved Rank-1 at 14/14 while increasing median
+correct-versus-best-impostor margin from **0.089 to 0.124** on those same
+14 queries. Adding neighboring patch appearance or learned feature weights
+did not improve on geometric consistency alone.
+
+This is a dataset-specific ranking observation, not evidence of calibrated
+identity confidence. When neighborhood evidence is incomparable, the score
+falls back to the original matcher. Convex hulls of sparse annotations do
+not guarantee the same visible skin, and missing spots are not verified
+biological negatives. Keep source images and proposed correspondences
+available for human audit, and require more independent individuals and
+encounters before adopting automatic identity or unknown-individual decisions.
 
 ### Lessons and implications
 
