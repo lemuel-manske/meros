@@ -219,8 +219,10 @@ def local_matches(distances: np.ndarray, tolerance: float) -> int:
     costs[n + np.arange(m), np.arange(m)] = 0.5
     costs[n:, m:] = 0.0
     rows, cols = linear_sum_assignment(costs)
-    return sum(i < n and j < m and distances[i, j] <= tolerance
-               for i, j in zip(rows, cols, strict=True))
+    return sum(
+        1 for i, j in zip(rows, cols, strict=True)
+        if i < n and j < m and distances[i, j] <= tolerance
+    )
 
 
 def neighborhood_support(
@@ -336,7 +338,8 @@ def draw_pair(
                 linewidths=1.6, zorder=5,
             )
 
-    strongest = sorted(accepted, key=lambda k: support[k].agreement, reverse=True)[:MAX_LINES]
+    strength = [info.agreement if info is not None else -1.0 for info in support]
+    strongest = sorted(accepted, key=lambda k: strength[k], reverse=True)[:MAX_LINES]
 
     for k in strongest:
         i, j = match.pairs[k]
