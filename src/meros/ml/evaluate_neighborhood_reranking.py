@@ -258,7 +258,7 @@ def run(project: Project) -> None:
     for method in METHODS:
         best = [
             candidates(label, labels, evidence, method, unknown=True)[0]
-            for label in labels if len(counts) > 1
+            for label in labels
         ]
         missing = sum(not candidate.comparable for candidate in best)
         print(
