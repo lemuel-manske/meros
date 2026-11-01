@@ -1,13 +1,13 @@
 """
-EXP-004N: test spot-neighborhood agreement around proposed pair matches.
+Compare the original spot matcher with a local geometric-neighborhood penalty.
 
-The baseline identifies individual spot pairs using appearance and geometry.
-Here each pair is checked against OTHER annotated spots surrounding its two
-endpoints, including unmatched neighbors. This is diagnostic, not a new score.
+EXP-004N/O found that original score times neighborhood geometry preserved
+14/14 known rankings while increasing the median correct-versus-impostor
+margin. This file unifies their diagnostics, without learned weights.
 
-Local comparisons are restricted to overlapping convex hulls of annotated
-spots, an imperfect proxy for comparable visible skin. Sparse or occluded
-annotations and longitudinal mark changes can make true pairs look different.
+Shared annotation hulls only approximate comparable visible skin. Sparse
+annotations, viewing angle and changing mark appearance can affect the score.
+Missing neighborhood evidence is neutral and cannot establish identity.
 """
 
 from __future__ import annotations
@@ -21,7 +21,6 @@ from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 
 from meros.ml.evaluate_individual_reid import (
-    MAX_VISUAL_DISTANCE,
     MIN_SPOTS,
     SpotPhoto,
     create_encoder,
@@ -29,6 +28,7 @@ from meros.ml.evaluate_individual_reid import (
     load_photo,
     pair_score,
     project_points,
+    rank_individuals,
 )
 from meros.project import Project
 
@@ -38,15 +38,14 @@ NEIGHBOR_TOLERANCE = 0.045
 ANNOTATED_BORDER = 0.03
 MIN_NEIGHBORS = 3
 MIN_EVALUABLE_ANCHORS = 3
+TOP_K = 3
 
-# Include disputed matches and biological controls, without fitting thresholds.
+# Illustrative same- and different-individual pairs from the visual audit.
 INSPECT_PAIRS = (
     (("rafael", 3), ("rogerio", 1)),
     (("rafael", 3), ("rafael", 2)),
     (("rogerio", 1), ("rogerio", 4)),
-    (("rogerio", 4), ("rafael", 2)),
     (("athila", 0), ("rogerio", 1)),
-    (("rafael", 4), ("rogerio", 0)),
 )
 
 Label = tuple[str, int]
@@ -57,7 +56,6 @@ class NeighborhoodResult:
     anchors: int
     matched_spots: int
     geometry: float
-    geometry_visual: float
     local_count_disagreement: float
 
 
@@ -66,10 +64,10 @@ def maximum_local_matches(
     allowed: np.ndarray,
 ) -> int:
     """
-    Find maximum one-to-one neighbor support with a dummy unmatched option.
+    Measure one-to-one local support with a minimum-cost assignment.
 
-    An allowed link always costs less than leaving both endpoints unmatched.
-    Unallowed links cost more, so they cannot fabricate local support.
+    Pairs outside the geometric tolerance cost more than unmatched options.
+    Keep this assignment unchanged to preserve EXP-004N/O comparability.
     """
     n_source, n_target = distance.shape
     size = n_source + n_target
@@ -131,7 +129,6 @@ def inspect_neighborhood(
     radius = NEIGHBOR_RADIUS * target.scale
     tolerance = NEIGHBOR_TOLERANCE * target.scale
     geometric = []
-    visual = []
     count_disagreement = []
 
     for source_id, target_id in match.pairs:
@@ -157,21 +154,11 @@ def inspect_neighborhood(
         first = projected[first_ids] - projected[source_id]
         second = target_points[second_ids] - target_points[target_id]
         distances = cdist(first, second)
-        visual_distances = cdist(
-            source.descriptors[first_ids],
-            target.descriptors[second_ids],
-            metric="cosine",
-        )
         allowed_geometry = distances <= tolerance
-        allowed_visual = allowed_geometry & (visual_distances <= MAX_VISUAL_DISTANCE)
         denominator = len(first_ids) + len(second_ids)
 
         geometric.append(
             2 * maximum_local_matches(distances / tolerance, allowed_geometry)
-            / denominator
-        )
-        visual.append(
-            2 * maximum_local_matches(distances / tolerance, allowed_visual)
             / denominator
         )
         count_disagreement.append(
@@ -185,31 +172,62 @@ def inspect_neighborhood(
         anchors=len(geometric),
         matched_spots=len(match.pairs),
         geometry=float(np.median(geometric)),
-        geometry_visual=float(np.median(visual)),
         local_count_disagreement=float(np.median(count_disagreement)),
     )
 
 
-def evaluate(
-    photos: dict[Label, SpotPhoto],
-    first: Label,
-    second: Label,
-) -> tuple[float, NeighborhoodResult | None]:
+@dataclass(frozen=True)
+class PairEvidence:
+    original: float
+    neighborhood: NeighborhoodResult | None
+
+    @property
+    def combined(self) -> float:
+        """
+        Preserve the baseline score when no neighborhood can be compared.
+        """
+        if self.neighborhood is None:
+            return self.original
+
+        return self.original * self.neighborhood.geometry
+
+
+def correct_rank(ranking, subject_id: str) -> int | None:
     """
-    Return baseline pair score and independent local-neighborhood diagnostics.
+    Worst-case true identity rank among ties; zero scores mean no evidence.
     """
-    source, target = photos[first], photos[second]
-    return pair_score(source, target), inspect_neighborhood(source, target)
+    genuine = next((candidate for candidate in ranking if candidate.subject_id == subject_id), None)
+
+    if genuine is None or genuine.score <= 0:
+        return None
+
+    return sum(candidate.score >= genuine.score - 1e-9 for candidate in ranking)
+
+
+def describe_pair(pair: tuple[Label, Label], item: PairEvidence) -> str:
+    """
+    Display one pair's original score and comparable local geometry.
+    """
+    first, second = pair
+    heading = f"{first[0]}/{first[1]} -> {second[0]}/{second[1]}"
+
+    if item.neighborhood is None:
+        return f"{heading} | score={item.original:.3f} | neighborhood=n/a"
+
+    result = item.neighborhood
+    return (
+        f"{heading} | score={item.original:.3f} | "
+        f"local={result.geometry:.3f} ({result.anchors}/{result.matched_spots} anchors) "
+        f"| density difference={result.local_count_disagreement:.3f}"
+    )
 
 
 def run(project: Project) -> None:
     """
-    Compare disputed pairs with verified same-identity controls.
-
-    Do not assume these selected examples are independent training samples.
+    Evaluate all ordered photo pairs and baseline versus neighborhood rankings.
     """
     encoder = create_encoder()
-    photos: dict[Label, SpotPhoto] = {}
+    gallery: dict[Label, SpotPhoto] = {}
 
     for subject in project.media.list_subjects():
         for image in subject.images:
@@ -221,78 +239,132 @@ def run(project: Project) -> None:
             photo = load_photo(project, label, encoder)
 
             if photo is not None:
-                photos[label] = photo
+                gallery[label] = photo
 
-    counts = Counter(subject for subject, _ in photos)
-    known = [label for label in photos if counts[label[0]] >= 2]
-    comparisons: list[tuple[Label, Label, str]] = [
-        (first, second, "inspect") for first, second in INSPECT_PAIRS
-    ]
+    labels = sorted(gallery)
+    counts = Counter(subject for subject, _ in labels)
+    evidence: dict[tuple[Label, Label], PairEvidence] = {}
 
-    # Each known query has a strongest verified same-individual match and
-    # strongest other-individual match under the original unmodified scorer.
-    for first in known:
-        scores = [
-            (second, pair_score(photos[first], photos[second]))
-            for second in photos if second != first
+    for first in labels:
+        for second in labels:
+            if first == second:
+                continue
+
+            original = pair_score(gallery[first], gallery[second])
+            local = (
+                inspect_neighborhood(gallery[first], gallery[second])
+                if original > 0 else None
+            )
+            evidence[(first, second)] = PairEvidence(original, local)
+
+    baseline = {pair: item.original for pair, item in evidence.items()}
+    combined = {pair: item.combined for pair, item in evidence.items()}
+
+    print(f"Gallery: {len(labels)} photos, {len(counts)} identities")
+    print("Baseline: visual/geometric spot matching.")
+    print("Neighborhood: baseline * geometric local consistency; no learning.")
+    print("No comparable neighborhood: unchanged baseline score, not a negative match.")
+
+    for same in (True, False):
+        group = [
+            item for (first, second), item in evidence.items()
+            if (first[0] == second[0]) == same
         ]
-
-        for relation in ("same", "different"):
-            choices = [
-                (label, score) for label, score in scores
-                if (label[0] == first[0]) == (relation == "same")
-            ]
-
-            if choices:
-                best = max(choices, key=lambda item: item[1])
-                comparisons.append((first, best[0], relation))
-
-    print(f"Gallery: {len(photos)} photos, {len(counts)} identities")
-    print(
-        f"EXP-004N: neighborhood radius={NEIGHBOR_RADIUS:.2f}, "
-        f"tolerance={NEIGHBOR_TOLERANCE:.3f} x target eye-mouth distance"
-    )
-    print(
-        "pair | class | original | anchors/matches | local geometry | "
-        "local geometry+visual | local count difference"
-    )
-    summary: dict[str, list[NeighborhoodResult]] = {
-        "same": [], "different": [],
-    }
-
-    for first, second, relation in comparisons:
-        baseline, result = evaluate(photos, first, second)
-        pair_name = f"{first[0]}/{first[1]} -> {second[0]}/{second[1]}"
-        label = "same" if first[0] == second[0] else "different"
-
-        if result is None:
-            print(f"{pair_name} | {relation} ({label}) | {baseline:.3f} | not comparable")
-            continue
-
+        comparable = [
+            item.neighborhood for item in group if item.neighborhood is not None
+        ]
+        name = "same" if same else "different"
+        median = (
+            f"{np.median([item.geometry for item in comparable]):.3f}"
+            if comparable else "n/a"
+        )
         print(
-            f"{pair_name} | {relation} ({label}) | {baseline:.3f} | "
-            f"{result.anchors}/{result.matched_spots} | "
-            f"{result.geometry:.2f} | {result.geometry_visual:.2f} | "
-            f"{result.local_count_disagreement:.2f}"
+            f"{name} ordered pairs: {len(group)}, comparable={len(comparable)}, "
+            f"missing={len(group) - len(comparable)}, median local geometry={median}"
         )
 
-        if relation in summary:
-            summary[relation].append(result)
+    print("\nAudited examples:")
+    for pair in INSPECT_PAIRS:
+        if pair in evidence:
+            print("  " + describe_pair(pair, evidence[pair]))
 
-    for relation, results in summary.items():
-        if results:
+    known = [label for label in labels if counts[label[0]] > 1]
+    results: dict[str, dict[Label, tuple[int | None, float, bool]]] = {
+        "baseline": {}, "neighborhood": {},
+    }
+
+    print("\nKnown queries: predicted first / best wrong / true-vs-wrong margin")
+    for label in known:
+        for method, scores in (("baseline", baseline), ("neighborhood", combined)):
+            ranking = rank_individuals(label, gallery[label], gallery, scores)
+            genuine = next(item for item in ranking if item.subject_id == label[0])
+            impostor = next(item for item in ranking if item.subject_id != label[0])
+            rank = correct_rank(ranking, label[0])
+            margin = genuine.score - impostor.score
+            top = ranking[0]
+            comparable = evidence[(label, (top.subject_id, top.image_id))].neighborhood
+            missing_top = comparable is None
+            results[method][label] = (rank, margin, missing_top)
+            flag = " [no-neighborhood]" if missing_top else ""
+
             print(
-                f"{relation}: {len(results)} comparable best-match queries; "
-                f"median geometry={np.median([r.geometry for r in results]):.2f}, "
-                "median geometry+visual="
-                f"{np.median([r.geometry_visual for r in results]):.2f}, "
-                "median local count difference="
-                f"{np.median([r.local_count_disagreement for r in results]):.2f}"
+                f"{label[0]}/{label[1]} | {method} | rank={rank or 'n/a'} | "
+                f"{top.subject_id}/{top.image_id}={top.score:.3f}{flag} | "
+                f"{impostor.subject_id}/{impostor.image_id}={impostor.score:.3f} "
+                f"| margin={margin:+.3f}"
             )
 
+    print("\nMethod | Rank-1 | Rank-3 | median margin | top without neighborhood")
+    for method, values in results.items():
+        rows = list(values.values())
+        rank1 = sum(rank == 1 for rank, _, _ in rows)
+        rankk = sum(rank is not None and rank <= TOP_K for rank, _, _ in rows)
+        margins = [margin for _, margin, _ in rows]
+        missing_top = sum(missing for _, _, missing in rows)
+        print(
+            f"{method} | {rank1}/{len(rows)} | {rankk}/{len(rows)} | "
+            f"{np.median(margins):+.3f} | {missing_top}"
+        )
+
+    gains = []
+    losses = []
+
+    for label in known:
+        before = results["baseline"][label]
+        after = results["neighborhood"][label]
+        if after[1] > before[1] + 1e-9:
+            gains.append(label)
+        elif after[1] < before[1] - 1e-9:
+            losses.append(label)
+
+    def show_labels(items: list[Label]) -> str:
+        return ", ".join(f"{subject}/{image}" for subject, image in items) or "none"
+
+    print(f"Margin increased ({len(gains)}): {show_labels(gains)}")
+    print(f"Margin decreased ({len(losses)}): {show_labels(losses)}")
+
+    print("\nSimulated unknown (query identity absent from gallery):")
+    for method, scores in (("baseline", baseline), ("neighborhood", combined)):
+        top = [
+            rank_individuals(
+                label, gallery[label], gallery, scores, excluded_subject=label[0]
+            )[0]
+            for label in labels if len(counts) > 1
+        ]
+        missing = sum(
+            evidence[(label, (candidate.subject_id, candidate.image_id))].neighborhood
+            is None
+            for label, candidate in zip(labels, top, strict=True)
+        )
+        print(
+            f"{method}: {len(top)} queries, median best incorrect score="
+            f"{np.median([candidate.score for candidate in top]):.3f}, "
+            f"top without neighborhood={missing}"
+        )
+
     print(
-        "No score was adjusted. Lack of local support is not proof of a "
-        "different fish; compare positive and negative controls before use."
+        "All scores are heuristics. Repeated photos of just two individuals "
+        "limit generalization; no automatic unknown threshold is validated."
     )
 
 
