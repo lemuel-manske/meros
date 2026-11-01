@@ -115,7 +115,8 @@ def create_encoder():
     Load a frozen ImageNet ResNet18. The weights download on the first run.
     """
     import torch  # pyright: ignore[reportMissingImports]
-    from torchvision.models import ResNet18_Weights, resnet18  # pyright: ignore[reportMissingImports]
+    from torchvision.models import ResNet18_Weights  # pyright: ignore[reportMissingImports]
+    from torchvision.models import resnet18  # pyright: ignore[reportMissingImports]
 
     backbone = resnet18(weights=ResNet18_Weights.DEFAULT)
     encoder = torch.nn.Sequential(*list(backbone.children())[:-2])
