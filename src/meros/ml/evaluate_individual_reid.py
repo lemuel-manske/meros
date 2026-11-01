@@ -231,7 +231,6 @@ def assign_matches(
     return tuple(pairs), tuple(errors)
 
 
-
 def alignment_quality(
     source: Photo,
     target: Photo,
@@ -359,9 +358,7 @@ def match_spots(source: Photo, target: Photo) -> Match:
         if len(alternatives) >= DEBUG_TOP:
             break
 
-    return Match(
-        ranked[0], most_pairs, tuple(alternatives), initial_scores, len(hypotheses)
-    )
+    return Match(ranked[0], most_pairs, tuple(alternatives), initial_scores, len(hypotheses))
 
 
 def verified_pairs(
@@ -415,7 +412,6 @@ def report_match(name: str, alignment: Alignment, truth: dict[int, int]) -> None
     )
 
 
-
 def draw_debug(
     first_label: Label,
     second_label: Label,
@@ -431,12 +427,22 @@ def draw_debug(
         count_axis.scatter(counts, scores, s=7, c=COLOR_NEUTRAL, alpha=0.35)
 
     count_axis.scatter(
-        len(result.most_pairs.pairs), result.most_pairs.score,
-        s=110, color=COLOR_BASELINE, marker="x", label="Most pairs", zorder=5,
+        len(result.most_pairs.pairs),
+        result.most_pairs.score,
+        s=110,
+        color=COLOR_BASELINE,
+        marker="x",
+        label="Most pairs",
+        zorder=5,
     )
     count_axis.scatter(
-        len(result.selected.pairs), result.selected.score,
-        s=90, color=COLOR_CORRECT, marker="o", label="Selected", zorder=5,
+        len(result.selected.pairs),
+        result.selected.score,
+        s=90,
+        color=COLOR_CORRECT,
+        marker="o",
+        label="Selected",
+        zorder=5,
     )
     count_axis.set_xlabel("Number of assigned pairs")
     count_axis.set_ylabel("Quality: support × residual × appearance × coverage")
@@ -455,12 +461,18 @@ def draw_debug(
         axis.imshow(cv.cvtColor(target.image, cv.COLOR_BGR2RGB))
         projected = project(source.points, candidate.matrix)
         axis.scatter(
-            target.points[:, 0], target.points[:, 1],
-            s=10, c=COLOR_SPOT, alpha=0.9,
+            target.points[:, 0],
+            target.points[:, 1],
+            s=10,
+            c=COLOR_SPOT,
+            alpha=0.9,
         )
         axis.scatter(
-            projected[:, 0], projected[:, 1],
-            s=10, c=COLOR_PROJECTION, alpha=0.6,
+            projected[:, 0],
+            projected[:, 1],
+            s=10,
+            c=COLOR_PROJECTION,
+            alpha=0.6,
         )
 
         strongest = sorted(
@@ -495,10 +507,12 @@ def draw_debug(
         f"{second_label[0]}/{second_label[1]} — alternatives"
     )
     figure.text(
-        0.5, 0.02,
+        0.5,
+        0.02,
         "Yellow: target spots | Purple: projected source spots | "
         "Cyan: tentative links | Red triangle: seed hypothesis",
-        ha="center", fontsize=9,
+        ha="center",
+        fontsize=9,
     )
     figure.tight_layout(rect=(0, 0.04, 1, 0.95))
     plt.show(block=True)
@@ -517,9 +531,7 @@ def draw_pair(
     truth = verified_pairs(project, first_label, second_label, source, target)
     figure, axes = plt.subplots(1, 2, figsize=(17, 8))
 
-    for axis, label, photo in zip(
-        axes, (first_label, second_label), (source, target), strict=True
-    ):
+    for axis, label, photo in zip(axes, (first_label, second_label), (source, target), strict=True):
         axis.imshow(cv.cvtColor(photo.image, cv.COLOR_BGR2RGB))
         axis.scatter(photo.points[:, 0], photo.points[:, 1], s=14, c=COLOR_SPOT)
         axis.set_title(f"{label[0]}/{label[1]}")
@@ -568,7 +580,8 @@ def draw_pair(
 
     figure.suptitle(f"{name} — tentative geometric associations")
     figure.text(
-        0.5, 0.035,
+        0.5,
+        0.035,
         "Green: verified link | Red: known mismatch or different individuals | "
         "Cyan: unverified | Yellow: annotated spots",
         ha="center",
