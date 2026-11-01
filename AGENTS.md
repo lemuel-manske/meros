@@ -41,7 +41,12 @@ These rules apply across the Meros codebase.
 
 - **Clean up regularly.** This project is about experimentation and multiple tries
   that may not succeed. Remove unused code, data, and artifacts to keep the repository
-  manageable and reduce confusion.
+  manageable and reduce confusion.|
+
+- **Use visual debugging strategies.** It should be possible for humans to understand
+  the behavior of algorithms and data processing, not just with `print` statements
+  but also with plots. You can also use `src/meros/sandbox` to add rapid & quick scripts
+  to demonstrate things, but use visual debugging on ml and processing modules.
 
 # Code style
 
