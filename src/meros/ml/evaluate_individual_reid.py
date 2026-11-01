@@ -79,9 +79,7 @@ def initial_similarity(
         raise ValueError("Eye and mouth landmarks must be distinct")
 
     cosine = np.dot(source_axis, target_axis) / (source_length * target_length)
-    sine = np.linalg.det(np.stack((source_axis, target_axis))) / (
-        source_length * target_length
-    )
+    sine = np.linalg.det(np.stack((source_axis, target_axis))) / (source_length * target_length)
     rotation = np.array(((cosine, -sine), (sine, cosine)))
     linear = rotation * (target_length / source_length)
 
@@ -236,10 +234,7 @@ def geometric_visual_match(source: SpotPhoto, target: SpotPhoto) -> SpotMatch:
 
     def propose(candidate: np.ndarray) -> tuple[tuple[int, int], ...]:
         projection_distances = cdist(project_points(source.points, candidate), target.points)
-        eligible = (
-            (visual_distances <= MAX_VISUAL_DISTANCE)
-            & (projection_distances <= radius)
-        )
+        eligible = (visual_distances <= MAX_VISUAL_DISTANCE) & (projection_distances <= radius)
         costs = (
             visual_distances / MAX_VISUAL_DISTANCE
             + GEOMETRIC_WEIGHT * projection_distances / radius
@@ -343,7 +338,6 @@ def rank_individuals(
     )
 
 
-
 @dataclass(frozen=True)
 class NeighborhoodResult:
     anchors: int
@@ -365,9 +359,7 @@ def maximum_local_matches(
     n_source, n_target = distance.shape
     size = n_source + n_target
     cost = np.full((size, size), 3.0, dtype=float)
-    cost[:n_source, :n_target] = np.where(
-        allowed, np.minimum(distance, 0.99), 3.0
-    )
+    cost[:n_source, :n_target] = np.where(allowed, np.minimum(distance, 0.99), 3.0)
     cost[np.arange(n_source), n_target + np.arange(n_source)] = 0.5
     cost[n_source + np.arange(n_target), np.arange(n_target)] = 0.5
     cost[n_source:, n_target:] = 0.0
@@ -411,9 +403,7 @@ def inspect_neighborhood(
         return {
             index
             for index, point in enumerate(points)
-            if cv.pointPolygonTest(
-                intersection, (float(point[0]), float(point[1])), True
-            ) >= border
+            if cv.pointPolygonTest(intersection, (float(point[0]), float(point[1])), True) >= border
         }
 
     shared_source = comparable(projected)
@@ -428,16 +418,15 @@ def inspect_neighborhood(
             continue
 
         first_ids = [
-            i for i in sorted(shared_source)
-            if i != source_id and np.linalg.norm(
-                projected[i] - projected[source_id]
-            ) <= radius
+            i
+            for i in sorted(shared_source)
+            if i != source_id and np.linalg.norm(projected[i] - projected[source_id]) <= radius
         ]
         second_ids = [
-            j for j in sorted(shared_target)
-            if j != target_id and np.linalg.norm(
-                target_points[j] - target_points[target_id]
-            ) <= radius
+            j
+            for j in sorted(shared_target)
+            if j != target_id
+            and np.linalg.norm(target_points[j] - target_points[target_id]) <= radius
         ]
 
         if min(len(first_ids), len(second_ids)) < MIN_NEIGHBORS:
@@ -450,8 +439,7 @@ def inspect_neighborhood(
         denominator = len(first_ids) + len(second_ids)
 
         geometric.append(
-            2 * maximum_local_matches(distances / tolerance, allowed_geometry)
-            / denominator
+            2 * maximum_local_matches(distances / tolerance, allowed_geometry) / denominator
         )
         count_disagreement.append(
             abs(len(first_ids) - len(second_ids)) / max(len(first_ids), len(second_ids))
@@ -514,7 +502,6 @@ def describe_pair(pair: tuple[Label, Label], item: PairEvidence) -> str:
     )
 
 
-
 @dataclass(frozen=True)
 class SharedEvidence:
     source_indices: tuple[int, ...]
@@ -565,9 +552,7 @@ def shared_evidence(
         return tuple(
             i
             for i, point in enumerate(points)
-            if cv.pointPolygonTest(
-                intersection, (float(point[0]), float(point[1])), True
-            ) >= border
+            if cv.pointPolygonTest(intersection, (float(point[0]), float(point[1])), True) >= border
         )
 
     source_ids = interior(projected)
@@ -585,9 +570,7 @@ def shared_evidence(
         target_ids[j] for j in np.where(np.min(distances, axis=0) > radius)[0]
     )
 
-    return SharedEvidence(
-        source_ids, target_ids, source_unsupported, target_unsupported, overlap
-    )
+    return SharedEvidence(source_ids, target_ids, source_unsupported, target_unsupported, overlap)
 
 
 def draw_spots(
@@ -604,31 +587,58 @@ def draw_spots(
     if unmatched:
         points = photo.points[unmatched]
         axis.scatter(
-            points[:, 0], points[:, 1], s=28, c="#ffcf54",
-            edgecolors="black", linewidths=0.35, alpha=0.8, zorder=3,
+            points[:, 0],
+            points[:, 1],
+            s=28,
+            c="#ffcf54",
+            edgecolors="black",
+            linewidths=0.35,
+            alpha=0.8,
+            zorder=3,
         )
 
     if matched:
         points = photo.points[sorted(matched)]
         axis.scatter(
-            points[:, 0], points[:, 1], s=30, c="#37f5eb",
-            edgecolors="black", linewidths=0.45, zorder=4,
+            points[:, 0],
+            points[:, 1],
+            s=30,
+            c="#37f5eb",
+            edgecolors="black",
+            linewidths=0.45,
+            zorder=4,
         )
 
     if unsupported:
         points = photo.points[list(unsupported)]
         axis.scatter(
-            points[:, 0], points[:, 1], s=75, marker="x", c="#ff416c",
-            linewidths=1.5, zorder=5,
+            points[:, 0],
+            points[:, 1],
+            s=75,
+            marker="x",
+            c="#ff416c",
+            linewidths=1.5,
+            zorder=5,
         )
 
     axis.scatter(
-        [photo.eye[0]], [photo.eye[1]], marker="+", s=110,
-        c="white", linewidths=1.5, zorder=6,
+        [photo.eye[0]],
+        [photo.eye[1]],
+        marker="+",
+        s=110,
+        c="white",
+        linewidths=1.5,
+        zorder=6,
     )
     axis.scatter(
-        [photo.mouth[0]], [photo.mouth[1]], marker="s", s=45,
-        facecolors="none", edgecolors="white", linewidths=1.5, zorder=6,
+        [photo.mouth[0]],
+        [photo.mouth[1]],
+        marker="s",
+        s=45,
+        facecolors="none",
+        edgecolors="white",
+        linewidths=1.5,
+        zorder=6,
     )
 
 
@@ -660,18 +670,22 @@ def show_pair(
     target_matched = {j for _, j in match.pairs}
 
     draw_spots(
-        first_axis, source, source_matched,
+        first_axis,
+        source,
+        source_matched,
         shared.source_unsupported if shared is not None else (),
     )
     draw_spots(
-        second_axis, target, target_matched,
+        second_axis,
+        target,
+        target_matched,
         shared.target_unsupported if shared is not None else (),
     )
 
     # Show a readable subset; draw ALL matched points on their photos above.
-    pair_indices = sorted(
-        range(len(match.pairs)), key=lambda index: match.errors[index]
-    )[:MAX_CONNECTIONS]
+    pair_indices = sorted(range(len(match.pairs)), key=lambda index: match.errors[index])[
+        :MAX_CONNECTIONS
+    ]
 
     for line_number, pair_index in enumerate(pair_indices, start=1):
         i, j = match.pairs[pair_index]
@@ -693,9 +707,14 @@ def show_pair(
 
         for axis, point in ((first_axis, first_point), (second_axis, second_point)):
             axis.annotate(
-                str(line_number), (float(point[0]), float(point[1])),
-                xytext=(4, 4), textcoords="offset points",
-                color="white", fontsize=7, fontweight="bold", zorder=7,
+                str(line_number),
+                (float(point[0]), float(point[1])),
+                xytext=(4, 4),
+                textcoords="offset points",
+                color="white",
+                fontsize=7,
+                fontweight="bold",
+                zorder=7,
             )
 
     if shared is None:
@@ -715,22 +734,28 @@ def show_pair(
         f" | original score={score:.3f} | matches={len(match.pairs)}"
     )
     figure.text(
-        0.5, 0.055,
+        0.5,
+        0.055,
         "Cyan: proposed matches (up to 20 numbered links)  |  "
         "Yellow: unpaired annotation  |  "
         "Red X: no nearby spot in comparable annotated region  |  "
         "White +/square: eye/mouth",
-        ha="center", va="center", fontsize=10,
+        ha="center",
+        va="center",
+        fontsize=10,
     )
     figure.text(
-        0.5, 0.025, region + "  |  Red X is NOT proof of a biological difference",
-        ha="center", va="center", fontsize=9,
+        0.5,
+        0.025,
+        region + "  |  Red X is NOT proof of a biological difference",
+        ha="center",
+        va="center",
+        fontsize=9,
     )
     figure.subplots_adjust(left=0.01, right=0.99, top=0.88, bottom=0.12, wspace=0.08)
 
     plt.show(block=True)
     plt.close(figure)
-
 
 
 def load_gallery(project: Project, only: set[Label] | None = None) -> dict[Label, SpotPhoto]:
@@ -788,14 +813,10 @@ def evaluate(project: Project) -> None:
 
     for same in (True, False):
         rows = [
-            item for (first, second), item in evidence.items()
-            if (first[0] == second[0]) == same
+            item for (first, second), item in evidence.items() if (first[0] == second[0]) == same
         ]
         valid = [item.neighborhood for item in rows if item.neighborhood is not None]
-        median = (
-            f"{np.median([item.geometry for item in valid]):.3f}"
-            if valid else "n/a"
-        )
+        median = f"{np.median([item.geometry for item in valid]):.3f}" if valid else "n/a"
         name = "same" if same else "different"
         print(
             f"{name} ordered pairs: {len(rows)}, comparable={len(valid)}, "
@@ -804,7 +825,8 @@ def evaluate(project: Project) -> None:
 
     known = [label for label in labels if counts[label[0]] > 1]
     stats: dict[str, dict[Label, tuple[int | None, float, bool]]] = {
-        "baseline": {}, "neighborhood": {},
+        "baseline": {},
+        "neighborhood": {},
     }
 
     print("\nKnown queries: best candidate, best impostor, true-vs-impostor margin")
@@ -853,15 +875,15 @@ def evaluate(project: Project) -> None:
         top = [
             (
                 label,
-                rank_individuals(
-                    label, gallery[label], gallery, scores, excluded_subject=label[0]
-                )[0],
+                rank_individuals(label, gallery[label], gallery, scores, excluded_subject=label[0])[
+                    0
+                ],
             )
-            for label in labels if len(counts) > 1
+            for label in labels
+            if len(counts) > 1
         ]
         missing = sum(
-            evidence[(label, (candidate.subject_id, candidate.image_id))].neighborhood
-            is None
+            evidence[(label, (candidate.subject_id, candidate.image_id))].neighborhood is None
             for label, candidate in top
         )
         print(
@@ -901,16 +923,18 @@ def visualize(project: Project) -> None:
             f"combined={original * local.geometry if local is not None else original:.3f}"
         )
         show_pair(
-            first, second,
+            first,
+            second,
             project.media.read_subject_image(*first),
             project.media.read_subject_image(*second),
-            source, target, match, original, shared,
+            source,
+            target,
+            match,
+            original,
+            shared,
         )
 
-    print(
-        "Unmatched spots and red X are diagnostics, not confirmed "
-        "biological differences."
-    )
+    print("Unmatched spots and red X are diagnostics, not confirmed biological differences.")
 
 
 def run(project: Project) -> None:
