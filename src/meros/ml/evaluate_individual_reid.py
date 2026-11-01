@@ -277,7 +277,7 @@ def alignment_quality(
 def match_spots(source: Photo, target: Photo) -> Match:
     first = local_triangles(source.points)
     second = local_triangles(target.points)
-    right_shapes = np.array([triangle.shape for triangle in second])
+    right_shapes = np.array([triangle.shape for triangle in second]).reshape(-1, 2)
     right_orientations = np.array([triangle.orientation for triangle in second])
     hypotheses = []
     appearance = cdist(source.descriptors, target.descriptors, metric="cosine")
@@ -442,7 +442,16 @@ def draw_debug(
     count_axis.set_ylabel("Quality: support × residual × appearance × coverage")
     count_axis.legend(loc="best")
 
-    for axis, candidate in zip(axes.flat[1:], result.alternatives, strict=False):
+    views = [("Quality winner", result.selected), ("Most pairs", result.most_pairs)]
+
+    for candidate in result.alternatives:
+        if len(views) >= 3:
+            break
+
+        if all(set(candidate.pairs) != set(view.pairs) for _, view in views):
+            views.append(("Alternative", candidate))
+
+    for axis, (label, candidate) in zip(axes.flat[1:], views, strict=False):
         axis.imshow(cv.cvtColor(target.image, cv.COLOR_BGR2RGB))
         projected = project(source.points, candidate.matrix)
         axis.scatter(
@@ -454,9 +463,12 @@ def draw_debug(
             s=10, c=COLOR_PROJECTION, alpha=0.6,
         )
 
-        for i, j in sorted(
-            candidate.pairs, key=lambda pair: candidate.errors[candidate.pairs.index(pair)]
-        )[:MAX_LINES]:
+        strongest = sorted(
+            zip(candidate.pairs, candidate.errors, strict=True),
+            key=lambda pair: pair[1],
+        )[:MAX_LINES]
+
+        for (i, j), _ in strongest:
             a, b = projected[i], target.points[j]
             axis.plot((a[0], b[0]), (a[1], b[1]), c=COLOR_MATCH, lw=0.8, alpha=0.65)
 
@@ -468,14 +480,14 @@ def draw_debug(
         axis.set_xlim(0, target.image.shape[1])
         axis.set_ylim(target.image.shape[0], 0)
         axis.set_title(
-            f"score={candidate.score:.3f} | pairs={len(candidate.pairs)} | "
+            f"{label}: score={candidate.score:.3f} | pairs={len(candidate.pairs)} | "
             f"geom={candidate.geometry:.2f} | visual={candidate.appearance:.2f} | "
             f"coverage={candidate.coverage:.2f}",
             fontsize=9,
         )
         axis.set_axis_off()
 
-    for axis in list(axes.flat)[1 + len(result.alternatives):]:
+    for axis in list(axes.flat)[1 + len(views) :]:
         axis.set_axis_off()
 
     figure.suptitle(
