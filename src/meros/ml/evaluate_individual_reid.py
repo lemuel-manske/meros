@@ -21,16 +21,15 @@ from itertools import combinations
 import cv2 as cv
 import matplotlib.pyplot as plt
 import numpy as np
+
 from matplotlib.patches import ConnectionPatch
 from scipy.spatial.distance import cdist
 
+import torch
+import torch.nn.functional as F
+
 from meros.project import Project
 
-
-SUBJECT_IDS: tuple[str, ...] = ()
-MAX_PAIRS: int | None = None
-DEBUG_VISUAL = False
-DEBUG_TOP = 3
 
 COLOR_SPOT = "#ffcc59"
 COLOR_MATCH = "#37f5eb"
@@ -41,20 +40,28 @@ COLOR_BASELINE = "#579bff"
 COLOR_NEUTRAL = "#9da4af"
 COLOR_SEED = "#ee995f"
 
-MIN_SPOTS = 4
 PATCH_SCALE = 2.0
 PATCH_SIZE = 128
+
 TRIANGLE_NEIGHBORS = 5
 TRIANGLE_SHAPE_TOLERANCE = 0.11
 TRIANGLE_CANDIDATES = 3
+
 MAX_HYPOTHESES = 1800
+
 MATCH_SPACING_RATIO = 0.70
+
 VISUAL_COST_WEIGHT = 0.20
+
 QUALITY_COVERAGE_WEIGHT = 0.70
 QUALITY_APPEARANCE_WEIGHT = 0.50
+
 REFINE_TOP = 5
+
 TRUTH_SPACING_RATIO = 0.50
+
 MAX_LINES = 20
+
 
 Label = tuple[str, int]
 
@@ -102,9 +109,7 @@ def spot_spacing(points: np.ndarray) -> float:
 
 
 def create_encoder():
-    import torch  # pyright: ignore[reportMissingImports]
-    from torchvision.models import ResNet18_Weights  # pyright: ignore[reportMissingImports]
-    from torchvision.models import resnet18  # pyright: ignore[reportMissingImports]
+    from torchvision.models import resnet18, ResNet18_Weights
 
     model = resnet18(weights=ResNet18_Weights.DEFAULT)
     encoder = torch.nn.Sequential(*list(model.children())[:-2])
@@ -119,9 +124,6 @@ def create_encoder():
 def load_photo(project: Project, label: Label, encoder) -> Photo:
     points = np.asarray(project.metadata.read_subject_spots(*label), dtype=np.float64)
 
-    if len(points) < MIN_SPOTS:
-        raise ValueError(f"{label}: fewer than {MIN_SPOTS} annotated spots")
-
     image = project.media.read_subject_image(*label)
     spacing = spot_spacing(points)
     width = max(16, round(PATCH_SCALE * spacing))
@@ -134,19 +136,18 @@ def load_photo(project: Project, label: Label, encoder) -> Photo:
         patch = cv.resize(patch, (PATCH_SIZE, PATCH_SIZE), interpolation=cv.INTER_AREA)
         patches.append(equalizer.apply(patch).astype(np.float32) / 255.0)
 
-    import torch  # pyright: ignore[reportMissingImports]
-    import torch.nn.functional as functional  # pyright: ignore[reportMissingImports]
-
-    tensor = torch.from_numpy(np.stack(patches)).unsqueeze(1).repeat(1, 3, 1, 1)
     mean = torch.tensor([0.485, 0.456, 0.406]).reshape(1, 3, 1, 1)
     std = torch.tensor([0.229, 0.224, 0.225]).reshape(1, 3, 1, 1)
+
+    tensor = torch.from_numpy(np.stack(patches)).unsqueeze(1).repeat(1, 3, 1, 1)
     tensor = (tensor - mean) / std
+
     batches = []
 
     with torch.inference_mode():
         for batch in tensor.split(32):
-            features = functional.adaptive_avg_pool2d(encoder(batch), 1).flatten(1)
-            batches.append(functional.normalize(features, dim=1).numpy())
+            features = F.adaptive_avg_pool2d(encoder(batch), 1).flatten(1)
+            batches.append(F.normalize(features, dim=1).numpy())
 
     return Photo(points, np.concatenate(batches), image, spacing)
 
@@ -154,6 +155,7 @@ def load_photo(project: Project, label: Label, encoder) -> Photo:
 def local_triangles(points: np.ndarray) -> list[Triangle]:
     distances = cdist(points, points)
     np.fill_diagonal(distances, np.inf)
+
     result = []
 
     for i in range(len(points)):
@@ -162,14 +164,17 @@ def local_triangles(points: np.ndarray) -> list[Triangle]:
         for j, k in combinations(nearest, 2):
             first = points[j] - points[i]
             second = points[k] - points[i]
+
             a = float(np.linalg.norm(first))
             b = float(np.linalg.norm(second))
+
             cross = float(np.linalg.det(np.stack((first, second))))
 
             if min(a, b) <= 1e-6 or abs(cross) < 0.15 * a * b:
                 continue
 
             c = float(np.linalg.norm(points[j] - points[k]))
+
             result.append(
                 Triangle(
                     (i, int(j), int(k)),
@@ -184,15 +189,20 @@ def local_triangles(points: np.ndarray) -> list[Triangle]:
 def similarity(first: np.ndarray, second: np.ndarray) -> np.ndarray:
     p = first.mean(axis=0)
     q = second.mean(axis=0)
+
     x = first - p
     y = second - q
+
     denominator = float(np.sum(x * x))
     a = float(np.sum(x[:, 0] * y[:, 0] + x[:, 1] * y[:, 1]) / denominator)
     b = float(np.sum(x[:, 0] * y[:, 1] - x[:, 1] * y[:, 0]) / denominator)
+
     linear = np.array(((a, -b), (b, a)))
+
     matrix = np.eye(3)
     matrix[:2, :2] = linear
     matrix[:2, 2] = q - linear @ p
+
     return matrix
 
 
@@ -355,9 +365,6 @@ def match_spots(source: Photo, target: Photo) -> Match:
             for previous in alternatives
         ):
             alternatives.append(candidate)
-
-        if len(alternatives) >= DEBUG_TOP:
-            break
 
     return Match(ranked[0], most_pairs, tuple(alternatives), initial_scores, len(hypotheses))
 
@@ -604,25 +611,25 @@ def draw_pair(
     plt.show(block=True)
     plt.close(figure)
 
-    if DEBUG_VISUAL:
-        draw_debug(first_label, second_label, source, target, result, truth)
+    draw_debug(first_label, second_label, source, target, result, truth)
+
+
+def get_pairs(project: Project) -> list[tuple[Label, Label]]:
+    labels = sorted(
+        (subject.subject_id, 0)  # pick just the 1st image of each subject
+        for subject in project.media.list_subjects()
+    )
+
+    pairs = combinations(labels, 2)
+
+    return list(pairs)
 
 
 def run(project: Project) -> None:
-    labels = sorted(
-        (subject.subject_id, image.image_id)
-        for subject in project.media.list_subjects()
-        if not SUBJECT_IDS or subject.subject_id in SUBJECT_IDS
-        for image in subject.images
-    )
-    pairs = list(combinations(labels, 2))
+    photos = {}
+    pairs = get_pairs(project)
 
-    if MAX_PAIRS is not None:
-        pairs = pairs[:MAX_PAIRS]
-
-    print(f"Visual spot audit: {len(labels)} photos, {len(pairs)} pairs")
     encoder = create_encoder()
-    photos: dict[Label, Photo] = {}
 
     for first, second in pairs:
         for label in (first, second):
