@@ -24,6 +24,7 @@ import numpy as np
 
 from matplotlib.patches import ConnectionPatch
 from matplotlib.widgets import CheckButtons
+from scipy.interpolate import RBFInterpolator
 from scipy.spatial.distance import cdist
 
 import torch  # pyright: ignore[reportMissingImports]
@@ -45,6 +46,11 @@ DEBUG_RECONSTRUCTION = True
 RECONSTRUCTION_HULL_MARGIN = 1.5
 RECONSTRUCTION_SPOT_RADIUS = 0.18
 RECONSTRUCTION_OVERLAY_ALPHA = 0.55
+TPS_ANCHORS = 12
+TPS_SMOOTHING = 1.0
+TPS_INFLUENCE_RADIUS = 3.0
+TPS_GRID_STEP = 8
+TPS_MAX_DISPLACEMENT = 1.5
 
 PATCH_SCALE = 2.0
 PATCH_SIZE = 128
@@ -543,12 +549,140 @@ def draw_debug(
     plt.close(figure)
 
 
+
+def tps_correction(
+    points: np.ndarray,
+    anchors: np.ndarray,
+    interpolator: RBFInterpolator,
+    source_spacing: float,
+    target_spacing: float,
+) -> np.ndarray:
+    normalized = points / target_spacing
+    residual = interpolator(normalized) * source_spacing
+    distance = cdist(points, anchors).min(axis=1) / target_spacing
+    fade = np.exp(-0.5 * (distance / TPS_INFLUENCE_RADIUS) ** 2)
+    residual *= fade[:, None]
+    norms = np.linalg.norm(residual, axis=1)
+    maximum = TPS_MAX_DISPLACEMENT * source_spacing
+    residual *= (np.minimum(norms, maximum) / np.maximum(norms, 1e-6))[:, None]
+    return residual
+
+
+def tps_reconstruction(
+    source: Photo,
+    target: Photo,
+    alignment: Alignment,
+    binary: np.ndarray,
+    region: np.ndarray,
+    truth: dict[int, int],
+) -> tuple[np.ndarray, np.ndarray] | None:
+    if len(alignment.pairs) < TPS_ANCHORS + 3:
+        return None
+
+    try:
+        inverse = np.linalg.inv(alignment.matrix)
+    except np.linalg.LinAlgError:
+        return None
+
+    ranked = sorted(
+        zip(alignment.pairs, alignment.errors, strict=True),
+        key=lambda pair: pair[1],
+    )[: max(TPS_ANCHORS * 3, 30)]
+    chosen = [ranked[0]]
+
+    while len(chosen) < TPS_ANCHORS:
+        remaining = [item for item in ranked if item not in chosen]
+        chosen_points = target.points[[pair[0][1] for pair in chosen]]
+        selected = max(
+            remaining,
+            key=lambda item: (
+                cdist(target.points[[item[0][1]]], chosen_points).min() / target.spacing
+                - 0.2 * item[1] / target.spacing
+            ),
+        )
+        chosen.append(selected)
+
+    source_indices = np.array([item[0][0] for item in chosen], dtype=int)
+    target_indices = np.array([item[0][1] for item in chosen], dtype=int)
+    anchors = target.points[target_indices]
+    source_positions = source.points[source_indices]
+    baseline = project(anchors, inverse)
+    residuals = (source_positions - baseline) / source.spacing
+
+    try:
+        interpolator = RBFInterpolator(
+            anchors / target.spacing,
+            residuals,
+            kernel="thin_plate_spline",
+            smoothing=TPS_SMOOTHING,
+        )
+    except (ValueError, np.linalg.LinAlgError):
+        return None
+
+    def assess(pairs: list[tuple[int, int]], label: str) -> None:
+        if not pairs:
+            return
+
+        a, b = zip(*pairs, strict=True)
+        source_coords = source.points[list(a)]
+        target_coords = target.points[list(b)]
+        original = project(target_coords, inverse)
+        corrected = original + tps_correction(
+            target_coords, anchors, interpolator, source.spacing, target.spacing
+        )
+        before = float(np.median(np.linalg.norm(original - source_coords, axis=1)))
+        after = float(np.median(np.linalg.norm(corrected - source_coords, axis=1)))
+        print(f"  TPS {label} ({len(pairs)}): global={before:.1f}px, TPS={after:.1f}px")
+
+    heldout = [pair for pair in alignment.pairs if pair[0] not in set(source_indices)]
+    assess(heldout, "held-out automatic links (not independent identity evidence)")
+    verified = [(i, j) for i, j in truth.items() if i not in set(source_indices)]
+    assess(verified, "held-out manual links")
+
+    target_height, target_width = target.image.shape[:2]
+    small_x, small_y = np.meshgrid(
+        np.arange(0, target_width, TPS_GRID_STEP, dtype=np.float32),
+        np.arange(0, target_height, TPS_GRID_STEP, dtype=np.float32),
+    )
+    samples = np.column_stack((small_x.ravel(), small_y.ravel()))
+    correction = tps_correction(
+        samples, anchors, interpolator, source.spacing, target.spacing
+    ).reshape(*small_x.shape, 2)
+
+    height, width = target_height, target_width
+    shift_x = cv.resize(correction[:, :, 0].astype(np.float32), (width, height))
+    shift_y = cv.resize(correction[:, :, 1].astype(np.float32), (width, height))
+
+    y, x = np.indices((height, width), dtype=np.float32)
+    map_x = inverse[0, 0] * x + inverse[0, 1] * y + inverse[0, 2] + shift_x
+    map_y = inverse[1, 0] * x + inverse[1, 1] * y + inverse[1, 2] + shift_y
+
+    warped_mask = cv.remap(
+        binary,
+        map_x.astype(np.float32),
+        map_y.astype(np.float32),
+        interpolation=cv.INTER_NEAREST,
+        borderMode=cv.BORDER_CONSTANT,
+        borderValue=0,
+    )
+    warped_region = cv.remap(
+        region,
+        map_x.astype(np.float32),
+        map_y.astype(np.float32),
+        interpolation=cv.INTER_NEAREST,
+        borderMode=cv.BORDER_CONSTANT,
+        borderValue=0,
+    )
+    return warped_mask, warped_region
+
+
 def draw_reconstruction(
     first_label: Label,
     second_label: Label,
     source: Photo,
     target: Photo,
     alignment: Alignment,
+    truth: dict[int, int],
 ) -> None:
     height, width = source.image.shape[:2]
     margin = max(8, round(RECONSTRUCTION_HULL_MARGIN * source.spacing))
@@ -582,6 +716,7 @@ def draw_reconstruction(
         borderValue=0,
     )
 
+    nonrigid = tps_reconstruction(source, target, alignment, binary, region, truth)
     figure, axes = plt.subplots(2, 2, figsize=(15, 11))
 
     axes[0, 0].imshow(cv.cvtColor(source.image, cv.COLOR_BGR2RGB))
@@ -590,8 +725,10 @@ def draw_reconstruction(
     axes[0, 1].imshow(binary, cmap="gray", vmin=0, vmax=255, interpolation="nearest")
     axes[0, 1].set_title("Source binary mask (before transform)")
 
-    axes[1, 0].imshow(warped_mask, cmap="gray", vmin=0, vmax=255, interpolation="nearest")
-    axes[1, 0].set_title("Source binary mask after selected transform")
+    mask_artist = axes[1, 0].imshow(
+        warped_mask, cmap="gray", vmin=0, vmax=255, interpolation="nearest"
+    )
+    axes[1, 0].set_title("Source binary mask: global alignment")
 
     axes[1, 1].imshow(cv.cvtColor(target.image, cv.COLOR_BGR2RGB))
     overlay_artist = axes[1, 1].imshow(
@@ -607,14 +744,34 @@ def draw_reconstruction(
     for axis in axes.flat:
         axis.set_axis_off()
 
-    check_axis = figure.add_axes((0.64, 0.025, 0.30, 0.045))
-    check = CheckButtons(check_axis, ["Show mask on target"], [True])
+    labels = ["Show mask on target"]
+    checked = [True]
 
-    def toggle_overlay(_label: str | None) -> None:
-        overlay_artist.set_visible(not overlay_artist.get_visible())
+    if nonrigid is not None:
+        labels.append("Use local TPS deformation")
+        checked.append(False)
+
+    check_axis = figure.add_axes((0.64, 0.015, 0.32, 0.080))
+    check = CheckButtons(check_axis, labels, checked)
+
+    def update_view(_label: str | None) -> None:
+        status = check.get_status()
+        use_tps = nonrigid is not None and len(status) > 1 and status[1]
+        shown_mask, shown_region = nonrigid if use_tps and nonrigid is not None else (
+            warped_mask, warped_region
+        )
+        mask_artist.set_data(shown_mask)
+        overlay_artist.set_data(shown_mask)
+        overlay_artist.set_alpha(
+            RECONSTRUCTION_OVERLAY_ALPHA * (shown_region > 0)
+        )
+        overlay_artist.set_visible(status[0])
+        axes[1, 0].set_title(
+            "Source binary mask: local TPS" if use_tps else "Source binary mask: global"
+        )
         figure.canvas.draw_idle()
 
-    check.on_clicked(toggle_overlay)
+    check.on_clicked(update_view)
 
     figure.suptitle(
         f"Selected transform ({len(alignment.pairs)} tentative pairs) | "
@@ -709,7 +866,7 @@ def draw_pair(
     draw_debug(first_label, second_label, source, target, result, truth)
 
     if DEBUG_RECONSTRUCTION:
-        draw_reconstruction(first_label, second_label, source, target, chosen)
+        draw_reconstruction(first_label, second_label, source, target, chosen, truth)
 
 
 def get_pairs(project: Project) -> list[tuple[Label, Label]]:
