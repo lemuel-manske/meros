@@ -2,7 +2,7 @@
 Visual audit of proposed Goliath grouper spot correspondences.
 
 A match is only a geometric/visual proposal. Draw a cyan connection only when
-nearby annotated spots also preserve their relative geometry. Show inconsistent
+other proposed spot links preserve their relative geometry. Show inconsistent
 proposals as magenta crosses and unassessable proposals as orange circles.
 
 Local support is diagnostic, not proof of identity. Sparse annotations,
@@ -40,10 +40,10 @@ MIN_SPOTS = 4
 
 NEIGHBOR_RADIUS = 0.40
 NEIGHBOR_TOLERANCE = 0.045
-NEAREST_NEIGHBORS = 6
+NEAREST_NEIGHBORS = 4
 MIN_NEIGHBORS = 2
 MIN_LOCAL_MATCHES = 2
-MIN_LOCAL_AGREEMENT = 0.70
+MIN_LOCAL_AGREEMENT = 0.60
 MAX_LINES = 20
 
 Label = tuple[str, int]
