@@ -1,10 +1,10 @@
 """
 Visual audit of proposed Goliath grouper spot correspondences.
 
-The original matcher proposes a coarse anatomical transform. A local
-constellation independently compares ALL annotated neighboring spots and
-tests alternative center assignments. Only distinctive, one-to-one matches
-are connected; ambiguous and unsupported proposals remain visibly separate.
+The original matcher is retained as a baseline. Local spot constellations
+now generate candidates beyond its narrow global alignment gate. Independent
+neighborhood votes select one-to-one links; ambiguous and unsupported links
+remain visible for human review.
 
 Local support is diagnostic, not proof of identity. Sparse annotations,
 viewpoint changes and longitudinal spot variation can cause false rejections.
@@ -43,11 +43,16 @@ RANSAC_RADIUS = 0.06
 MIN_SPOTS = 4
 
 NEIGHBOR_RADIUS = 0.40
-NEIGHBOR_TOLERANCE = 0.045
+NEIGHBOR_TOLERANCE = 0.08
+NEIGHBOR_LIMIT = 12
 MIN_NEIGHBORS = 2
-MIN_LOCAL_MATCHES = 2
-MIN_LOCAL_AGREEMENT = 0.60
-MIN_ALTERNATIVE_MARGIN = 0.10
+MIN_SEED_AGREEMENT = 0.40
+SEARCH_RADIUS = 0.65
+SHAPE_NEIGHBORS = 5
+SHAPE_CANDIDATES = 10
+VISUAL_CANDIDATES = 5
+MIN_PAIR_VOTES = 0.80
+MIN_ALTERNATIVE_MARGIN = 0.15
 TRUTH_POINT_TOLERANCE = 0.06
 MAX_LINES = 20
 
@@ -78,6 +83,7 @@ class SpotMatch:
 class LocalSupport:
     agreement: float
     neighbors_matched: int
+    links: tuple[tuple[int, int], ...]
 
 
 @dataclass(frozen=True)
@@ -87,6 +93,8 @@ class ConstellationResult:
     ambiguous: tuple[tuple[int, int], ...]
     insufficient: tuple[tuple[int, int], ...]
     corrected: int
+    new_sources: int
+    seeds: int
 
 
 def create_encoder():
@@ -227,21 +235,24 @@ def local_support(
     j: int,
 ) -> LocalSupport | None:
     """
-    Compare two complete neighboring constellations, independently of links.
+    Match the neighboring constellations after independently centering them.
 
-    The center is fixed, and other annotated spots can be assigned only once.
-    Neither the neighborhood membership nor the assignment uses prior matches.
+    A source/target center is only a hypothesis. One-to-one assignments of
+    nearby spots supply new pair proposals rather than just validating the
+    original global associations.
     """
     radius = NEIGHBOR_RADIUS * target.scale
     tolerance = NEIGHBOR_TOLERANCE * target.scale
-    first = np.flatnonzero(
-        (np.linalg.norm(projected - projected[i], axis=1) <= radius)
-        & (np.arange(len(projected)) != i)
-    )
-    second = np.flatnonzero(
-        (np.linalg.norm(target.points - target.points[j], axis=1) <= radius)
-        & (np.arange(len(target.points)) != j)
-    )
+    first_distances = np.linalg.norm(projected - projected[i], axis=1)
+    second_distances = np.linalg.norm(target.points - target.points[j], axis=1)
+    first = [
+        k for k in np.argsort(first_distances)
+        if k != i and first_distances[k] <= radius
+    ][:NEIGHBOR_LIMIT]
+    second = [
+        k for k in np.argsort(second_distances)
+        if k != j and second_distances[k] <= radius
+    ][:NEIGHBOR_LIMIT]
 
     if min(len(first), len(second)) < MIN_NEIGHBORS:
         return None
@@ -250,18 +261,33 @@ def local_support(
     second_vectors = target.points[second] - target.points[j]
     distances = cdist(first_vectors, second_vectors)
     n, m = distances.shape
-    cost = np.full((n + m, n + m), 3.0)
-    cost[:n, :m] = np.where(distances <= tolerance, np.minimum(distances / tolerance, 0.99), 3.0)
-    cost[np.arange(n), m + np.arange(n)] = 0.5
-    cost[n + np.arange(m), np.arange(m)] = 0.5
-    cost[n:, m:] = 0.0
-    rows, cols = linear_sum_assignment(cost)
-    hits = sum(
-        1
+    costs = np.full((n + m, n + m), 3.0)
+    costs[:n, :m] = np.where(
+        distances <= tolerance,
+        np.minimum(distances / tolerance, 0.99),
+        3.0,
+    )
+    costs[np.arange(n), m + np.arange(n)] = 0.5
+    costs[n + np.arange(m), np.arange(m)] = 0.5
+    costs[n:, m:] = 0.0
+    rows, cols = linear_sum_assignment(costs)
+    links = tuple(
+        (int(first[a]), int(second[b]))
         for a, b in zip(rows, cols, strict=True)
         if a < n and b < m and distances[a, b] <= tolerance
     )
-    return LocalSupport(2 * hits / (n + m), hits)
+
+    return LocalSupport(2 * len(links) / (n + m), len(links), links)
+
+
+def radial_fingerprints(points: np.ndarray, scale: float) -> np.ndarray:
+    """
+    Summarize neighboring spot distances without using visual descriptors.
+    """
+    distances = cdist(points, points) / scale
+    np.fill_diagonal(distances, np.inf)
+    nearest = np.sort(distances, axis=1)[:, :SHAPE_NEIGHBORS]
+    return np.minimum(nearest, NEIGHBOR_RADIUS)
 
 
 def compare_constellations(
@@ -270,82 +296,106 @@ def compare_constellations(
     coarse: SpotMatch,
 ) -> ConstellationResult:
     """
-    Jointly select center associations, rejecting near-equivalent alternatives.
+    Recover local associations outside the original match radius.
 
-    Global alignment restricts candidates, but every neighborhood is rebuilt
-    from all annotated spots. Mutual best-center preference and the runner-up
-    margin prevent an arbitrary center swap within a similar constellation.
+    Shortlist anchor hypotheses by local radial shape AND by visual patches.
+    Their neighbors vote for one-to-one correspondences. A unique global
+    assignment is proposed only when both endpoints prefer it sufficiently.
+    No manually verified links participate in the search.
     """
-    projected = project(source.points, coarse.matrix)
-    geometry = cdist(projected, target.points)
+    projected = project(source.points, initial_transform(source, target))
     appearance = cdist(source.features, target.features, metric="cosine")
-    # Consider geometric alternatives even if their patch appearance differs.
-    # Otherwise an incorrect center may appear unique only because its rivals
-    # were removed by the original visual descriptor filter.
-    eligible = geometry <= GEOMETRIC_RADIUS * target.scale
-    evidence: dict[tuple[int, int], LocalSupport] = {}
+    geometry = cdist(projected, target.points) / target.scale
+    first_shapes = radial_fingerprints(projected, target.scale)
+    second_shapes = radial_fingerprints(target.points, target.scale)
+    shape_distance = cdist(first_shapes, second_shapes)
+    shape_distance += 0.10 * geometry
+    old_links = set(coarse.pairs)
+    votes = np.zeros_like(appearance)
+    seed_count = 0
 
-    for i, j in np.argwhere(eligible):
-        score = local_support(source, target, projected, int(i), int(j))
+    for i in range(len(source.points)):
+        eligible = np.flatnonzero(geometry[i] <= SEARCH_RADIUS)
+        candidates: set[int] = {
+            j for a, j in old_links if a == i
+        }
 
-        if score is not None:
-            evidence[(int(i), int(j))] = score
+        if len(eligible):
+            candidates.update(
+                eligible[np.argsort(shape_distance[i, eligible])[:SHAPE_CANDIDATES]]
+            )
+            candidates.update(
+                eligible[np.argsort(appearance[i, eligible])[:VISUAL_CANDIDATES]]
+            )
 
-    def choices(index: int, *, source_side: bool) -> list[tuple[tuple[int, int], float]]:
-        items = [
-            (pair, result.agreement)
-            for pair, result in evidence.items()
-            if pair[0 if source_side else 1] == index
-        ]
-        return sorted(items, key=lambda item: -item[1])
+        for j in candidates:
+            support = local_support(source, target, projected, i, int(j))
 
-    by_source = {i: choices(i, source_side=True) for i in range(len(source.points))}
-    by_target = {j: choices(j, source_side=False) for j in range(len(target.points))}
-    accepted = []
+            if support is None or support.neighbors_matched < MIN_NEIGHBORS:
+                continue
 
-    for pair, result in evidence.items():
-        if appearance[pair] > MAX_VISUAL_DISTANCE:
-            continue
+            if support.agreement < MIN_SEED_AGREEMENT:
+                continue
 
-        if result.neighbors_matched < MIN_LOCAL_MATCHES:
-            continue
+            seed_count += 1
+            weight = support.agreement
+            votes[i, j] += weight
 
-        if result.agreement < MIN_LOCAL_AGREEMENT:
-            continue
+            for first, second in support.links:
+                votes[first, second] += weight
 
-        first_rank = by_source[pair[0]]
-        second_rank = by_target[pair[1]]
+    # Appearance is a secondary preference, never a hard gate for a
+    # correspondence supported by multiple neighboring constellations.
+    votes *= np.clip(1.0 - 0.3 * appearance, 0.50, 1.0)
+    eligible = votes >= MIN_PAIR_VOTES
+    n, m = votes.shape
+    costs = np.zeros((n + m, n + m))
+    costs[:n, :m] = np.where(eligible, -votes, 1.0)
+    rows, cols = linear_sum_assignment(costs)
+    proposed = [
+        (int(i), int(j))
+        for i, j in zip(rows, cols, strict=True)
+        if i < n and j < m and eligible[i, j]
+    ]
+    accepted, ambiguous = [], []
 
-        if first_rank[0][0] != pair or second_rank[0][0] != pair:
-            continue
+    for i, j in proposed:
+        own = votes[i, j]
+        source_second = max(
+            (votes[i, k] for k in range(m) if k != j), default=0.0
+        )
+        target_second = max(
+            (votes[k, j] for k in range(n) if k != i), default=0.0
+        )
 
-        first_margin = result.agreement - first_rank[1][1] if len(first_rank) > 1 else 1.0
-        second_margin = result.agreement - second_rank[1][1] if len(second_rank) > 1 else 1.0
-
-        if min(first_margin, second_margin) >= MIN_ALTERNATIVE_MARGIN:
-            accepted.append(pair)
+        if own - max(source_second, target_second) >= MIN_ALTERNATIVE_MARGIN * own:
+            accepted.append((i, j))
+        else:
+            ambiguous.append((i, j))
 
     accepted.sort()
-    accepted_by_source = {i: j for i, j in accepted}
-    rejected, ambiguous, insufficient = [], [], []
+    chosen = {i: j for i, j in accepted}
+    proposed_sources = {i for i, _ in proposed}
+    rejected, insufficient = [], []
 
     for i, j in coarse.pairs:
-        if i in accepted_by_source:
+        if i in chosen or i in proposed_sources:
             continue
 
-        options = by_source[i]
-
-        if not options:
+        if np.max(votes[i]) < MIN_PAIR_VOTES:
             insufficient.append((i, j))
-        elif options[0][1] >= MIN_LOCAL_AGREEMENT:
-            ambiguous.append((i, j))
         else:
             rejected.append((i, j))
 
-    corrected = sum(i in accepted_by_source and accepted_by_source[i] != j for i, j in coarse.pairs)
+    corrected = sum(
+        i in chosen and chosen[i] != j for i, j in coarse.pairs
+    )
+    old_sources = {i for i, _ in coarse.pairs}
+    new_sources = sum(i not in old_sources for i in chosen)
 
     return ConstellationResult(
-        tuple(accepted), tuple(rejected), tuple(ambiguous), tuple(insufficient), corrected
+        tuple(accepted), tuple(rejected), tuple(ambiguous),
+        tuple(insufficient), corrected, new_sources, seed_count,
     )
 
 
@@ -480,6 +530,7 @@ def draw_pair(
     print(
         f"{pair_name}: original={len(coarse.pairs)}, "
         f"accepted={len(result.accepted)}, corrected={result.corrected}, "
+        f"new-sources={result.new_sources}, seeds={result.seeds}, "
         f"rejected={len(result.rejected)}, ambiguous={len(result.ambiguous)}, "
         f"insufficient={len(result.insufficient)}"
     )
