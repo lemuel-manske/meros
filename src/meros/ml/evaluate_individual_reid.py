@@ -23,6 +23,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from matplotlib.patches import ConnectionPatch
+from matplotlib.widgets import CheckButtons
 from scipy.spatial.distance import cdist
 
 import torch  # pyright: ignore[reportMissingImports]
@@ -43,6 +44,7 @@ COLOR_SEED = "#ee995f"
 DEBUG_RECONSTRUCTION = True
 RECONSTRUCTION_HULL_MARGIN = 1.5
 RECONSTRUCTION_SPOT_RADIUS = 0.18
+RECONSTRUCTION_OVERLAY_ALPHA = 0.55
 
 PATCH_SCALE = 2.0
 PATCH_SIZE = 128
@@ -553,9 +555,11 @@ def draw_reconstruction(
     radius = max(2, round(RECONSTRUCTION_SPOT_RADIUS * source.spacing))
 
     hull = cv.convexHull(np.rint(source.points).astype(np.int32))
-    binary = np.zeros((height, width), dtype=np.uint8)
-    cv.fillConvexPoly(binary, hull, 255)
-    cv.polylines(binary, [hull], True, 255, thickness=2 * margin)
+    region = np.zeros((height, width), dtype=np.uint8)
+    cv.fillConvexPoly(region, hull, 255)
+    cv.polylines(region, [hull], True, 255, thickness=2 * margin)
+
+    binary = region.copy()
 
     for x, y in source.points:
         cv.circle(binary, (round(x), round(y)), radius, 0, thickness=-1)
@@ -569,30 +573,63 @@ def draw_reconstruction(
         borderMode=cv.BORDER_CONSTANT,
         borderValue=0,
     )
+    warped_region = cv.warpPerspective(
+        region,
+        alignment.matrix,
+        (target_width, target_height),
+        flags=cv.INTER_NEAREST,
+        borderMode=cv.BORDER_CONSTANT,
+        borderValue=0,
+    )
 
-    figure, axes = plt.subplots(1, 2, figsize=(17, 8))
-    axes[0].imshow(cv.cvtColor(source.image, cv.COLOR_BGR2RGB))
-    axes[0].set_title(f"Source: {first_label[0]}/{first_label[1]}")
+    figure, axes = plt.subplots(2, 2, figsize=(15, 11))
 
-    axes[1].imshow(warped_mask, cmap="gray", vmin=0, vmax=255, interpolation="nearest")
-    axes[1].set_title(f"Binary spot mask after alignment: {second_label[0]}/{second_label[1]}")
+    axes[0, 0].imshow(cv.cvtColor(source.image, cv.COLOR_BGR2RGB))
+    axes[0, 0].set_title(f"Original source: {first_label[0]}/{first_label[1]}")
 
-    for axis in axes:
+    axes[0, 1].imshow(binary, cmap="gray", vmin=0, vmax=255, interpolation="nearest")
+    axes[0, 1].set_title("Source binary mask (before transform)")
+
+    axes[1, 0].imshow(
+        warped_mask, cmap="gray", vmin=0, vmax=255, interpolation="nearest"
+    )
+    axes[1, 0].set_title("Source binary mask after selected transform")
+
+    axes[1, 1].imshow(cv.cvtColor(target.image, cv.COLOR_BGR2RGB))
+    overlay_artist = axes[1, 1].imshow(
+        warped_mask,
+        cmap="gray",
+        vmin=0,
+        vmax=255,
+        interpolation="nearest",
+        alpha=RECONSTRUCTION_OVERLAY_ALPHA * (warped_region > 0),
+    )
+    axes[1, 1].set_title(f"Target: {second_label[0]}/{second_label[1]} + mask")
+
+    for axis in axes.flat:
         axis.set_axis_off()
 
+    check_axis = figure.add_axes((0.64, 0.025, 0.30, 0.045))
+    check = CheckButtons(check_axis, ["Show mask on target"], [True])
+
+    def toggle_overlay(_label: str) -> None:
+        overlay_artist.set_visible(not overlay_artist.get_visible())
+        figure.canvas.draw_idle()
+
+    check.on_clicked(toggle_overlay)
+
     figure.suptitle(
-        f"Selected alignment: {len(alignment.pairs)} tentative pairs | "
-        "white = approximate spot region, black holes = source spots"
+        f"Selected transform ({len(alignment.pairs)} tentative pairs) | "
+        "white = approximate region, black holes = source spots"
     )
     figure.text(
-        0.5,
-        0.025,
-        "The mask uses annotated spot centers and an expanded hull, not image segmentation. "
-        "The same selected transform is applied to the entire mask.",
-        ha="center",
+        0.04,
+        0.035,
+        "Binary masks use annotated spot centers and an expanded hull, not fish segmentation.",
+        ha="left",
         fontsize=9,
     )
-    figure.tight_layout(rect=(0, 0.05, 1, 0.93))
+    figure.subplots_adjust(left=0.02, right=0.98, top=0.91, bottom=0.11, hspace=0.12)
     plt.show(block=True)
     plt.close(figure)
 
