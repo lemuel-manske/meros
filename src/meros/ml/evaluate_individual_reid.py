@@ -170,9 +170,7 @@ def match_spots(source: Photo, target: Photo) -> SpotMatch:
         distances = cdist(project(source.points, transform), target.points)
         allowed = (visual <= MAX_VISUAL_DISTANCE) & (distances <= radius)
         costs = visual / MAX_VISUAL_DISTANCE + GEOMETRIC_WEIGHT * distances / radius
-        positions = sorted(
-            np.argwhere(allowed), key=lambda ij: costs[ij[0], ij[1]]
-        )
+        positions = sorted(np.argwhere(allowed), key=lambda ij: costs[ij[0], ij[1]])
         taken_source: set[int] = set()
         taken_target: set[int] = set()
         result = []
@@ -220,7 +218,8 @@ def local_matches(distances: np.ndarray, tolerance: float) -> int:
     costs[n:, m:] = 0.0
     rows, cols = linear_sum_assignment(costs)
     return sum(
-        1 for i, j in zip(rows, cols, strict=True)
+        1
+        for i, j in zip(rows, cols, strict=True)
         if i < n and j < m and distances[i, j] <= tolerance
     )
 
@@ -249,9 +248,9 @@ def neighborhood_support(
 
     def interior(points: np.ndarray) -> set[int]:
         return {
-            k for k, point in enumerate(points)
-            if cv.pointPolygonTest(intersection, (float(point[0]), float(point[1])), True)
-            >= border
+            k
+            for k, point in enumerate(points)
+            if cv.pointPolygonTest(intersection, (float(point[0]), float(point[1])), True) >= border
         }
 
     source_shared = interior(predicted)
@@ -266,12 +265,14 @@ def neighborhood_support(
             continue
 
         first = [
-            k for k in source_shared if k != i
-            and np.linalg.norm(predicted[k] - predicted[i]) <= radius
+            k
+            for k in source_shared
+            if k != i and np.linalg.norm(predicted[k] - predicted[i]) <= radius
         ]
         second = [
-            k for k in target_shared if k != j
-            and np.linalg.norm(target.points[k] - target.points[j]) <= radius
+            k
+            for k in target_shared
+            if k != j and np.linalg.norm(target.points[k] - target.points[j]) <= radius
         ]
 
         if min(len(first), len(second)) < MIN_NEIGHBORS:
@@ -301,7 +302,8 @@ def draw_pair(
     match = match_spots(source, target)
     support = neighborhood_support(source, target, match)
     accepted = [
-        k for k, info in enumerate(support)
+        k
+        for k, info in enumerate(support)
         if info is not None
         and info.neighbors_matched >= MIN_LOCAL_MATCHES
         and info.agreement >= MIN_LOCAL_AGREEMENT
@@ -310,9 +312,7 @@ def draw_pair(
     unknown = [k for k, info in enumerate(support) if info is None]
     figure, axes = plt.subplots(1, 2, figsize=(17, 8))
 
-    for axis, label, photo in zip(
-        axes, (first_label, second_label), (source, target), strict=True
-    ):
+    for axis, label, photo in zip(axes, (first_label, second_label), (source, target), strict=True):
         axis.imshow(cv.cvtColor(photo.image, cv.COLOR_BGR2RGB))
         axis.scatter(photo.points[:, 0], photo.points[:, 1], s=13, c="#ffcc59")
         axis.scatter(*photo.eye, s=115, c="white", marker="+", linewidths=2)
@@ -332,10 +332,14 @@ def draw_pair(
             indices = [match.pairs[k][side] for k in positions]
             points = photo.points[indices]
             axis.scatter(
-                points[:, 0], points[:, 1], s=size, marker=marker,
+                points[:, 0],
+                points[:, 1],
+                s=size,
+                marker=marker,
                 facecolors="none" if marker == "o" else color,
                 edgecolors=color if marker == "o" else "none",
-                linewidths=1.6, zorder=5,
+                linewidths=1.6,
+                zorder=5,
             )
 
     strength = [info.agreement if info is not None else -1.0 for info in support]
@@ -344,13 +348,19 @@ def draw_pair(
     for k in strongest:
         i, j = match.pairs[k]
         a, b = source.points[i], target.points[j]
-        figure.add_artist(ConnectionPatch(
-            xyA=(float(a[0]), float(a[1])),
-            xyB=(float(b[0]), float(b[1])),
-            coordsA="data", coordsB="data",
-            axesA=axes[0], axesB=axes[1],
-            color="#39f5e8", alpha=0.55, linewidth=1,
-        ))
+        figure.add_artist(
+            ConnectionPatch(
+                xyA=(float(a[0]), float(a[1])),
+                xyB=(float(b[0]), float(b[1])),
+                coordsA="data",
+                coordsB="data",
+                axesA=axes[0],
+                axesB=axes[1],
+                color="#39f5e8",
+                alpha=0.55,
+                linewidth=1,
+            )
+        )
 
     values = [info.agreement for info in support if info is not None]
     median = f"{np.median(values):.2f}" if values else "n/a"
@@ -362,10 +372,12 @@ def draw_pair(
     )
     figure.suptitle(f"{pair_name}  |  local agreement={median}  |  {len(accepted)} consistent")
     figure.text(
-        0.5, 0.035,
+        0.5,
+        0.035,
         "Cyan: supported proposals  |  Pink X: inconsistent neighborhood  |  "
         "Orange ring: insufficient evidence  |  Yellow: annotated spots",
-        ha="center", fontsize=9,
+        ha="center",
+        fontsize=9,
     )
     figure.subplots_adjust(left=0.02, right=0.98, top=0.90, bottom=0.10, wspace=0.04)
     plt.show(block=True)
