@@ -866,7 +866,7 @@ def draw_pair(
         draw_reconstruction(first_label, second_label, source, target, chosen, truth)
 
 
-def get_pairs(project: Project) -> list[tuple[Label, Label]]:
+def get_different_individuals_pairs(project: Project) -> list[tuple[Label, Label]]:
     labels = sorted(
         (subject.subject_id, 0)  # pick just the 1st image of each subject
         for subject in project.media.list_subjects()
@@ -877,9 +877,21 @@ def get_pairs(project: Project) -> list[tuple[Label, Label]]:
     return list(pairs)
 
 
+def get_same_individual_pairs(project: Project) -> list[tuple[Label, Label]]:
+    pairs = []
+
+    for subject in project.media.list_subjects():
+        images = sorted((subject.subject_id, index) for index in range(len(subject.images)))
+
+        for first, second in combinations(images, 2):
+            pairs.append((first, second))
+
+    return pairs
+
+
 def run(project: Project) -> None:
     photos = {}
-    pairs = get_pairs(project)
+    pairs = get_same_individual_pairs(project)
 
     encoder = create_encoder()
 
