@@ -1,9 +1,10 @@
 """
 Visual audit of proposed Goliath grouper spot correspondences.
 
-A match is only a geometric/visual proposal. Draw a cyan connection only when
-other proposed spot links preserve their relative geometry. Show inconsistent
-proposals as magenta crosses and unassessable proposals as orange circles.
+The original matcher proposes a coarse anatomical transform. A local
+constellation independently compares ALL annotated neighboring spots and
+tests alternative center assignments. Only distinctive, one-to-one matches
+are connected; ambiguous and unsupported proposals remain visibly separate.
 
 Local support is diagnostic, not proof of identity. Sparse annotations,
 viewpoint changes and longitudinal spot variation can cause false rejections.
@@ -18,6 +19,7 @@ import cv2 as cv
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import ConnectionPatch
+from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 
 from meros.project import Project
@@ -28,6 +30,8 @@ PAIRS = (
     (("rafael", 3), ("rogerio", 1)),
     (("rafael", 3), ("rafael", 2)),
     (("rogerio", 1), ("rogerio", 4)),
+    (("rogerio", 0), ("rogerio", 1)),
+    (("rogerio", 11), ("rogerio", 12)),
 )
 
 PATCH_SCALE = 0.22
@@ -40,10 +44,11 @@ MIN_SPOTS = 4
 
 NEIGHBOR_RADIUS = 0.40
 NEIGHBOR_TOLERANCE = 0.045
-NEAREST_NEIGHBORS = 4
 MIN_NEIGHBORS = 2
 MIN_LOCAL_MATCHES = 2
 MIN_LOCAL_AGREEMENT = 0.60
+MIN_ALTERNATIVE_MARGIN = 0.10
+TRUTH_POINT_TOLERANCE = 0.06
 MAX_LINES = 20
 
 Label = tuple[str, int]
@@ -73,6 +78,15 @@ class SpotMatch:
 class LocalSupport:
     agreement: float
     neighbors_matched: int
+
+
+@dataclass(frozen=True)
+class ConstellationResult:
+    accepted: tuple[tuple[int, int], ...]
+    rejected: tuple[tuple[int, int], ...]
+    ambiguous: tuple[tuple[int, int], ...]
+    insufficient: tuple[tuple[int, int], ...]
+    corrected: int
 
 
 def create_encoder():
@@ -205,153 +219,288 @@ def match_spots(source: Photo, target: Photo) -> SpotMatch:
     return SpotMatch(matrix, pairs, errors)
 
 
-def neighborhood_support(
+def local_support(
     source: Photo,
     target: Photo,
-    match: SpotMatch,
-) -> list[LocalSupport | None]:
+    projected: np.ndarray,
+    i: int,
+    j: int,
+) -> LocalSupport | None:
     """
-    Check whether each proposed spot link agrees with its linked neighbors.
+    Compare two complete neighboring constellations, independently of links.
 
-    Unlike free matching between local spot clouds, this preserves neighbor
-    identities: an edge (i -> j) can support another edge (k -> l) only if
-    both relative displacement vectors agree. A displaced link in a repeated
-    constellation therefore cannot borrow support by relabeling the neighbors.
-
-    Compare the union of the nearest matched neighbors on both photos so
-    that one-sided changes in local topology count against agreement.
+    The center is fixed, and other annotated spots can be assigned only once.
+    Neither the neighborhood membership nor the assignment uses prior matches.
     """
-    if not match.pairs:
-        return []
-
-    first, second = zip(*match.pairs, strict=True)
-    source_points = project(source.points, match.matrix)[list(first)]
-    target_points = target.points[list(second)]
     radius = NEIGHBOR_RADIUS * target.scale
     tolerance = NEIGHBOR_TOLERANCE * target.scale
-    output: list[LocalSupport | None] = []
+    first = np.flatnonzero(
+        (np.linalg.norm(projected - projected[i], axis=1) <= radius)
+        & (np.arange(len(projected)) != i)
+    )
+    second = np.flatnonzero(
+        (np.linalg.norm(target.points - target.points[j], axis=1) <= radius)
+        & (np.arange(len(target.points)) != j)
+    )
 
-    for index, (anchor_source, anchor_target) in enumerate(
-        zip(source_points, target_points, strict=True)
-    ):
-        source_vectors = source_points - anchor_source
-        target_vectors = target_points - anchor_target
-        source_distances = np.linalg.norm(source_vectors, axis=1)
-        target_distances = np.linalg.norm(target_vectors, axis=1)
+    if min(len(first), len(second)) < MIN_NEIGHBORS:
+        return None
 
-        neighbors = np.zeros(len(match.pairs), dtype=bool)
-        neighbors[np.argsort(source_distances)[1 : NEAREST_NEIGHBORS + 1]] = True
-        neighbors[np.argsort(target_distances)[1 : NEAREST_NEIGHBORS + 1]] = True
-        neighbors[index] = False
-        neighbors &= (source_distances <= radius) | (target_distances <= radius)
+    first_vectors = projected[first] - projected[i]
+    second_vectors = target.points[second] - target.points[j]
+    distances = cdist(first_vectors, second_vectors)
+    n, m = distances.shape
+    cost = np.full((n + m, n + m), 3.0)
+    cost[:n, :m] = np.where(
+        distances <= tolerance, np.minimum(distances / tolerance, 0.99), 3.0
+    )
+    cost[np.arange(n), m + np.arange(n)] = 0.5
+    cost[n + np.arange(m), np.arange(m)] = 0.5
+    cost[n:, m:] = 0.0
+    rows, cols = linear_sum_assignment(cost)
+    hits = sum(
+        1
+        for a, b in zip(rows, cols, strict=True)
+        if a < n and b < m and distances[a, b] <= tolerance
+    )
+    return LocalSupport(2 * hits / (n + m), hits)
 
-        count = int(neighbors.sum())
 
-        if count < MIN_NEIGHBORS:
-            output.append(None)
+def compare_constellations(
+    source: Photo,
+    target: Photo,
+    coarse: SpotMatch,
+) -> ConstellationResult:
+    """
+    Jointly select center associations, rejecting near-equivalent alternatives.
+
+    Global alignment restricts candidates, but every neighborhood is rebuilt
+    from all annotated spots. Mutual best-center preference and the runner-up
+    margin prevent an arbitrary center swap within a similar constellation.
+    """
+    projected = project(source.points, coarse.matrix)
+    geometry = cdist(projected, target.points)
+    appearance = cdist(source.features, target.features, metric="cosine")
+    eligible = (
+        (geometry <= GEOMETRIC_RADIUS * target.scale)
+        & (appearance <= MAX_VISUAL_DISTANCE)
+    )
+    evidence: dict[tuple[int, int], LocalSupport] = {}
+
+    for i, j in np.argwhere(eligible):
+        score = local_support(source, target, projected, int(i), int(j))
+
+        if score is not None:
+            evidence[(int(i), int(j))] = score
+
+    def choices(index: int, *, source_side: bool) -> list[tuple[tuple[int, int], float]]:
+        items = [
+            (pair, result.agreement)
+            for pair, result in evidence.items()
+            if pair[0 if source_side else 1] == index
+        ]
+        return sorted(items, key=lambda item: -item[1])
+
+    by_source = {i: choices(i, source_side=True) for i in range(len(source.points))}
+    by_target = {j: choices(j, source_side=False) for j in range(len(target.points))}
+    accepted = []
+
+    for pair, result in evidence.items():
+        if result.neighbors_matched < MIN_LOCAL_MATCHES:
             continue
 
-        displacement_error = np.linalg.norm(source_vectors - target_vectors, axis=1)
-        consistent = (
-            neighbors
-            & (source_distances <= radius)
-            & (target_distances <= radius)
-            & (displacement_error <= tolerance)
-        )
-        hits = int(consistent.sum())
-        output.append(LocalSupport(hits / count, hits))
+        if result.agreement < MIN_LOCAL_AGREEMENT:
+            continue
 
-    return output
+        first_rank = by_source[pair[0]]
+        second_rank = by_target[pair[1]]
+
+        if first_rank[0][0] != pair or second_rank[0][0] != pair:
+            continue
+
+        first_margin = (
+            result.agreement - first_rank[1][1] if len(first_rank) > 1 else 1.0
+        )
+        second_margin = (
+            result.agreement - second_rank[1][1] if len(second_rank) > 1 else 1.0
+        )
+
+        if min(first_margin, second_margin) >= MIN_ALTERNATIVE_MARGIN:
+            accepted.append(pair)
+
+    accepted.sort()
+    accepted_by_source = {i: j for i, j in accepted}
+    rejected, ambiguous, insufficient = [], [], []
+
+    for i, j in coarse.pairs:
+        if i in accepted_by_source:
+            continue
+
+        options = by_source[i]
+
+        if not options:
+            insufficient.append((i, j))
+        elif options[0][1] >= MIN_LOCAL_AGREEMENT:
+            ambiguous.append((i, j))
+        else:
+            rejected.append((i, j))
+
+    corrected = sum(
+        i in accepted_by_source and accepted_by_source[i] != j
+        for i, j in coarse.pairs
+    )
+
+    return ConstellationResult(
+        tuple(accepted), tuple(rejected), tuple(ambiguous),
+        tuple(insufficient), corrected
+    )
+
+
+def verified_pairs(
+    project: Project,
+    first: Label,
+    second: Label,
+    source: Photo,
+    target: Photo,
+) -> dict[int, int]:
+    """
+    Attach existing manually verified coordinate pairs to annotated spot IDs.
+
+    A missing or empty reference is never interpreted as negative evidence.
+    """
+    if first[0] != second[0]:
+        return {}
+
+    reverse = first[1] > second[1]
+    a, b = sorted((first[1], second[1]))
+    records = project.metadata.read_subject_spot_correspondences(first[0], a, b)
+    truth: dict[int, int] = {}
+    used_targets = set()
+
+    for record in records:
+        left = record["second"] if reverse else record["first"]
+        right = record["first"] if reverse else record["second"]
+        source_distances = np.linalg.norm(source.points - left, axis=1)
+        target_distances = np.linalg.norm(target.points - right, axis=1)
+        i, j = int(np.argmin(source_distances)), int(np.argmin(target_distances))
+
+        if source_distances[i] > TRUTH_POINT_TOLERANCE * source.scale:
+            continue
+
+        if target_distances[j] > TRUTH_POINT_TOLERANCE * target.scale:
+            continue
+
+        if i not in truth and j not in used_targets:
+            truth[i] = j
+            used_targets.add(j)
+
+    if records:
+        print(
+            f"  Verified correspondence labels: {len(truth)}/{len(records)} "
+            "mapped to spot annotations"
+        )
+
+    return truth
+
+
+def report_verified(
+    name: str,
+    pairs: tuple[tuple[int, int], ...],
+    truth: dict[int, int],
+) -> None:
+    """
+    Count confirmed links, wrong links on reviewed source spots and recall.
+
+    Predictions on unreviewed source spots cannot be classified as false.
+    """
+    proposed = dict(pairs)
+    correct = sum(proposed.get(i) == j for i, j in truth.items())
+    wrong = sum(i in truth and proposed[i] != truth[i] for i in proposed)
+    print(
+        f"  {name}: verified={correct}/{len(truth)}, "
+        f"wrong-on-verified-source={wrong}, "
+        f"unverified-predictions={len(proposed) - correct - wrong}"
+    )
 
 
 def draw_pair(
+    project: Project,
     first_label: Label,
     second_label: Label,
     source: Photo,
     target: Photo,
 ) -> None:
     """
-    Connect ONLY locally supported pairs. Mark the rest without linking.
+    Show jointly supported links, rejected links and ambiguous center choices.
     """
-    match = match_spots(source, target)
-    support = neighborhood_support(source, target, match)
-    accepted = [
-        k
-        for k, info in enumerate(support)
-        if info is not None
-        and info.neighbors_matched >= MIN_LOCAL_MATCHES
-        and info.agreement >= MIN_LOCAL_AGREEMENT
-    ]
-    rejected = [k for k, info in enumerate(support) if info is not None and k not in accepted]
-    unknown = [k for k, info in enumerate(support) if info is None]
+    coarse = match_spots(source, target)
+    result = compare_constellations(source, target, coarse)
     figure, axes = plt.subplots(1, 2, figsize=(17, 8))
 
-    for axis, label, photo in zip(axes, (first_label, second_label), (source, target), strict=True):
+    for axis, label, photo in zip(
+        axes, (first_label, second_label), (source, target), strict=True
+    ):
         axis.imshow(cv.cvtColor(photo.image, cv.COLOR_BGR2RGB))
-        axis.scatter(photo.points[:, 0], photo.points[:, 1], s=13, c="#ffcc59")
+        axis.scatter(photo.points[:, 0], photo.points[:, 1], s=12, c="#ffcc59")
         axis.scatter(*photo.eye, s=115, c="white", marker="+", linewidths=2)
         axis.scatter(*photo.mouth, s=55, c="white", marker="s", facecolors="none")
         axis.set_title(f"{label[0]}/{label[1]}")
         axis.set_axis_off()
 
-    for positions, color, marker, size in (
-        (rejected, "#ff4182", "x", 65),
-        (unknown, "#ffab36", "o", 65),
-        (accepted, "#39f5e8", "o", 34),
+    for links, color, marker, size in (
+        (result.rejected, "#ff4182", "x", 62),
+        (result.insufficient, "#b4b4b4", "o", 56),
+        (result.ambiguous, "#ffab36", "o", 56),
+        (result.accepted, "#39f5e8", "o", 32),
     ):
-        if not positions:
+        if not links:
             continue
 
         for axis, photo, side in zip(axes, (source, target), (0, 1), strict=True):
-            indices = [match.pairs[k][side] for k in positions]
-            points = photo.points[indices]
+            points = photo.points[[link[side] for link in links]]
             axis.scatter(
-                points[:, 0],
-                points[:, 1],
-                s=size,
-                marker=marker,
+                points[:, 0], points[:, 1], s=size, marker=marker,
                 facecolors="none" if marker == "o" else color,
                 edgecolors=color if marker == "o" else "none",
-                linewidths=1.6,
-                zorder=5,
+                linewidths=1.5, zorder=5,
             )
 
-    strength = [info.agreement if info is not None else -1.0 for info in support]
-    strongest = sorted(accepted, key=lambda k: strength[k], reverse=True)[:MAX_LINES]
-
-    for k in strongest:
-        i, j = match.pairs[k]
+    for i, j in result.accepted[:MAX_LINES]:
         a, b = source.points[i], target.points[j]
         figure.add_artist(
             ConnectionPatch(
                 xyA=(float(a[0]), float(a[1])),
                 xyB=(float(b[0]), float(b[1])),
-                coordsA="data",
-                coordsB="data",
-                axesA=axes[0],
-                axesB=axes[1],
-                color="#39f5e8",
-                alpha=0.55,
-                linewidth=1,
+                coordsA="data", coordsB="data",
+                axesA=axes[0], axesB=axes[1],
+                color="#39f5e8", alpha=0.6, linewidth=1,
             )
         )
 
-    values = [info.agreement for info in support if info is not None]
-    median = f"{np.median(values):.2f}" if values else "n/a"
-    pair_name = f"{first_label[0]}/{first_label[1]} ↔ {second_label[0]}/{second_label[1]}"
-    print(
-        f"{pair_name}: proposals={len(match.pairs)}, consistent={len(accepted)}, "
-        f"inconsistent={len(rejected)}, insufficient={len(unknown)}, "
-        f"median local agreement={median}"
+    pair_name = (
+        f"{first_label[0]}/{first_label[1]} ↔ "
+        f"{second_label[0]}/{second_label[1]}"
     )
-    figure.suptitle(f"{pair_name}  |  local agreement={median}  |  {len(accepted)} consistent")
+    print(
+        f"{pair_name}: original={len(coarse.pairs)}, "
+        f"accepted={len(result.accepted)}, corrected={result.corrected}, "
+        f"rejected={len(result.rejected)}, ambiguous={len(result.ambiguous)}, "
+        f"insufficient={len(result.insufficient)}"
+    )
+    truth = verified_pairs(project, first_label, second_label, source, target)
+
+    if truth:
+        report_verified("original", coarse.pairs, truth)
+        report_verified("constellation", result.accepted, truth)
+
+    figure.suptitle(
+        f"{pair_name} | {len(result.accepted)} distinctive constellations"
+    )
     figure.text(
-        0.5,
-        0.035,
-        "Cyan: supported proposals  |  Pink X: inconsistent neighborhood  |  "
-        "Orange ring: insufficient evidence  |  Yellow: annotated spots",
-        ha="center",
-        fontsize=9,
+        0.5, 0.035,
+        "Cyan: distinctive links | Pink X: unsupported | "
+        "Orange: ambiguous | Gray: insufficient | Yellow: annotated spots",
+        ha="center", fontsize=9,
     )
     figure.subplots_adjust(left=0.02, right=0.98, top=0.90, bottom=0.10, wspace=0.04)
     plt.show(block=True)
@@ -370,7 +519,7 @@ def run(project: Project) -> None:
             if label not in photos:
                 photos[label] = load_photo(project, label, encoder)
 
-        draw_pair(first, second, photos[first], photos[second])
+        draw_pair(project, first, second, photos[first], photos[second])
 
 
 if __name__ == "__main__":
