@@ -1,5 +1,3 @@
-.DEFAULT_GOAL := help
-
 VENV ?= .venv
 
 PYTHON ?= $(if $(wildcard $(VENV)/bin/python),$(VENV)/bin/python,python3)
@@ -11,19 +9,9 @@ PORT ?= 8080
 BIND ?= 127.0.0.1
 
 
-.PHONY: help init install install-sam2 sam2-submodule
+.PHONY: init install install-sam2 sam2-submodule
 .PHONY: data-pull data-save data-push results-save pipeline subjects
 .PHONY: typecheck lint format format-check check serve-media
-
-
-help:
-	@printf '%s\n' \
-		'Setup: init, install, install-sam2' \
-		'Data: data-pull, data-save, data-push, results-save RUN_DIR=...' \
-		'Images: subjects' \
-		'Video: pipeline (optional processing)' \
-		'Checks: typecheck, lint, format, format-check, check' \
-		'Preview: serve-media (PORT=... BIND=...)'
 
 
 init:
