@@ -542,8 +542,10 @@ def draw_pair(
     truth = verified_pairs(project, first_label, second_label, source, target)
 
     if truth:
+        proposals = tuple(sorted((*result.accepted, *result.ambiguous)))
         report_verified("original", coarse.pairs, truth)
-        report_verified("constellation", result.accepted, truth)
+        report_verified("constellation candidates", proposals, truth)
+        report_verified("constellation accepted", result.accepted, truth)
 
     figure.suptitle(f"{pair_name} | {len(result.accepted)} distinctive constellations")
     figure.text(
