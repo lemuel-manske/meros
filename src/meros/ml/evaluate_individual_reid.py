@@ -8,6 +8,8 @@ for evaluation, never to generate or select a transformation.
 
 A geometric correspondence is NOT a confirmed identity. In particular,
 dense spot patterns can align by chance across different individuals.
+The debug view compares the most-pairs hypothesis with quality-ranked
+alternatives, including spatial coverage, geometric residual and appearance.
 Close each visual comparison to continue to the next pair.
 """
 
@@ -25,14 +27,18 @@ from scipy.spatial.distance import cdist
 from meros.project import Project
 
 
-PAIRS = (
-    (("athila", 0), ("rogerio", 1)),
-    (("rafael", 3), ("rogerio", 1)),
-    (("rafael", 3), ("rafael", 2)),
-    (("rogerio", 1), ("rogerio", 4)),
-    (("rogerio", 0), ("rogerio", 1)),
-    (("rogerio", 11), ("rogerio", 12)),
-)
+SUBJECT_IDS: tuple[str, ...] = ()
+MAX_PAIRS: int | None = None
+DEBUG_VISUAL = False
+DEBUG_TOP = 3
+
+COLOR_SPOT = "#ffcc59"
+COLOR_MATCH = "#37f5eb"
+COLOR_CORRECT = "#36d399"
+COLOR_INCORRECT = "#fb5470"
+COLOR_PROJECTION = "#b894ff"
+COLOR_BASELINE = "#579bff"
+COLOR_NEUTRAL = "#9da4af"
 
 MIN_SPOTS = 4
 PATCH_SCALE = 2.0
@@ -43,6 +49,9 @@ TRIANGLE_CANDIDATES = 3
 MAX_HYPOTHESES = 1800
 MATCH_SPACING_RATIO = 0.70
 VISUAL_COST_WEIGHT = 0.20
+QUALITY_COVERAGE_WEIGHT = 0.70
+QUALITY_APPEARANCE_WEIGHT = 0.50
+REFINE_TOP = 5
 TRUTH_SPACING_RATIO = 0.50
 MAX_LINES = 20
 
@@ -65,26 +74,33 @@ class Triangle:
 
 
 @dataclass(frozen=True)
-class Match:
+class Alignment:
     pairs: tuple[tuple[int, int], ...]
     errors: tuple[float, ...]
     matrix: np.ndarray
+    score: float
+    coverage: float
+    geometry: float
+    appearance: float
+    seed: tuple[tuple[int, int, int], tuple[int, int, int]] | None
+
+
+@dataclass(frozen=True)
+class Match:
+    selected: Alignment
+    most_pairs: Alignment
+    alternatives: tuple[Alignment, ...]
+    scores: tuple[tuple[int, float], ...]
     hypotheses: int
 
 
 def spot_spacing(points: np.ndarray) -> float:
-    """
-    Estimate patch and matching scale from spots alone, never anatomy.
-    """
     distances = cdist(points, points)
     np.fill_diagonal(distances, np.inf)
     return float(np.median(np.sort(distances, axis=1)[:, 2]))
 
 
 def create_encoder():
-    """
-    Load frozen ImageNet ResNet18 features, as in the earlier experiment.
-    """
     import torch  # pyright: ignore[reportMissingImports]
     from torchvision.models import ResNet18_Weights  # pyright: ignore[reportMissingImports]
     from torchvision.models import resnet18  # pyright: ignore[reportMissingImports]
@@ -100,9 +116,6 @@ def create_encoder():
 
 
 def load_photo(project: Project, label: Label, encoder) -> Photo:
-    """
-    Read spots and image through Project. No other annotations are required.
-    """
     points = np.asarray(project.metadata.read_subject_spots(*label), dtype=np.float64)
 
     if len(points) < MIN_SPOTS:
@@ -138,9 +151,6 @@ def load_photo(project: Project, label: Label, encoder) -> Photo:
 
 
 def local_triangles(points: np.ndarray) -> list[Triangle]:
-    """
-    Describe local triangles by ratios, invariant to translation and scale.
-    """
     distances = cdist(points, points)
     np.fill_diagonal(distances, np.inf)
     result = []
@@ -171,9 +181,6 @@ def local_triangles(points: np.ndarray) -> list[Triangle]:
 
 
 def similarity(first: np.ndarray, second: np.ndarray) -> np.ndarray:
-    """
-    Fit a similarity transform from three candidate corresponding spots.
-    """
     p = first.mean(axis=0)
     q = second.mean(axis=0)
     x = first - p
@@ -189,9 +196,6 @@ def similarity(first: np.ndarray, second: np.ndarray) -> np.ndarray:
 
 
 def project(points: np.ndarray, matrix: np.ndarray) -> np.ndarray:
-    """
-    Project all source spots into the target image coordinate system.
-    """
     return cv.perspectiveTransform(points.reshape(1, -1, 2), matrix).reshape(-1, 2)
 
 
@@ -201,9 +205,6 @@ def assign_matches(
     matrix: np.ndarray,
     appearance: np.ndarray,
 ) -> tuple[tuple[tuple[int, int], ...], tuple[float, ...]]:
-    """
-    Greedily select spatially close, one-to-one spot hypotheses.
-    """
     distances = cdist(project(source.points, matrix), target.points)
     radius = MATCH_SPACING_RATIO * target.spacing
     first, second = np.where(distances <= radius)
@@ -230,13 +231,50 @@ def assign_matches(
     return tuple(pairs), tuple(errors)
 
 
-def match_spots(source: Photo, target: Photo) -> Match:
-    """
-    Generate initial alignment hypotheses ONLY from local spot triangles.
 
-    The highest-consensus hypothesis is exploratory. Many correspondences
-    alone do not establish that both photos show the same individual.
-    """
+def alignment_quality(
+    source: Photo,
+    target: Photo,
+    matrix: np.ndarray,
+    appearance: np.ndarray,
+    seed: tuple[tuple[int, int, int], tuple[int, int, int]] | None,
+) -> Alignment:
+    pairs, errors = assign_matches(source, target, matrix, appearance)
+
+    if not pairs:
+        return Alignment(pairs, errors, matrix, 0.0, 0.0, 0.0, 0.0, seed)
+
+    first, second = zip(*pairs, strict=True)
+    indices = np.asarray(first, dtype=int)
+    matches = np.asarray(second, dtype=int)
+    radius = MATCH_SPACING_RATIO * target.spacing
+    normalized = np.asarray(errors) / radius
+    geometry = float(np.mean(np.clip(1.0 - normalized**2, 0.0, 1.0)))
+    visual = float(np.mean(np.clip(1.0 - appearance[indices, matches], 0.0, 1.0)))
+
+    def fraction(points: np.ndarray, matched: np.ndarray) -> float:
+        whole = float(cv.contourArea(cv.convexHull(points.astype(np.float32))))
+
+        if len(matched) < 3 or whole <= 0:
+            return 0.0
+
+        area = float(cv.contourArea(cv.convexHull(matched.astype(np.float32))))
+        return float(np.clip(area / whole, 0.0, 1.0))
+
+    source_coverage = fraction(source.points, source.points[indices])
+    target_coverage = fraction(target.points, target.points[matches])
+    coverage = float(np.sqrt(source_coverage * target_coverage))
+    support = len(pairs) / np.sqrt(len(source.points) * len(target.points))
+    score = (
+        support
+        * geometry
+        * (1.0 - QUALITY_APPEARANCE_WEIGHT + QUALITY_APPEARANCE_WEIGHT * visual)
+        * (1.0 - QUALITY_COVERAGE_WEIGHT + QUALITY_COVERAGE_WEIGHT * coverage)
+    )
+    return Alignment(pairs, errors, matrix, float(score), coverage, geometry, visual, seed)
+
+
+def match_spots(source: Photo, target: Photo) -> Match:
     first = local_triangles(source.points)
     second = local_triangles(target.points)
     right_shapes = np.array([triangle.shape for triangle in second])
@@ -254,27 +292,39 @@ def match_spots(source: Photo, target: Photo) -> Match:
 
     hypotheses.sort(key=lambda item: item[0])
     hypotheses = hypotheses[:MAX_HYPOTHESES]
-    best_pairs: tuple[tuple[int, int], ...] = ()
-    best_errors: tuple[float, ...] = ()
-    best_matrix = np.eye(3)
-    best_quality = (-1, float("-inf"))
+    candidates: list[Alignment] = []
 
     for _, left, right in hypotheses:
         matrix = similarity(
             source.points[list(left.indices)],
             target.points[list(right.indices)],
         )
-        pairs, errors = assign_matches(source, target, matrix, appearance)
-        quality = (
-            len(pairs),
-            -float(np.mean(errors)) if errors else float("-inf"),
+        candidates.append(
+            alignment_quality(
+                source,
+                target,
+                matrix,
+                appearance,
+                (left.indices, right.indices),
+            )
         )
 
-        if quality > best_quality:
-            best_pairs, best_errors, best_matrix, best_quality = (pairs, errors, matrix, quality)
+    if not candidates:
+        empty = alignment_quality(source, target, np.eye(3), appearance, None)
+        return Match(empty, empty, (empty,), (), 0)
 
-    if len(best_pairs) >= 4:
-        a, b = zip(*best_pairs, strict=True)
+    most_pairs = max(
+        candidates,
+        key=lambda item: (len(item.pairs), -float(np.mean(item.errors))),
+    )
+    initial_scores = tuple((len(item.pairs), item.score) for item in candidates)
+    ranked = sorted(candidates, key=lambda item: item.score, reverse=True)
+
+    for candidate in ranked[:REFINE_TOP]:
+        if len(candidate.pairs) < 4:
+            continue
+
+        a, b = zip(*candidate.pairs, strict=True)
         cv.setRNGSeed(0)
 
         try:
@@ -289,12 +339,29 @@ def match_spots(source: Photo, target: Photo) -> Match:
 
         if affine is not None and inliers is not None and int(inliers.sum()) >= 4:
             matrix = np.vstack((affine, [0.0, 0.0, 1.0]))
-            pairs, errors = assign_matches(source, target, matrix, appearance)
+            refined = alignment_quality(source, target, matrix, appearance, candidate.seed)
 
-            if len(pairs) >= len(best_pairs):
-                best_pairs, best_errors, best_matrix = pairs, errors, matrix
+            if refined.score > candidate.score:
+                candidates.append(refined)
 
-    return Match(best_pairs, best_errors, best_matrix, len(hypotheses))
+    ranked = sorted(candidates, key=lambda item: item.score, reverse=True)
+    alternatives = []
+
+    for candidate in ranked:
+        links = set(candidate.pairs)
+
+        if all(
+            len(links & set(previous.pairs)) / max(len(links | set(previous.pairs)), 1) < 0.8
+            for previous in alternatives
+        ):
+            alternatives.append(candidate)
+
+        if len(alternatives) >= DEBUG_TOP:
+            break
+
+    return Match(
+        ranked[0], most_pairs, tuple(alternatives), initial_scores, len(hypotheses)
+    )
 
 
 def verified_pairs(
@@ -304,9 +371,6 @@ def verified_pairs(
     source: Photo,
     target: Photo,
 ) -> dict[int, int]:
-    """
-    Convert existing human-verified coordinates into spot indices for audit.
-    """
     if first[0] != second[0]:
         return {}
 
@@ -339,19 +403,94 @@ def verified_pairs(
     return truth
 
 
-def report_match(match: Match, truth: dict[int, int]) -> None:
-    """
-    Evaluate only reviewed source spots; unreviewed predictions stay unknown.
-    """
-    predicted = dict(match.pairs)
+def report_match(name: str, alignment: Alignment, truth: dict[int, int]) -> None:
+    predicted = dict(alignment.pairs)
     correct = sum(predicted.get(i) == j for i, j in truth.items())
     wrong = sum(i in truth and predicted[i] != truth[i] for i in predicted)
     unknown = len(predicted) - correct - wrong
     print(
-        f"  verified recovered={correct}/{len(truth)}, "
+        f"  {name}: verified recovered={correct}/{len(truth)}, "
         f"wrong-on-reviewed-source={wrong}, "
         f"unverified-proposals={unknown}"
     )
+
+
+
+def draw_debug(
+    first_label: Label,
+    second_label: Label,
+    source: Photo,
+    target: Photo,
+    result: Match,
+) -> None:
+    figure, axes = plt.subplots(2, 2, figsize=(16, 11))
+    count_axis = axes[0, 0]
+
+    if result.scores:
+        counts, scores = zip(*result.scores, strict=True)
+        count_axis.scatter(counts, scores, s=7, c=COLOR_NEUTRAL, alpha=0.35)
+
+    count_axis.scatter(
+        len(result.most_pairs.pairs), result.most_pairs.score,
+        s=110, color=COLOR_BASELINE, marker="x", label="Most pairs", zorder=5,
+    )
+    count_axis.scatter(
+        len(result.selected.pairs), result.selected.score,
+        s=90, color=COLOR_CORRECT, marker="o", label="Selected", zorder=5,
+    )
+    count_axis.set_xlabel("Number of assigned pairs")
+    count_axis.set_ylabel("Quality: support × residual × appearance × coverage")
+    count_axis.legend(loc="best")
+
+    for axis, candidate in zip(axes.flat[1:], result.alternatives, strict=False):
+        axis.imshow(cv.cvtColor(target.image, cv.COLOR_BGR2RGB))
+        projected = project(source.points, candidate.matrix)
+        axis.scatter(
+            target.points[:, 0], target.points[:, 1],
+            s=10, c=COLOR_SPOT, alpha=0.9,
+        )
+        axis.scatter(
+            projected[:, 0], projected[:, 1],
+            s=10, c=COLOR_PROJECTION, alpha=0.6,
+        )
+
+        for i, j in sorted(
+            candidate.pairs, key=lambda pair: candidate.errors[candidate.pairs.index(pair)]
+        )[:MAX_LINES]:
+            a, b = projected[i], target.points[j]
+            axis.plot((a[0], b[0]), (a[1], b[1]), c=COLOR_MATCH, lw=0.8, alpha=0.65)
+
+        if candidate.seed is not None:
+            _, indices = candidate.seed
+            polygon = target.points[list(indices) + [indices[0]]]
+            axis.plot(polygon[:, 0], polygon[:, 1], c=COLOR_INCORRECT, lw=1.8)
+
+        axis.set_xlim(0, target.image.shape[1])
+        axis.set_ylim(target.image.shape[0], 0)
+        axis.set_title(
+            f"score={candidate.score:.3f} | pairs={len(candidate.pairs)} | "
+            f"geom={candidate.geometry:.2f} | visual={candidate.appearance:.2f} | "
+            f"coverage={candidate.coverage:.2f}",
+            fontsize=9,
+        )
+        axis.set_axis_off()
+
+    for axis in list(axes.flat)[1 + len(result.alternatives):]:
+        axis.set_axis_off()
+
+    figure.suptitle(
+        f"DEBUG {first_label[0]}/{first_label[1]} ↔ "
+        f"{second_label[0]}/{second_label[1]} — alternatives"
+    )
+    figure.text(
+        0.5, 0.02,
+        "Yellow: target spots | Purple: projected source spots | "
+        "Cyan: tentative links | Red triangle: seed hypothesis",
+        ha="center", fontsize=9,
+    )
+    figure.tight_layout(rect=(0, 0.04, 1, 0.95))
+    plt.show(block=True)
+    plt.close(figure)
 
 
 def draw_pair(
@@ -361,30 +500,30 @@ def draw_pair(
     source: Photo,
     target: Photo,
 ) -> None:
-    """
-    Always visualize geometric hypotheses; never label them confirmed identity.
-    """
-    match = match_spots(source, target)
+    result = match_spots(source, target)
+    chosen = result.selected
     truth = verified_pairs(project, first_label, second_label, source, target)
     figure, axes = plt.subplots(1, 2, figsize=(17, 8))
 
-    for axis, label, photo in zip(axes, (first_label, second_label), (source, target), strict=True):
+    for axis, label, photo in zip(
+        axes, (first_label, second_label), (source, target), strict=True
+    ):
         axis.imshow(cv.cvtColor(photo.image, cv.COLOR_BGR2RGB))
-        axis.scatter(photo.points[:, 0], photo.points[:, 1], s=14, c="#ffcc59")
+        axis.scatter(photo.points[:, 0], photo.points[:, 1], s=14, c=COLOR_SPOT)
         axis.set_title(f"{label[0]}/{label[1]}")
         axis.set_axis_off()
 
-    ordered = np.argsort(match.errors)[:MAX_LINES]
+    ordered = np.argsort(chosen.errors)[:MAX_LINES]
 
     for index in ordered:
-        i, j = match.pairs[index]
+        i, j = chosen.pairs[index]
         first_point, second_point = source.points[i], target.points[j]
-        color = "#37f5eb"
+        color = COLOR_MATCH
 
         if i in truth:
-            color = "#36d399" if truth[i] == j else "#fb5470"
+            color = COLOR_CORRECT if truth[i] == j else COLOR_INCORRECT
         elif first_label[0] != second_label[0]:
-            color = "#fb5470"
+            color = COLOR_INCORRECT
 
         figure.add_artist(
             ConnectionPatch(
@@ -401,23 +540,23 @@ def draw_pair(
         )
 
     name = f"{first_label[0]}/{first_label[1]} ↔ {second_label[0]}/{second_label[1]}"
-    residual = f"{np.median(match.errors):.1f}px" if match.errors else "n/a"
+    residual = f"{np.median(chosen.errors):.1f}px" if chosen.errors else "n/a"
     print(
-        f"{name}: proposals={len(match.pairs)}, "
-        f"alignment hypotheses={match.hypotheses}, "
-        f"median residual={residual}"
+        f"{name}: pairs={len(chosen.pairs)}, score={chosen.score:.3f}, "
+        f"coverage={chosen.coverage:.2f}, residual={residual}, "
+        f"most-pairs={len(result.most_pairs.pairs)}, hypotheses={result.hypotheses}"
     )
 
     if truth:
-        report_match(match, truth)
+        report_match("most-pairs", result.most_pairs, truth)
+        report_match("quality", chosen, truth)
 
     if first_label[0] != second_label[0]:
-        print("  Different biological individuals: all proposed links require rejection.")
+        print("  Different biological individuals: links are false identity evidence.")
 
     figure.suptitle(f"{name} — tentative geometric associations")
     figure.text(
-        0.5,
-        0.035,
+        0.5, 0.035,
         "Green: verified link | Red: known mismatch or different individuals | "
         "Cyan: unverified | Yellow: annotated spots",
         ha="center",
@@ -427,15 +566,27 @@ def draw_pair(
     plt.show(block=True)
     plt.close(figure)
 
+    if DEBUG_VISUAL:
+        draw_debug(first_label, second_label, source, target, result)
+
 
 def run(project: Project) -> None:
-    """
-    Inspect all selected pairs using only spot and image annotations.
-    """
+    labels = sorted(
+        (subject.subject_id, image.image_id)
+        for subject in project.media.list_subjects()
+        if not SUBJECT_IDS or subject.subject_id in SUBJECT_IDS
+        for image in subject.images
+    )
+    pairs = list(combinations(labels, 2))
+
+    if MAX_PAIRS is not None:
+        pairs = pairs[:MAX_PAIRS]
+
+    print(f"Visual spot audit: {len(labels)} photos, {len(pairs)} pairs")
     encoder = create_encoder()
     photos: dict[Label, Photo] = {}
 
-    for first, second in PAIRS:
+    for first, second in pairs:
         for label in (first, second):
             if label not in photos:
                 photos[label] = load_photo(project, label, encoder)
