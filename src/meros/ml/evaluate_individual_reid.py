@@ -25,8 +25,8 @@ import numpy as np
 from matplotlib.patches import ConnectionPatch
 from scipy.spatial.distance import cdist
 
-import torch
-import torch.nn.functional as F
+import torch  # pyright: ignore[reportMissingImports]
+import torch.nn.functional as F  # pyright: ignore[reportMissingImports]
 
 from meros.project import Project
 
@@ -114,7 +114,7 @@ def spot_spacing(points: np.ndarray) -> float:
 
 
 def create_encoder():
-    from torchvision.models import resnet18, ResNet18_Weights
+    from torchvision.models import resnet18, ResNet18_Weights  # pyright: ignore[reportMissingImports]
 
     model = resnet18(weights=ResNet18_Weights.DEFAULT)
     encoder = torch.nn.Sequential(*list(model.children())[:-2])
