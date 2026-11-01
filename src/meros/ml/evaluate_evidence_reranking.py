@@ -273,7 +273,11 @@ def run(project: Project) -> None:
                             ),
                             None,
                         )
-                        rank1[name] += int(true_rank == 0)
+                        best_is_unique = bool(ranking) and sum(
+                            abs(support - ranking[0][1]) <= 1e-9
+                            for _, support in ranking
+                        ) == 1
+                        rank1[name] += int(true_rank == 0 and best_is_unique)
                         rankk[name] += int(
                             true_rank is not None and true_rank < TOP_CANDIDATES
                         )
