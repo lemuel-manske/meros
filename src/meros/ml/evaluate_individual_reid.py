@@ -590,9 +590,7 @@ def draw_reconstruction(
     axes[0, 1].imshow(binary, cmap="gray", vmin=0, vmax=255, interpolation="nearest")
     axes[0, 1].set_title("Source binary mask (before transform)")
 
-    axes[1, 0].imshow(
-        warped_mask, cmap="gray", vmin=0, vmax=255, interpolation="nearest"
-    )
+    axes[1, 0].imshow(warped_mask, cmap="gray", vmin=0, vmax=255, interpolation="nearest")
     axes[1, 0].set_title("Source binary mask after selected transform")
 
     axes[1, 1].imshow(cv.cvtColor(target.image, cv.COLOR_BGR2RGB))
