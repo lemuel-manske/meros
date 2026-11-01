@@ -251,9 +251,7 @@ def local_support(
     distances = cdist(first_vectors, second_vectors)
     n, m = distances.shape
     cost = np.full((n + m, n + m), 3.0)
-    cost[:n, :m] = np.where(
-        distances <= tolerance, np.minimum(distances / tolerance, 0.99), 3.0
-    )
+    cost[:n, :m] = np.where(distances <= tolerance, np.minimum(distances / tolerance, 0.99), 3.0)
     cost[np.arange(n), m + np.arange(n)] = 0.5
     cost[n + np.arange(m), np.arange(m)] = 0.5
     cost[n:, m:] = 0.0
@@ -321,12 +319,8 @@ def compare_constellations(
         if first_rank[0][0] != pair or second_rank[0][0] != pair:
             continue
 
-        first_margin = (
-            result.agreement - first_rank[1][1] if len(first_rank) > 1 else 1.0
-        )
-        second_margin = (
-            result.agreement - second_rank[1][1] if len(second_rank) > 1 else 1.0
-        )
+        first_margin = result.agreement - first_rank[1][1] if len(first_rank) > 1 else 1.0
+        second_margin = result.agreement - second_rank[1][1] if len(second_rank) > 1 else 1.0
 
         if min(first_margin, second_margin) >= MIN_ALTERNATIVE_MARGIN:
             accepted.append(pair)
@@ -348,14 +342,10 @@ def compare_constellations(
         else:
             rejected.append((i, j))
 
-    corrected = sum(
-        i in accepted_by_source and accepted_by_source[i] != j
-        for i, j in coarse.pairs
-    )
+    corrected = sum(i in accepted_by_source and accepted_by_source[i] != j for i, j in coarse.pairs)
 
     return ConstellationResult(
-        tuple(accepted), tuple(rejected), tuple(ambiguous),
-        tuple(insufficient), corrected
+        tuple(accepted), tuple(rejected), tuple(ambiguous), tuple(insufficient), corrected
     )
 
 
@@ -440,9 +430,7 @@ def draw_pair(
     result = compare_constellations(source, target, coarse)
     figure, axes = plt.subplots(1, 2, figsize=(17, 8))
 
-    for axis, label, photo in zip(
-        axes, (first_label, second_label), (source, target), strict=True
-    ):
+    for axis, label, photo in zip(axes, (first_label, second_label), (source, target), strict=True):
         axis.imshow(cv.cvtColor(photo.image, cv.COLOR_BGR2RGB))
         axis.scatter(photo.points[:, 0], photo.points[:, 1], s=12, c="#ffcc59")
         axis.scatter(*photo.eye, s=115, c="white", marker="+", linewidths=2)
@@ -462,10 +450,14 @@ def draw_pair(
         for axis, photo, side in zip(axes, (source, target), (0, 1), strict=True):
             points = photo.points[[link[side] for link in links]]
             axis.scatter(
-                points[:, 0], points[:, 1], s=size, marker=marker,
+                points[:, 0],
+                points[:, 1],
+                s=size,
+                marker=marker,
                 facecolors="none" if marker == "o" else color,
                 edgecolors=color if marker == "o" else "none",
-                linewidths=1.5, zorder=5,
+                linewidths=1.5,
+                zorder=5,
             )
 
     for i, j in result.accepted[:MAX_LINES]:
@@ -474,16 +466,17 @@ def draw_pair(
             ConnectionPatch(
                 xyA=(float(a[0]), float(a[1])),
                 xyB=(float(b[0]), float(b[1])),
-                coordsA="data", coordsB="data",
-                axesA=axes[0], axesB=axes[1],
-                color="#39f5e8", alpha=0.6, linewidth=1,
+                coordsA="data",
+                coordsB="data",
+                axesA=axes[0],
+                axesB=axes[1],
+                color="#39f5e8",
+                alpha=0.6,
+                linewidth=1,
             )
         )
 
-    pair_name = (
-        f"{first_label[0]}/{first_label[1]} ↔ "
-        f"{second_label[0]}/{second_label[1]}"
-    )
+    pair_name = f"{first_label[0]}/{first_label[1]} ↔ {second_label[0]}/{second_label[1]}"
     print(
         f"{pair_name}: original={len(coarse.pairs)}, "
         f"accepted={len(result.accepted)}, corrected={result.corrected}, "
@@ -496,14 +489,14 @@ def draw_pair(
         report_verified("original", coarse.pairs, truth)
         report_verified("constellation", result.accepted, truth)
 
-    figure.suptitle(
-        f"{pair_name} | {len(result.accepted)} distinctive constellations"
-    )
+    figure.suptitle(f"{pair_name} | {len(result.accepted)} distinctive constellations")
     figure.text(
-        0.5, 0.035,
+        0.5,
+        0.035,
         "Cyan: distinctive links | Pink X: unsupported | "
         "Orange: ambiguous | Gray: insufficient | Yellow: annotated spots",
-        ha="center", fontsize=9,
+        ha="center",
+        fontsize=9,
     )
     figure.subplots_adjust(left=0.02, right=0.98, top=0.90, bottom=0.10, wspace=0.04)
     plt.show(block=True)
