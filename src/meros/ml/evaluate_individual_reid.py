@@ -208,8 +208,7 @@ def assign_matches(
     radius = MATCH_SPACING_RATIO * target.spacing
     first, second = np.where(distances <= radius)
     order = np.argsort(
-        distances[first, second] / radius
-        + VISUAL_COST_WEIGHT * appearance[first, second],
+        distances[first, second] / radius + VISUAL_COST_WEIGHT * appearance[first, second],
         kind="stable",
     )
     used_source: set[int] = set()
@@ -272,9 +271,7 @@ def match_spots(source: Photo, target: Photo) -> Match:
         )
 
         if quality > best_quality:
-            best_pairs, best_errors, best_matrix, best_quality = (
-                pairs, errors, matrix, quality
-            )
+            best_pairs, best_errors, best_matrix, best_quality = (pairs, errors, matrix, quality)
 
     if len(best_pairs) >= 4:
         a, b = zip(*best_pairs, strict=True)
@@ -311,9 +308,7 @@ def verified_pairs(
 
     reverse = first[1] > second[1]
     left_id, right_id = sorted((first[1], second[1]))
-    records = project.metadata.read_subject_spot_correspondences(
-        first[0], left_id, right_id
-    )
+    records = project.metadata.read_subject_spot_correspondences(first[0], left_id, right_id)
     truth: dict[int, int] = {}
     used_targets: set[int] = set()
 
@@ -369,9 +364,7 @@ def draw_pair(
     truth = verified_pairs(project, first_label, second_label, source, target)
     figure, axes = plt.subplots(1, 2, figsize=(17, 8))
 
-    for axis, label, photo in zip(
-        axes, (first_label, second_label), (source, target), strict=True
-    ):
+    for axis, label, photo in zip(axes, (first_label, second_label), (source, target), strict=True):
         axis.imshow(cv.cvtColor(photo.image, cv.COLOR_BGR2RGB))
         axis.scatter(photo.points[:, 0], photo.points[:, 1], s=14, c="#ffcc59")
         axis.set_title(f"{label[0]}/{label[1]}")
@@ -418,7 +411,8 @@ def draw_pair(
 
     figure.suptitle(f"{name} — tentative geometric associations")
     figure.text(
-        0.5, 0.035,
+        0.5,
+        0.035,
         "Green: verified link | Red: known mismatch or different individuals | "
         "Cyan: unverified | Yellow: annotated spots",
         ha="center",
