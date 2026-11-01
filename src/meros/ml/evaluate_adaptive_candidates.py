@@ -45,10 +45,10 @@ FEATURE_NAMES = (
     "density_log_ratio",
     "spatial_distribution",
     "annotated_overlap",
+    "comparable_region",
     "anchor_drift",
     "affine_anisotropy",
     "reflection",
-    "comparable_region",
 )
 
 
@@ -189,7 +189,14 @@ class PairKNN:
     def __init__(
         self,
         samples: list[tuple[np.ndarray, tuple[str, ...]]],
+        *,
+        selected_features: tuple[str, ...] = FEATURE_NAMES,
     ) -> None:
+        selected = set(selected_features)
+
+        if not selected or not selected.issubset(FEATURE_NAMES):
+            raise ValueError("Select at least one known evidence feature")
+
         values = np.stack([vector for vector, _ in samples])
         self.center = np.array(
             [
@@ -201,7 +208,9 @@ class PairKNN:
         filled = np.where(np.isfinite(values), values, self.center)
         q25, q75 = np.percentile(filled, (25, 75), axis=0)
         self.scale = np.where(q75 - q25 > 1e-6, q75 - q25, 1.0)
-        self.active = q75 - q25 > 1e-6
+        self.active = (q75 - q25 > 1e-6) & np.asarray(
+            [name in selected for name in FEATURE_NAMES]
+        )
 
         if not np.any(self.active):
             raise ValueError("No varying evidence features in the verified training pairs")
