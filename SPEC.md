@@ -425,9 +425,9 @@ variants scored 5/7 on Rogerio; training reduced the other individuals from
 
 After confirming Luana = Rogério and Yam = Rafael, the same 18 photos represent
 **six biological individuals**. Only Rafael and Rogério have multiple photos.
-The current frozen ImageNet ResNet18 spot-descriptor matcher combines local
+The earlier frozen ImageNet ResNet18 spot-descriptor matcher combined local
 appearance with eye/mouth geometry and affine matching of manually annotated
-spots. On 14 leave-one-image-out queries, its **Rank-1 and Rank-3 are 14/14**;
+spots. On 14 leave-one-image-out queries, its **Rank-1 and Rank-3 were 14/14**;
 this is not validation on independent encounters or newly sampled identities.
 
 Experiments with kNN-based adaptive combinations of score, density, coverage,
@@ -452,6 +452,29 @@ not guarantee the same visible skin, and missing spots are not verified
 biological negatives. Keep source images and proposed correspondences
 available for human audit, and require more independent individuals and
 encounters before adopting automatic identity or unknown-individual decisions.
+
+### Landmark-free spot alignment audit
+
+The experimental `src/meros/ml/evaluate_individual_reid.py` no longer reads
+eye or mouth annotations. It uses annotated spot coordinates to estimate
+local spacing and propose similarity transforms from neighboring spot
+triangles; image-patch descriptors remain secondary evidence. A spatial
+consensus and optional affine refinement generate **tentative** one-to-one
+links for visual review. The script reports recovery against existing manually
+verified links, without using those links to find the transformation. No
+automatic identity acceptance or updated Rank-1 benchmark is claimed.
+
+Why remove anatomical anchors: in Rogério/0–1, only 15/31 manually linked
+spots lay within 0.12 times the target eye–mouth distance of their
+anatomically projected positions. A similarity fitted from the other
+30 verified links in leave-one-out evaluation placed 31/31 within 0.08
+of that distance. This is evidence of initial-alignment error, **not** an
+automatic matching result: the leave-one-out fit has access to verified links.
+Eight of these historical correspondence coordinates also lacked a nearby
+source spot in the then-current spot annotations under the earlier mapping
+criterion. Geometry-only search may still produce many incidental matches
+between different individuals, especially with uneven spot densities.
+Retain explicit human review and test against independently labeled fish.
 
 ### Lessons and implications
 
