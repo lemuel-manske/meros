@@ -22,6 +22,7 @@ from scipy.spatial.distance import cdist
 
 from meros.ml.evaluate_individual_reid import (
     MIN_SPOTS,
+    Candidate,
     SpotPhoto,
     create_encoder,
     geometric_visual_match,
@@ -192,7 +193,7 @@ class PairEvidence:
         return self.original * self.neighborhood.geometry
 
 
-def correct_rank(ranking, subject_id: str) -> int | None:
+def correct_rank(ranking: list[Candidate], subject_id: str) -> int | None:
     """
     Worst-case true identity rank among ties; zero scores mean no evidence.
     """
@@ -218,7 +219,7 @@ def describe_pair(pair: tuple[Label, Label], item: PairEvidence) -> str:
     return (
         f"{heading} | score={item.original:.3f} | "
         f"local={result.geometry:.3f} ({result.anchors}/{result.matched_spots} anchors) "
-        f"| density difference={result.local_count_disagreement:.3f}"
+        f"| neighbor count difference={result.local_count_disagreement:.3f}"
     )
 
 
