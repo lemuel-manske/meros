@@ -245,14 +245,12 @@ def local_support(
     tolerance = NEIGHBOR_TOLERANCE * target.scale
     first_distances = np.linalg.norm(projected - projected[i], axis=1)
     second_distances = np.linalg.norm(target.points - target.points[j], axis=1)
-    first = [
-        k for k in np.argsort(first_distances)
-        if k != i and first_distances[k] <= radius
-    ][:NEIGHBOR_LIMIT]
-    second = [
-        k for k in np.argsort(second_distances)
-        if k != j and second_distances[k] <= radius
-    ][:NEIGHBOR_LIMIT]
+    first = [k for k in np.argsort(first_distances) if k != i and first_distances[k] <= radius][
+        :NEIGHBOR_LIMIT
+    ]
+    second = [k for k in np.argsort(second_distances) if k != j and second_distances[k] <= radius][
+        :NEIGHBOR_LIMIT
+    ]
 
     if min(len(first), len(second)) < MIN_NEIGHBORS:
         return None
@@ -321,17 +319,11 @@ def compare_constellations(
 
     for i in range(len(source.points)):
         eligible = np.flatnonzero(geometry[i] <= SEARCH_RADIUS)
-        candidates: set[int] = {
-            j for a, j in old_links if a == i
-        }
+        candidates: set[int] = {j for a, j in old_links if a == i}
 
         if len(eligible):
-            candidates.update(
-                eligible[np.argsort(shape_distance[i, eligible])[:SHAPE_CANDIDATES]]
-            )
-            candidates.update(
-                eligible[np.argsort(appearance[i, eligible])[:VISUAL_CANDIDATES]]
-            )
+            candidates.update(eligible[np.argsort(shape_distance[i, eligible])[:SHAPE_CANDIDATES]])
+            candidates.update(eligible[np.argsort(appearance[i, eligible])[:VISUAL_CANDIDATES]])
 
         for j in candidates:
             support = local_support(source, target, projected, i, int(j))
@@ -366,12 +358,8 @@ def compare_constellations(
 
     for i, j in proposed:
         own = votes[i, j]
-        source_second = max(
-            (votes[i, k] for k in range(m) if k != j), default=0.0
-        )
-        target_second = max(
-            (votes[k, j] for k in range(n) if k != i), default=0.0
-        )
+        source_second = max((votes[i, k] for k in range(m) if k != j), default=0.0)
+        target_second = max((votes[k, j] for k in range(n) if k != i), default=0.0)
 
         if own - max(source_second, target_second) >= MIN_ALTERNATIVE_MARGIN * own:
             accepted.append((i, j))
@@ -392,15 +380,18 @@ def compare_constellations(
         else:
             rejected.append((i, j))
 
-    corrected = sum(
-        i in chosen and chosen[i] != j for i, j in coarse.pairs
-    )
+    corrected = sum(i in chosen and chosen[i] != j for i, j in coarse.pairs)
     old_sources = {i for i, _ in coarse.pairs}
     new_sources = sum(i not in old_sources for i in chosen)
 
     return ConstellationResult(
-        tuple(accepted), tuple(rejected), tuple(ambiguous),
-        tuple(insufficient), corrected, new_sources, seed_count,
+        tuple(accepted),
+        tuple(rejected),
+        tuple(ambiguous),
+        tuple(insufficient),
+        corrected,
+        new_sources,
+        seed_count,
     )
 
 
