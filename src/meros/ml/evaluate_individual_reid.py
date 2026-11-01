@@ -155,7 +155,7 @@ def local_triangles(points: np.ndarray) -> list[Triangle]:
             b = float(np.linalg.norm(second))
             cross = float(np.linalg.det(np.stack((first, second))))
 
-            if abs(cross) < 0.15 * a * b:
+            if min(a, b) <= 1e-6 or abs(cross) < 0.15 * a * b:
                 continue
 
             c = float(np.linalg.norm(points[j] - points[k]))
@@ -276,12 +276,16 @@ def match_spots(source: Photo, target: Photo) -> Match:
     if len(best_pairs) >= 4:
         a, b = zip(*best_pairs, strict=True)
         cv.setRNGSeed(0)
-        affine, inliers = cv.estimateAffine2D(
-            source.points[list(a)],
-            target.points[list(b)],
-            method=cv.RANSAC,
-            ransacReprojThreshold=MATCH_SPACING_RATIO * target.spacing,
-        )
+
+        try:
+            affine, inliers = cv.estimateAffine2D(
+                source.points[list(a)],
+                target.points[list(b)],
+                method=cv.RANSAC,
+                ransacReprojThreshold=MATCH_SPACING_RATIO * target.spacing,
+            )
+        except cv.error:
+            affine, inliers = None, None
 
         if affine is not None and inliers is not None and int(inliers.sum()) >= 4:
             matrix = np.vstack((affine, [0.0, 0.0, 1.0]))
@@ -397,10 +401,11 @@ def draw_pair(
         )
 
     name = f"{first_label[0]}/{first_label[1]} ↔ {second_label[0]}/{second_label[1]}"
+    residual = f"{np.median(match.errors):.1f}px" if match.errors else "n/a"
     print(
         f"{name}: proposals={len(match.pairs)}, "
         f"alignment hypotheses={match.hypotheses}, "
-        f"median residual={np.median(match.errors) if match.errors else 0:.1f}px"
+        f"median residual={residual}"
     )
 
     if truth:
