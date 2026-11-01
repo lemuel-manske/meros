@@ -281,10 +281,10 @@ def compare_constellations(
     projected = project(source.points, coarse.matrix)
     geometry = cdist(projected, target.points)
     appearance = cdist(source.features, target.features, metric="cosine")
-    eligible = (
-        (geometry <= GEOMETRIC_RADIUS * target.scale)
-        & (appearance <= MAX_VISUAL_DISTANCE)
-    )
+    # Consider geometric alternatives even if their patch appearance differs.
+    # Otherwise an incorrect center may appear unique only because its rivals
+    # were removed by the original visual descriptor filter.
+    eligible = geometry <= GEOMETRIC_RADIUS * target.scale
     evidence: dict[tuple[int, int], LocalSupport] = {}
 
     for i, j in np.argwhere(eligible):
@@ -306,6 +306,9 @@ def compare_constellations(
     accepted = []
 
     for pair, result in evidence.items():
+        if appearance[pair] > MAX_VISUAL_DISTANCE:
+            continue
+
         if result.neighbors_matched < MIN_LOCAL_MATCHES:
             continue
 
