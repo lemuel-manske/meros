@@ -287,7 +287,12 @@ def radial_fingerprints(points: np.ndarray, scale: float) -> np.ndarray:
     distances = cdist(points, points) / scale
     np.fill_diagonal(distances, np.inf)
     nearest = np.sort(distances, axis=1)[:, :SHAPE_NEIGHBORS]
-    return np.minimum(nearest, NEIGHBOR_RADIUS)
+    padded = np.pad(
+        nearest,
+        ((0, 0), (0, SHAPE_NEIGHBORS - nearest.shape[1])),
+        constant_values=NEIGHBOR_RADIUS,
+    )
+    return np.minimum(padded, NEIGHBOR_RADIUS)
 
 
 def compare_constellations(
