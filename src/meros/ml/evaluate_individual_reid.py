@@ -612,7 +612,7 @@ def draw_reconstruction(
     check_axis = figure.add_axes((0.64, 0.025, 0.30, 0.045))
     check = CheckButtons(check_axis, ["Show mask on target"], [True])
 
-    def toggle_overlay(_label: str) -> None:
+    def toggle_overlay(_label: str | None) -> None:
         overlay_artist.set_visible(not overlay_artist.get_visible())
         figure.canvas.draw_idle()
 
