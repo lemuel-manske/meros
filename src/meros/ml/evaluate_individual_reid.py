@@ -39,6 +39,7 @@ COLOR_INCORRECT = "#fb5470"
 COLOR_PROJECTION = "#b894ff"
 COLOR_BASELINE = "#579bff"
 COLOR_NEUTRAL = "#9da4af"
+COLOR_SEED = "#ee995f"
 
 MIN_SPOTS = 4
 PATCH_SCALE = 2.0
@@ -418,6 +419,7 @@ def draw_debug(
     source: Photo,
     target: Photo,
     result: Match,
+    truth: dict[int, int],
 ) -> None:
     figure, axes = plt.subplots(2, 2, figsize=(16, 11))
     count_axis = axes[0, 0]
@@ -482,19 +484,28 @@ def draw_debug(
 
         for (i, j), _ in strongest:
             a, b = projected[i], target.points[j]
-            axis.plot((a[0], b[0]), (a[1], b[1]), c=COLOR_MATCH, lw=0.8, alpha=0.65)
+            color = COLOR_MATCH
+
+            if i in truth:
+                color = COLOR_CORRECT if truth[i] == j else COLOR_INCORRECT
+            elif first_label[0] != second_label[0]:
+                color = COLOR_INCORRECT
+
+            axis.plot((a[0], b[0]), (a[1], b[1]), c=color, lw=0.8, alpha=0.65)
 
         if candidate.seed is not None:
             _, indices = candidate.seed
             polygon = target.points[list(indices) + [indices[0]]]
-            axis.plot(polygon[:, 0], polygon[:, 1], c=COLOR_INCORRECT, lw=1.8)
+            axis.plot(polygon[:, 0], polygon[:, 1], c=COLOR_SEED, lw=1.8)
 
         axis.set_xlim(0, target.image.shape[1])
         axis.set_ylim(target.image.shape[0], 0)
+        verified = sum(truth.get(i) == j for i, j in candidate.pairs if i in truth)
+        wrong = sum(truth.get(i) != j for i, j in candidate.pairs if i in truth)
         axis.set_title(
             f"{label}: score={candidate.score:.3f} | pairs={len(candidate.pairs)} | "
             f"geom={candidate.geometry:.2f} | visual={candidate.appearance:.2f} | "
-            f"coverage={candidate.coverage:.2f}",
+            f"coverage={candidate.coverage:.2f} | reviewed={verified} ok, {wrong} wrong",
             fontsize=9,
         )
         axis.set_axis_off()
@@ -510,7 +521,7 @@ def draw_debug(
         0.5,
         0.02,
         "Yellow: target spots | Purple: projected source spots | "
-        "Cyan: tentative links | Red triangle: seed hypothesis",
+        "Cyan: unverified links | Green: correct | Red: incorrect | Orange: seed triangle",
         ha="center",
         fontsize=9,
     )
@@ -567,8 +578,10 @@ def draw_pair(
     residual = f"{np.median(chosen.errors):.1f}px" if chosen.errors else "n/a"
     print(
         f"{name}: pairs={len(chosen.pairs)}, score={chosen.score:.3f}, "
-        f"coverage={chosen.coverage:.2f}, residual={residual}, "
-        f"most-pairs={len(result.most_pairs.pairs)}, hypotheses={result.hypotheses}"
+        f"coverage={chosen.coverage:.2f}, geometry={chosen.geometry:.2f}, "
+        f"appearance={chosen.appearance:.2f}, residual={residual}, "
+        f"count-only={len(result.most_pairs.pairs)} "
+        f"(score={result.most_pairs.score:.3f}), hypotheses={result.hypotheses}"
     )
 
     if truth:
@@ -592,7 +605,7 @@ def draw_pair(
     plt.close(figure)
 
     if DEBUG_VISUAL:
-        draw_debug(first_label, second_label, source, target, result)
+        draw_debug(first_label, second_label, source, target, result, truth)
 
 
 def run(project: Project) -> None:
