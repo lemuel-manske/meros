@@ -549,7 +549,6 @@ def draw_debug(
     plt.close(figure)
 
 
-
 def tps_correction(
     points: np.ndarray,
     anchors: np.ndarray,
@@ -757,14 +756,12 @@ def draw_reconstruction(
     def update_view(_label: str | None) -> None:
         status = check.get_status()
         use_tps = nonrigid is not None and len(status) > 1 and status[1]
-        shown_mask, shown_region = nonrigid if use_tps and nonrigid is not None else (
-            warped_mask, warped_region
+        shown_mask, shown_region = (
+            nonrigid if use_tps and nonrigid is not None else (warped_mask, warped_region)
         )
         mask_artist.set_data(shown_mask)
         overlay_artist.set_data(shown_mask)
-        overlay_artist.set_alpha(
-            RECONSTRUCTION_OVERLAY_ALPHA * (shown_region > 0)
-        )
+        overlay_artist.set_alpha(RECONSTRUCTION_OVERLAY_ALPHA * (shown_region > 0))
         overlay_artist.set_visible(status[0])
         axes[1, 0].set_title(
             "Source binary mask: local TPS" if use_tps else "Source binary mask: global"
