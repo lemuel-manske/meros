@@ -1,6 +1,6 @@
 {
-  "subject_id": "yam",
-  "image_id": 1,
+  "subject_id": "rafael",
+  "image_id": 3,
   "side": "left",
   "coordinate_system": "subject_image_pixels",
   "eye": {
@@ -10,6 +10,6 @@
     ],
     "radius_x": 59.101196478344406,
     "radius_y": 46.45765693322596,
-    "angle_degrees": 0.0
+    "angle_degrees": 0
   }
 }

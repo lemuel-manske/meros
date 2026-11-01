@@ -1,7 +1,7 @@
 {
-  "subject_id": "yam",
-  "image_id": 1,
-  "image": "data/media/subjects/yam/1.jpg",
+  "subject_id": "rafael",
+  "image_id": 3,
+  "image": "data/media/subjects/rafael/3.jpg",
   "coordinate_system": "subject_image_pixels",
   "points": [
     [

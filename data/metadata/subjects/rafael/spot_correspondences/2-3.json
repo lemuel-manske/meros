@@ -1,8 +1,8 @@
 {
-  "subject_id": "yam",
+  "subject_id": "rafael",
   "image_ids": [
-    0,
-    1
+    2,
+    3
   ],
   "coordinate_system": "subject_image_pixels",
   "pairs": [

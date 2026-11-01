@@ -1,10 +1,10 @@
 {
-  "subject_id": "yam",
-  "image_id": 1,
+  "subject_id": "rafael",
+  "image_id": 3,
   "coordinate_system": "subject_image_pixels",
   "regions": [
     {
-      "region_id": "yam_1_20261102_1",
+      "region_id": "rafael_3_20261102_1",
       "bounds": [
         441,
         337,
