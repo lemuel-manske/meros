@@ -574,14 +574,11 @@ def draw_reconstruction(
 
     opacity = (RECONSTRUCTION_ALPHA * mask.astype(np.float32) / 255.0)[..., None]
     overlay = (
-        target.image.astype(np.float32) * (1.0 - opacity)
-        + warped.astype(np.float32) * opacity
+        target.image.astype(np.float32) * (1.0 - opacity) + warped.astype(np.float32) * opacity
     ).astype(np.uint8)
 
     tile = max(24, round(RECONSTRUCTION_CHECKER_TILE * target.spacing))
-    grid = (
-        np.arange(height)[:, None] // tile + np.arange(width)[None, :] // tile
-    ) % 2 == 0
+    grid = (np.arange(height)[:, None] // tile + np.arange(width)[None, :] // tile) % 2 == 0
     checkerboard = target.image.copy()
     use_warp = grid & (mask >= 128)
     checkerboard[use_warp] = warped[use_warp]
@@ -616,12 +613,18 @@ def draw_reconstruction(
 
     projected = project(source.points, alignment.matrix)
     axis.scatter(
-        projected[:, 0], projected[:, 1],
-        s=12, c=COLOR_PROJECTION, alpha=0.65,
+        projected[:, 0],
+        projected[:, 1],
+        s=12,
+        c=COLOR_PROJECTION,
+        alpha=0.65,
     )
     axis.scatter(
-        target.points[:, 0], target.points[:, 1],
-        s=12, c=COLOR_SPOT, alpha=0.85,
+        target.points[:, 0],
+        target.points[:, 1],
+        s=12,
+        c=COLOR_SPOT,
+        alpha=0.85,
     )
 
     for index in np.argsort(alignment.errors)[:MAX_LINES]:
