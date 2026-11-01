@@ -18,7 +18,6 @@ import cv2 as cv
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import ConnectionPatch
-from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 
 from meros.project import Project
@@ -41,10 +40,10 @@ MIN_SPOTS = 4
 
 NEIGHBOR_RADIUS = 0.40
 NEIGHBOR_TOLERANCE = 0.045
-NEIGHBOR_BORDER = 0.03
-MIN_NEIGHBORS = 3
-MIN_LOCAL_MATCHES = 3
-MIN_LOCAL_AGREEMENT = 0.60
+NEAREST_NEIGHBORS = 6
+MIN_NEIGHBORS = 2
+MIN_LOCAL_MATCHES = 2
+MIN_LOCAL_AGREEMENT = 0.70
 MAX_LINES = 20
 
 Label = tuple[str, int]
@@ -206,86 +205,61 @@ def match_spots(source: Photo, target: Photo) -> SpotMatch:
     return SpotMatch(matrix, pairs, errors)
 
 
-def local_matches(distances: np.ndarray, tolerance: float) -> int:
-    """
-    Count one-to-one neighboring spots within the positional tolerance.
-    """
-    n, m = distances.shape
-    costs = np.full((n + m, n + m), 3.0)
-    costs[:n, :m] = np.where(distances <= tolerance, distances / tolerance, 3.0)
-    costs[np.arange(n), m + np.arange(n)] = 0.5
-    costs[n + np.arange(m), np.arange(m)] = 0.5
-    costs[n:, m:] = 0.0
-    rows, cols = linear_sum_assignment(costs)
-    return sum(
-        1
-        for i, j in zip(rows, cols, strict=True)
-        if i < n and j < m and distances[i, j] <= tolerance
-    )
-
-
 def neighborhood_support(
     source: Photo,
     target: Photo,
     match: SpotMatch,
 ) -> list[LocalSupport | None]:
     """
-    Verify each proposed match against OTHER annotated spots in shared skin.
+    Check whether each proposed spot link agrees with its linked neighbors.
 
-    None means evidence is unavailable, not that the proposal is incorrect.
+    Unlike free matching between local spot clouds, this preserves neighbor
+    identities: an edge (i -> j) can support another edge (k -> l) only if
+    both relative displacement vectors agree. A displaced link in a repeated
+    constellation therefore cannot borrow support by relabeling the neighbors.
+
+    Compare the union of the nearest matched neighbors on both photos so
+    that one-sided changes in local topology count against agreement.
     """
-    predicted = project(source.points, match.matrix)
-    first_hull = cv.convexHull(predicted.astype(np.float32))
-    second_hull = cv.convexHull(target.points.astype(np.float32))
-    if min(cv.contourArea(first_hull), cv.contourArea(second_hull)) <= 0:
-        return [None] * len(match.pairs)
+    if not match.pairs:
+        return []
 
-    area, intersection = cv.intersectConvexConvex(first_hull, second_hull)
-    if intersection is None or area <= 0:
-        return [None] * len(match.pairs)
-
-    border = NEIGHBOR_BORDER * target.scale
-
-    def interior(points: np.ndarray) -> set[int]:
-        return {
-            k
-            for k, point in enumerate(points)
-            if cv.pointPolygonTest(intersection, (float(point[0]), float(point[1])), True) >= border
-        }
-
-    source_shared = interior(predicted)
-    target_shared = interior(target.points)
+    first, second = zip(*match.pairs, strict=True)
+    source_points = project(source.points, match.matrix)[list(first)]
+    target_points = target.points[list(second)]
     radius = NEIGHBOR_RADIUS * target.scale
     tolerance = NEIGHBOR_TOLERANCE * target.scale
     output: list[LocalSupport | None] = []
 
-    for i, j in match.pairs:
-        if i not in source_shared or j not in target_shared:
+    for index, (anchor_source, anchor_target) in enumerate(
+        zip(source_points, target_points, strict=True)
+    ):
+        source_vectors = source_points - anchor_source
+        target_vectors = target_points - anchor_target
+        source_distances = np.linalg.norm(source_vectors, axis=1)
+        target_distances = np.linalg.norm(target_vectors, axis=1)
+
+        neighbors = np.zeros(len(match.pairs), dtype=bool)
+        neighbors[np.argsort(source_distances)[1 : NEAREST_NEIGHBORS + 1]] = True
+        neighbors[np.argsort(target_distances)[1 : NEAREST_NEIGHBORS + 1]] = True
+        neighbors[index] = False
+        neighbors &= (source_distances <= radius) | (target_distances <= radius)
+
+        count = int(neighbors.sum())
+
+        if count < MIN_NEIGHBORS:
             output.append(None)
             continue
 
-        first = [
-            k
-            for k in source_shared
-            if k != i and np.linalg.norm(predicted[k] - predicted[i]) <= radius
-        ]
-        second = [
-            k
-            for k in target_shared
-            if k != j and np.linalg.norm(target.points[k] - target.points[j]) <= radius
-        ]
-
-        if min(len(first), len(second)) < MIN_NEIGHBORS:
-            output.append(None)
-            continue
-
-        distances = cdist(
-            predicted[first] - predicted[i],
-            target.points[second] - target.points[j],
+        displacement_error = np.linalg.norm(source_vectors - target_vectors, axis=1)
+        consistent = (
+            neighbors
+            & (source_distances <= radius)
+            & (target_distances <= radius)
+            & (displacement_error <= tolerance)
         )
-        count = local_matches(distances, tolerance)
-        agreement = 2 * count / (len(first) + len(second))
-        output.append(LocalSupport(agreement, count))
+        hits = int(consistent.sum())
+        output.append(LocalSupport(hits / count, hits))
 
     return output
 
