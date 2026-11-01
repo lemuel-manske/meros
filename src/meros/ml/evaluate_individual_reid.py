@@ -40,6 +40,11 @@ COLOR_BASELINE = "#579bff"
 COLOR_NEUTRAL = "#9da4af"
 COLOR_SEED = "#ee995f"
 
+DEBUG_RECONSTRUCTION = True
+RECONSTRUCTION_ALPHA = 0.45
+RECONSTRUCTION_HULL_MARGIN = 1.5
+RECONSTRUCTION_CHECKER_TILE = 2.0
+
 PATCH_SCALE = 2.0
 PATCH_SIZE = 128
 
@@ -537,6 +542,117 @@ def draw_debug(
     plt.close(figure)
 
 
+def draw_reconstruction(
+    first_label: Label,
+    second_label: Label,
+    source: Photo,
+    target: Photo,
+    alignment: Alignment,
+) -> None:
+    height, width = target.image.shape[:2]
+    source_height, source_width = source.image.shape[:2]
+    margin = max(10, round(RECONSTRUCTION_HULL_MARGIN * source.spacing))
+
+    hull = cv.convexHull(np.rint(source.points).astype(np.int32))
+    source_mask = np.zeros((source_height, source_width), dtype=np.uint8)
+    cv.fillConvexPoly(source_mask, hull, 255)
+    cv.polylines(source_mask, [hull], True, 255, thickness=2 * margin)
+
+    warped = cv.warpPerspective(
+        source.image,
+        alignment.matrix,
+        (width, height),
+        flags=cv.INTER_LINEAR,
+    )
+    mask = cv.warpPerspective(
+        source_mask,
+        alignment.matrix,
+        (width, height),
+        flags=cv.INTER_LINEAR,
+    )
+    mask = cv.GaussianBlur(mask, (0, 0), sigmaX=max(2.0, margin * 0.25))
+
+    opacity = (RECONSTRUCTION_ALPHA * mask.astype(np.float32) / 255.0)[..., None]
+    overlay = (
+        target.image.astype(np.float32) * (1.0 - opacity)
+        + warped.astype(np.float32) * opacity
+    ).astype(np.uint8)
+
+    tile = max(24, round(RECONSTRUCTION_CHECKER_TILE * target.spacing))
+    grid = (
+        np.arange(height)[:, None] // tile + np.arange(width)[None, :] // tile
+    ) % 2 == 0
+    checkerboard = target.image.copy()
+    use_warp = grid & (mask >= 128)
+    checkerboard[use_warp] = warped[use_warp]
+
+    figure, axes = plt.subplots(2, 3, figsize=(19, 11))
+    images = (
+        (axes[0, 0], source.image, "Source: original photo"),
+        (axes[0, 1], target.image, "Target: original photo"),
+        (axes[0, 2], warped, "Source warped to target coordinates"),
+        (axes[1, 0], overlay, "Masked overlay: source 45% / target 55%"),
+        (axes[1, 1], checkerboard, "Checkerboard inside the rough spot region"),
+    )
+
+    for axis, image, title in images:
+        axis.imshow(cv.cvtColor(image, cv.COLOR_BGR2RGB))
+        axis.set_title(title)
+        axis.set_axis_off()
+
+    axis = axes[1, 2]
+    axis.imshow(cv.cvtColor(target.image, cv.COLOR_BGR2RGB))
+
+    source_outline = cv.convexHull(source.points.astype(np.float32)).reshape(-1, 2)
+    target_outline = cv.convexHull(target.points.astype(np.float32)).reshape(-1, 2)
+    projected_outline = project(source_outline, alignment.matrix)
+
+    for polygon, color, name in (
+        (projected_outline, COLOR_PROJECTION, "Warped source spots hull"),
+        (target_outline, COLOR_SPOT, "Target spots hull"),
+    ):
+        closed = np.vstack((polygon, polygon[:1]))
+        axis.plot(closed[:, 0], closed[:, 1], color=color, lw=2, label=name)
+
+    projected = project(source.points, alignment.matrix)
+    axis.scatter(
+        projected[:, 0], projected[:, 1],
+        s=12, c=COLOR_PROJECTION, alpha=0.65,
+    )
+    axis.scatter(
+        target.points[:, 0], target.points[:, 1],
+        s=12, c=COLOR_SPOT, alpha=0.85,
+    )
+
+    for index in np.argsort(alignment.errors)[:MAX_LINES]:
+        i, j = alignment.pairs[index]
+        a, b = projected[i], target.points[j]
+        axis.plot((a[0], b[0]), (a[1], b[1]), color=COLOR_MATCH, lw=1, alpha=0.6)
+
+    axis.set_xlim(0, width)
+    axis.set_ylim(height, 0)
+    axis.set_title("Spot-hull outlines and proposed links")
+    axis.legend(loc="upper right", fontsize=8)
+    axis.set_axis_off()
+
+    figure.suptitle(
+        f"{first_label[0]}/{first_label[1]} → "
+        f"{second_label[0]}/{second_label[1]} | "
+        f"Selected transform ({len(alignment.pairs)} tentative pairs)"
+    )
+    figure.text(
+        0.5,
+        0.02,
+        "The expanded spot hull is only an approximate region, not a fish segmentation. "
+        "A plausible overlay does not prove identity.",
+        ha="center",
+        fontsize=9,
+    )
+    figure.tight_layout(rect=(0, 0.04, 1, 0.95))
+    plt.show(block=True)
+    plt.close(figure)
+
+
 def draw_pair(
     project: Project,
     first_label: Label,
@@ -612,6 +728,9 @@ def draw_pair(
     plt.close(figure)
 
     draw_debug(first_label, second_label, source, target, result, truth)
+
+    if DEBUG_RECONSTRUCTION:
+        draw_reconstruction(first_label, second_label, source, target, chosen)
 
 
 def get_pairs(project: Project) -> list[tuple[Label, Label]]:
