@@ -575,9 +575,7 @@ def draw_reconstruction(
     axes[0].set_title(f"Source: {first_label[0]}/{first_label[1]}")
 
     axes[1].imshow(warped_mask, cmap="gray", vmin=0, vmax=255, interpolation="nearest")
-    axes[1].set_title(
-        f"Binary spot mask after alignment: {second_label[0]}/{second_label[1]}"
-    )
+    axes[1].set_title(f"Binary spot mask after alignment: {second_label[0]}/{second_label[1]}")
 
     for axis in axes:
         axis.set_axis_off()
