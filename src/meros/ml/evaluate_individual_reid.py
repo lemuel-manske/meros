@@ -114,8 +114,8 @@ def create_encoder():
     """
     Load a frozen ImageNet ResNet18. The weights download on the first run.
     """
-    import torch
-    from torchvision.models import ResNet18_Weights, resnet18
+    import torch  # pyright: ignore[reportMissingImports]
+    from torchvision.models import ResNet18_Weights, resnet18  # pyright: ignore[reportMissingImports]
 
     backbone = resnet18(weights=ResNet18_Weights.DEFAULT)
     encoder = torch.nn.Sequential(*list(backbone.children())[:-2])
@@ -136,8 +136,8 @@ def extract_descriptors(
     """
     Embed grayscale contrast-normalized patches centered on manual spots.
     """
-    import torch
-    import torch.nn.functional as functional
+    import torch  # pyright: ignore[reportMissingImports]
+    import torch.nn.functional as functional  # pyright: ignore[reportMissingImports]
 
     patch_width = max(16, round(PATCH_SCALE * scale))
     grayscale = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
