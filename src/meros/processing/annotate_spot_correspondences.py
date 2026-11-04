@@ -9,7 +9,7 @@ import numpy as np
 from meros.project import Project
 
 
-SUBJECT_ID = 'rogerio'
+SUBJECT_ID = "rogerio"
 
 IMAGE_ID_1 = 10
 IMAGE_ID_2 = 12
