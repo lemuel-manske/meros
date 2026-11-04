@@ -6,7 +6,7 @@ from math import cos, radians, sin
 
 import numpy as np
 
-from meros.sandbox.common import show
+from meros.sandbox.geometry.common import show
 
 
 ANGLE = radians(25)

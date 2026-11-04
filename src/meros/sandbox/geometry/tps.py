@@ -5,7 +5,7 @@ Each evaluated correspondence is held out of fitting. TPS smoothing is chosen
 using only the remaining training pairs (nested cross-validation). This is a
 supervised geometric benchmark, not automatic fish identification.
 
-Run: python -m meros.sandbox.tps
+Run: python -m meros.sandbox.geometry.tps
 Requires DVC photos and the 10-12 spot-correspondence metadata.
 """
 
@@ -16,7 +16,7 @@ import numpy as np
 from scipy.interpolate import RBFInterpolator
 
 from meros.project import Project
-from meros.sandbox.spot_registration import load_example, show_predictions, summarize
+from meros.sandbox.geometry.common import load_example, show_predictions, summarize
 
 
 SUBJECT = "rogerio"

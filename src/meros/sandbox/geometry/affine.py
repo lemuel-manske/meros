@@ -4,7 +4,7 @@ Demo: independent scaling, shear and translation.
 
 import numpy as np
 
-from meros.sandbox.common import show
+from meros.sandbox.geometry.common import show
 
 
 matrix = np.array(

@@ -6,7 +6,7 @@ annotations establish an anatomical similarity initialization. Verified spot
 pairs are read only after fitting, to assess geometric error and identity.
 This benchmark is not comparable to supervised leave-one-out TPS as a ranking.
 
-Run: python -m meros.sandbox.cpd
+Run: python -m meros.sandbox.geometry.cpd
 Requires DVC photos and the 10-12 spot-correspondence metadata.
 """
 
@@ -17,7 +17,7 @@ from scipy.linalg import solve
 from scipy.spatial.distance import cdist
 
 from meros.project import Project
-from meros.sandbox.spot_registration import load_example, show_predictions, summarize
+from meros.sandbox.geometry.common import load_example, show_predictions, summarize
 
 
 SUBJECT = "rogerio"
