@@ -1,3 +1,11 @@
 # Processing
 
-Modules expose a preparation step and reusable image functions. Preparation runs in a fixed order and uses each step's completion check to reuse valid outputs. Rebuilding a step rebuilds the steps after it. Alignment stores transforms; composite construction applies them in memory. The matcher returns comparison statistics.
+Prepare and annotate observations from the project's media and metadata.
+
+- `extract_*.py` modules generate frames, tracks, and masked crops.
+- `annotate_*.py` modules provide interactive annotation tools.
+- `common.py` provides shared video-processing helpers.
+
+The pipeline controls stage order and completion checks. Persistence belongs
+in adapters accessed through `Project`; individual-identity scoring belongs
+in `meros.identification` rather than this package.
