@@ -5,8 +5,8 @@ These descriptors compare distributions, not point correspondences or fitted
 geometric transformations. Scores are uncalibrated research evidence, not
 probabilities of identity or automatic known/unknown decisions.
 
-Historical E05: local three-neighbor distribution, energy distance.
-Historical E24: the same local features with 0.25-weighted global context.
+The local signature uses a three-neighbor feature distribution.
+The combined signature adds lightly weighted global distance context.
 
 Run: python -m meros.sandbox.geometry.spot_signature
 """
@@ -95,8 +95,8 @@ def run() -> None:
         joint_score = score(source, target)
         print(
             f"{source_id} -> {target_id}: "
-            f"E05.local3.energy={local_score:.6f}, "
-            f"E24.global_joint0.25={joint_score:.6f}"
+            f"local_signature={local_score:.6f}, "
+            f"local_global_signature={joint_score:.6f}"
         )
 
         if not SHOW_PLOTS:
@@ -110,7 +110,7 @@ def run() -> None:
             axis.invert_yaxis()
             axis.set_title(f"{label[0]}/{label[1]} ({len(points)} spots)")
 
-        figure.suptitle(f"Coordinate-only comparison | E24 score: {joint_score:.4f}")
+        figure.suptitle(f"Coordinate-only comparison | combined score: {joint_score:.4f}")
         figure.tight_layout()
         plt.show(block=True)
         plt.close(figure)
