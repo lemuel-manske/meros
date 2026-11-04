@@ -11,8 +11,8 @@ from meros.project import Project
 
 SUBJECT_ID = "rogerio"
 
-IMAGE_ID_1 = 10
-IMAGE_ID_2 = 12
+IMAGE_ID_1 = 9
+IMAGE_ID_2 = 11
 
 
 def annotate_pair(
