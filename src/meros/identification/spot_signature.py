@@ -11,11 +11,6 @@ from scipy.spatial.distance import cdist
 
 
 GLOBAL_WEIGHT = 0.25
-SHOW_PLOTS = True
-EXAMPLE_PAIRS = (
-    (("rogerio", 10), ("rogerio", 12)),
-    (("rafael", 3), ("rogerio", 9)),
-)
 
 
 def descriptors(points: np.ndarray, global_weight: float = GLOBAL_WEIGHT) -> np.ndarray:
