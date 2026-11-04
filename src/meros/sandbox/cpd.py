@@ -33,8 +33,10 @@ COORDINATE_SCALE = 100.0
 
 
 def anatomical_similarity(
-    source_eye: np.ndarray, source_mouth: np.ndarray,
-    target_eye: np.ndarray, target_mouth: np.ndarray,
+    source_eye: np.ndarray,
+    source_mouth: np.ndarray,
+    target_eye: np.ndarray,
+    target_mouth: np.ndarray,
 ) -> np.ndarray:
     """
     Return a similarity matrix from two anatomical landmarks in each image.
@@ -74,8 +76,10 @@ def nonrigid_cpd(source: np.ndarray, target: np.ndarray) -> tuple[np.ndarray, in
         probabilities = np.exp(-distances / (2 * variance))
         outlier_term = (
             (2 * np.pi * variance) ** (dimensions / 2)
-            * CPD_OUTLIER_FRACTION / (1 - CPD_OUTLIER_FRACTION)
-            * m / n
+            * CPD_OUTLIER_FRACTION
+            / (1 - CPD_OUTLIER_FRACTION)
+            * m
+            / n
         )
         probabilities /= probabilities.sum(axis=0, keepdims=True) + outlier_term + 1e-80
 
@@ -117,8 +121,10 @@ def run() -> None:
         raise ValueError("CPD requires eye and mouth annotations for both photographs")
 
     matrix = anatomical_similarity(
-        np.asarray(source_eye.center), np.asarray(source_mouth),
-        np.asarray(target_eye.center), np.asarray(target_mouth),
+        np.asarray(source_eye.center),
+        np.asarray(source_mouth),
+        np.asarray(target_eye.center),
+        np.asarray(target_mouth),
     )
     aligned = example.source_spots @ matrix[:2, :2].T + matrix[:2, 2]
     transformed, iterations = nonrigid_cpd(aligned, example.target_spots)
@@ -133,7 +139,9 @@ def run() -> None:
     print(f"CPD iterations: {iterations}; max label-to-source offset: {np.max(deviations):.1f}px")
     summarize("CPD (label-free)", predictions, example)
     show_predictions(
-        example, predictions, "Non-rigid CPD: labels used only for evaluation",
+        example,
+        predictions,
+        "Non-rigid CPD: labels used only for evaluation",
         transformed_spots=transformed,
     )
 
