@@ -130,9 +130,7 @@ def local_triangles(points: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return np.asarray(ordered, dtype=int), np.asarray(signatures)
 
 
-def hypotheses(
-    source: np.ndarray, target: np.ndarray, method: str, rng: np.random.Generator
-):
+def hypotheses(source: np.ndarray, target: np.ndarray, method: str, rng: np.random.Generator):
     """
     Yield affine hypotheses from unlabeled geometric correspondences.
     """
@@ -277,7 +275,11 @@ def best_hypothesis(
 
 
 def fit_tps(
-    source: np.ndarray, target: np.ndarray, affine: np.ndarray, first: np.ndarray, second: np.ndarray
+    source: np.ndarray,
+    target: np.ndarray,
+    affine: np.ndarray,
+    first: np.ndarray,
+    second: np.ndarray,
 ):
     """
     Fit a regularized bounded residual warp from unlabeled consensus pairs.
@@ -301,8 +303,11 @@ def fit_tps(
 
 
 def heldout_score(
-    projected: np.ndarray, target: np.ndarray, occupied: np.ndarray,
-    radius: float, rng: np.random.Generator,
+    projected: np.ndarray,
+    target: np.ndarray,
+    occupied: np.ndarray,
+    radius: float,
+    rng: np.random.Generator,
 ) -> tuple[int, int, float, float, np.ndarray, np.ndarray]:
     """
     Verify on unused source spots and targets, correcting for chance coincidence.
@@ -357,8 +362,19 @@ def compare(
     score = float(excess * support * penalty)
 
     return MatchResult(
-        method, source, target, transformed, training[anchors], target[matches],
-        held_source, held_target, evaluated, observed, expected, score, bending,
+        method,
+        source,
+        target,
+        transformed,
+        training[anchors],
+        target[matches],
+        held_source,
+        held_target,
+        evaluated,
+        observed,
+        expected,
+        score,
+        bending,
     )
 
 
@@ -384,8 +400,7 @@ def visualize(results: dict[str, MatchResult], title: str) -> None:
         axis.set_aspect("equal", adjustable="box")
         axis.invert_yaxis()
         axis.set_title(
-            f"{method}: held-out={result.observed}/{result.evaluated}; "
-            f"score={result.score:.2f}"
+            f"{method}: held-out={result.observed}/{result.evaluated}; score={result.score:.2f}"
         )
 
     figure.suptitle(title + " | cyan: mapped source | yellow: target | red: held-out links")
