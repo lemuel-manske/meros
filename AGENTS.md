@@ -74,6 +74,10 @@ It includes functions for resizing, filtering, and transforming images.
 
 - Never write right after `"""` on the same line. Always start a new line for the docstring content.
 
+# Commits
+
+This project follows the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) specification.
+
 # Validation
 
 > `make test`, `make typecheck`, `make lint`, `make format-check`, and `make cli-check` can also run separately. `make format` applies the formatting rules.
