@@ -1,18 +1,16 @@
+"""
+Coordinate-only spot signatures without alignment or known spot correspondences.
+
+Scores are uncalibrated distribution similarities, not identity probabilities.
+"""
+
 from __future__ import annotations
 
-import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial.distance import cdist
 
-from meros.project import Project
-
 
 GLOBAL_WEIGHT = 0.25
-SHOW_PLOTS = True
-EXAMPLE_PAIRS = (
-    (("rogerio", 10), ("rogerio", 12)),
-    (("rafael", 3), ("rogerio", 9)),
-)
 
 
 def descriptors(points: np.ndarray, global_weight: float = GLOBAL_WEIGHT) -> np.ndarray:
@@ -66,42 +64,3 @@ def score(
     energy = max(0.0, float(2 * between - within_first - within_second))
 
     return -energy
-
-
-def run() -> None:
-    """
-    Compare one known-positive and one known-negative pair for visual inspection.
-    """
-    project = Project.open()
-
-    for source_id, target_id in EXAMPLE_PAIRS:
-        source = np.asarray(project.metadata.read_subject_spots(*source_id), dtype=float)
-        target = np.asarray(project.metadata.read_subject_spots(*target_id), dtype=float)
-
-        local_score = score(source, target, global_weight=0.0)
-        joint_score = score(source, target)
-        print(
-            f"{source_id} -> {target_id}: "
-            f"local_signature={local_score:.6f}, "
-            f"local_global_signature={joint_score:.6f}"
-        )
-
-        if not SHOW_PLOTS:
-            continue
-
-        figure, axes = plt.subplots(1, 2, figsize=(11, 5))
-
-        for axis, points, label in zip(axes, (source, target), (source_id, target_id), strict=True):
-            axis.scatter(points[:, 0], points[:, 1], s=16)
-            axis.set_aspect("equal", adjustable="box")
-            axis.invert_yaxis()
-            axis.set_title(f"{label[0]}/{label[1]} ({len(points)} spots)")
-
-        figure.suptitle(f"Coordinate-only comparison | combined score: {joint_score:.4f}")
-        figure.tight_layout()
-        plt.show(block=True)
-        plt.close(figure)
-
-
-if __name__ == "__main__":
-    run()
