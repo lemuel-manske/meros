@@ -5,7 +5,7 @@ Demo: perspective distortion from a square to a quadrilateral.
 import cv2 as cv
 import numpy as np
 
-from meros.sandbox.common import show
+from meros.sandbox.geometry.common import show
 
 
 source = np.array([[0, 0], [4, 0], [4, 4], [0, 4]], dtype=np.float32)
