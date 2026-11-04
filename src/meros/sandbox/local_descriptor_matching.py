@@ -228,8 +228,7 @@ def diagnostic_report(
         best = float(similarity[i, source_order[i, 0]])
         correct = float(similarity[i, j])
         print(
-            f"  {i:3d} -> {j:3d} | {rank:3d} | {correct:+.4f} | "
-            f"{best:+.4f} | {best - correct:.4f}"
+            f"  {i:3d} -> {j:3d} | {rank:3d} | {correct:+.4f} | {best:+.4f} | {best - correct:.4f}"
         )
 
     print(
