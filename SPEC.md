@@ -1,6 +1,8 @@
-# Meros — Goliath Grouper Individual Re-Identification
+# Meros - Goliath Grouper Individual Re-Identification
 
 ## Project overview
+
+> Meros is the Portuguese name for Goliath Groupers (*Epinephelus itajara*)
 
 **Meros** is a research collaboration between the **Regional University of Blumenau (FURB)** and the **Meros Institute of Brazil**.
 
@@ -36,28 +38,15 @@ The head contains numerous spots and irregular markings. Their spatial configura
 
 #### Observed longitudinal variation in spot appearance
 
-Two photographs from different encounters of the fish now identified as **Rogerio**
-(formerly also labeled **Luana**) show a local difference in the marked skin
-pattern near the eye: one photograph appears to contain a single larger dark
-spot, while the other shows two smaller adjacent marks in the corresponding
-region. The observer confirmed that both photographs depict the same individual.
+Two photographs from different encounters of the fish now identified as **Rogerio** show a local difference in the marked skin pattern near the eye: one photograph appears to contain a single larger dark spot, while the other shows two smaller adjacent marks in the corresponding region. The observer confirmed that both photographs depict the same individual.
 
-This is an **observed difference in appearance across encounters**, not proof
-that one biological spot physically split into two. Camera viewpoint, image
-quality, illumination, and mark boundaries may contribute to the appearance;
-the biological mechanism has not been established. Exact recording dates
-and the elapsed interval have not been documented here.
-
-**Implication for future research:** a strict permanent one-to-one mapping of
-individual spots should not be assumed across encounters. An unmatched spot
-or a changed local spot count is not, by itself, evidence of a different fish.
-Longitudinal validation should distinguish genuine pattern changes from
-differences caused by imaging conditions. This observation is recorded as a
-dataset limitation; it does **not** change the current matcher or its evaluation.
+This is an **observed difference in appearance across encounters**, not proof that one biological spot physically split into two. Camera viewpoint, image quality, illumination, and mark boundaries may contribute to the appearance; the biological mechanism has not been established.
 
 ### Body patterns
 
 The body presents irregular combinations of darker and lighter regions, including bands, blotches, and other markings. These patterns may also contain information useful for individual identification.
+
+It's known that those patterns can change their color over time; Some captures show a very dark body, while others show a lighter body with no visible markings.
 
 ### Color variation
 
@@ -78,35 +67,13 @@ Whether particular markings are sufficiently stable and unique to function as bi
 
 ## Dataset
 
-The dataset consists primarily of short underwater videos recorded by **divers and swimmers along the Brazilian coast**, including observations made at breeding aggregation sites.
+The current working dataset contains 6 individuals, with 2 of them with multiple captures.
 
-Videos generally contain approximately **100–500 frames**, with many sequences containing around **200 frames**.
+Those photos were taken on Fernando de Noronha Island, Brazil, in 2004–2013. The dataset is **not yet large enough to support a fully independent evaluation of identification performance**.
 
-Because consecutive frames are highly correlated, however, the number of video frames should not be interpreted as the number of independent observations. A 200-frame video may contain many nearly identical views of the same individual.
+The dataset was labeled: individual name, head spots, spots correspondences between captures, mouths, eyes, etc.
 
-The effective amount of identity information therefore depends more strongly on:
-
-- number of known individuals;
-- number of independent encounters with each individual;
-- number of locations;
-- number of recording dates;
-- viewpoint diversity;
-- visibility conditions;
-- quality of the visible anatomical patterns.
-
-## Dataset characteristics
-
-### Camera motion
-
-The cameras are operated by divers or swimmers rather than mounted in a fixed position. Consequently:
-
-- camera orientation changes continuously;
-- distance to the fish varies;
-- framing changes rapidly;
-- motion blur can occur;
-- the fish may enter or leave the image boundaries.
-
-The system cannot assume a stable background or camera geometry.
+## Dataset cearacteristics
 
 ### Viewpoint variation
 
@@ -124,8 +91,6 @@ This makes individual recognition inherently **viewpoint dependent**.
 ### Turbidity and visibility
 
 Breeding areas may contain highly turbid water. Suspended particles reduce contrast and obscure fine-scale skin patterns.
-
-Visibility may also vary considerably within a single recording as the distance between the camera and fish changes.
 
 ### Illumination and color distortion
 
@@ -163,99 +128,9 @@ Fish may be:
 
 An identification system must therefore tolerate incomplete observations.
 
-### Multiple individuals
-
-Some recordings contain multiple Goliath Groupers at the same time.
-
-Consequently, detection and tracking are important preprocessing stages. Identity evidence from different animals must not accidentally be aggregated into the same representation.
-
 ## Key research challenges
 
-The project involves several related computer-vision challenges.
-
-### 1. Fish detection
-
-Locate every visible Goliath Grouper within each frame.
-
-The detector must remain robust under:
-
-- poor visibility;
-- partial occlusion;
-- variable scale;
-- unusual viewing angles;
-- motion blur.
-
-### 2. Multi-object tracking
-
-Associate detections belonging to the same fish across consecutive frames.
-
-Tracking provides two important benefits:
-
-- it prevents every frame from being treated as an independent observation;
-- it produces a **track** containing multiple views of the same candidate individual.
-
-### 3. Anatomical region localization
-
-The complete fish may not always provide the best representation for identification.
-
-Potentially useful regions include:
-
-- head;
-- cheek or operculum region;
-- lateral body;
-- dorsal region;
-- tail;
-- other morphological structures.
-
-The system may therefore benefit from identifying anatomical regions before extracting identity features.
-
-### 4. Individual feature representation
-
-The system must learn or construct an embedding in which observations of the **same fish are close together**, while observations of **different fish are separated**.
-
-The representation should ideally be robust to:
-
-- viewpoint;
-- scale;
-- brightness;
-- color changes;
-- turbidity;
-- partial occlusion;
-- moderate blur.
-
-At the same time, it must preserve subtle individual-specific markings.
-
-### 5. Multi-frame evidence aggregation
-
-Not every frame provides equally useful information.
-
-Rather than identifying a fish independently from every frame, the system should potentially estimate the quality of each observation and combine evidence across a track.
-
-For example, one frame might provide a clear view of the head while another provides a better lateral body view.
-
-This suggests a formulation such as:
-
-**frames → fish detections → track → quality/view assessment → identity representation → individual match**
-
-rather than:
-
-**frame → identity**
-
-### 6. Cross-video re-identification
-
-The central task is determining whether fish appearing in different recordings correspond to the same individual.
-
-This is significantly more difficult than tracking within a single video because recordings may differ in:
-
-- date;
-- location;
-- camera;
-- illumination;
-- water conditions;
-- orientation;
-- visible anatomical region.
-
-### 7. Open-set identification
+### Open-set identification
 
 In real deployments, not every observed fish will already exist in the reference database.
 
@@ -272,85 +147,6 @@ and:
 > Is this one of the known individuals, or is it a previously unseen fish?
 
 This distinction is especially important if the system will eventually be used for ecological monitoring rather than only retrospective classification of a fixed dataset.
-
-## Proposed system abstraction
-
-A useful high-level representation of the pipeline is:
-
-**Underwater video**
-
-→ **Goliath Grouper detection**
-
-→ **multi-object tracking**
-
-→ **fish tracks**
-
-→ **frame/view quality assessment**
-
-→ **anatomical-pattern feature extraction**
-
-→ **multi-frame identity embedding**
-
-→ **similarity search against known individuals**
-
-→ **known individual / unknown individual decision**
-
-→ **observation database**
-
-→ **movement and migration analysis**
-
-## Dataset annotation requirements
-
-To properly investigate the problem, the dataset should eventually contain annotations at several levels.
-
-At minimum:
-
-- video identifier;
-- recording date;
-- recording location;
-- known fish identity, when available;
-- bounding box or segmentation of each visible grouper;
-- association between detections belonging to the same fish within a video.
-
-Additional annotations could substantially help the research:
-
-- left/right/front/rear viewpoint;
-- head visibility;
-- body visibility;
-- degree of occlusion;
-- image quality;
-- blur level;
-- visibility or turbidity level;
-- confidence of the human-provided identity.
-
-These labels could later be automated, but they would make controlled experiments considerably easier.
-
-## Evaluation protocol
-
-Evaluation must be designed carefully because video frames are highly correlated.
-
-Randomly splitting frames into training and testing sets would produce severe **data leakage**: nearly identical frames of the same encounter could appear in both sets and result in unrealistically high performance.
-
-Dataset partitions should therefore be created at the level of **independent encounters or videos**, and preferably also account for recording date and location.
-
-For individual re-identification, relevant metrics include:
-
-- **Top-1 identification accuracy**;
-- **Top-k identification accuracy**;
-- **mean Average Precision (mAP)** for retrieval;
-- **ROC / verification performance** for deciding whether two observations correspond to the same individual;
-- **false-match rate**;
-- **false-non-match rate**;
-- performance of **unknown-individual rejection** for open-set experiments.
-
-Results should additionally be stratified according to difficult conditions such as:
-
-- viewpoint;
-- visibility;
-- blur;
-- fish size in the image;
-- occlusion;
-- anatomical region visible.
 
 ## Research questions
 
@@ -381,164 +177,3 @@ For each sufficiently reliable observation, the system should eventually produce
 **individual identity + location + date/time + identification confidence**
 
 Repeated observations could then be used to reconstruct movement histories and investigate migration, site fidelity, and breeding aggregation behavior of *Epinephelus itajara* along the Brazilian coast.
-
-## Findings from exploratory experiments
-
-The initial historical photo benchmark listed 18 images under eight catalog identities,
-including names that later proved to represent the same fish. Four catalog
-identities had multiple eligible images, yielding 14 queries. These historical
-results use the original labels and should not be treated as independent tests
-of biological identity. Eye and mouth landmarks were manual.
-
-### Identification results
-
-| Method | Rank-1 |
-| --- | --- |
-| Anatomical geometry: manual query / manual gallery | 14/14 |
-| Anatomical geometry: automatic query / manual gallery | 11/14 |
-| Anatomical geometry: manual query / automatic gallery | 9/14 |
-| Anatomical geometry: automatic query / automatic gallery | 7/14 |
-| Frozen MiewID: complete photo | 6/14 |
-| Frozen MiewID: segmented fish | 8/14 |
-
-Manual spots were selected while comparing photos and finding correspondences:
-14/14 includes human matching knowledge, not independent detector performance.
-Automatic/automatic means detected centers in both query and gallery; anatomical
-landmarks are still provided by a human.
-
-A local-pattern experiment kept the same gallery but excluded Luana's two
-queries because her 13 verified correspondences supplied metric training:
-
-| Method, using the same retained automatic centers | Rank-1 |
-| --- | --- |
-| Original anatomical matcher | 4/12 |
-| Frozen local ImageNet ResNet18 features | 10/12 |
-| Same features with a metric trained on Luana | 6/12 |
-
-The encoder stayed frozen; training adjusted feature weights. Inputs were
-small grayscale neighborhoods with normalized contrast, anatomical
-scale/orientation, and a fish-mask coverage filter. Both local
-variants scored 5/7 on Rogerio; training reduced the other individuals from
-5/5 to 1/5. Some decisions relied on only 1–3 proposed correspondences.
-
-### Reconciled spot-based re-identification benchmark
-
-After confirming Luana = Rogério and Yam = Rafael, the same 18 photos represent
-**six biological individuals**. Only Rafael and Rogério have multiple photos.
-The historical frozen ImageNet ResNet18 spot-descriptor matcher combines local
-appearance with eye/mouth geometry and affine matching of manually annotated
-spots. On 14 leave-one-image-out queries, its **Rank-1 and Rank-3 were 14/14**.
-The photographs represent distinct encounters, but repeated exploration of the
-same small corpus prevents an independent estimate of performance on unseen identities.
-
-Experiments with kNN-based adaptive combinations of score, density, coverage,
-and spatial distribution degraded Rank-1 to 11/14 (12/14 with local features).
-The original matcher was the retrieval baseline for those historical image-and-anatomy experiments; it is distinct from the coordinate-only baseline below.
-
-A more useful hypothesis was to check the **geometric arrangement of all
-annotated spots surrounding each proposed correspondence**, including spots
-not already matched. On all 306 directed photo pairs, local geometric
-consistency was measurable for 78/92 same-identity and 151/214
-different-identity pairs. Median consistency was 0.474 for same-identity
-pairs and 0.349 for different-identity pairs. Multiplying the original score
-by this consistency preserved Rank-1 at 14/14 while increasing median
-correct-versus-best-impostor margin from **0.089 to 0.124** on those same
-14 queries. Adding neighboring patch appearance or learned feature weights
-did not improve on geometric consistency alone.
-
-This is a dataset-specific ranking observation, not evidence of calibrated
-identity confidence. When neighborhood evidence is incomparable, the score
-falls back to the original matcher. Convex hulls of sparse annotations do
-not guarantee the same visible skin, and missing spots are not verified
-biological negatives. Keep source images and proposed correspondences
-available for human audit. The final historical corpus cannot establish
-operational accuracy or calibrated unknown-individual rejection.
-
-### Lessons and implications
-
-- **Detection quality is not identification quality.** Additional centers caused
-  spurious geometric matches despite useful candidate coverage. Evaluate detector
-  and matcher changes separately, retaining the anatomical matcher as a baseline.
-- **Unannotated does not mean negative.** Original labels are selective. Use
-  completely reviewed regions for background supervision, retain ambiguous cases,
-  and keep automatic proposals separate from verified correspondences. Human
-  reviews remain in `data/metadata/subjects/*/spot_region_reviews/`.
-- **Darkness alone is insufficient.** Earlier DoG experiments benefited from
-  center-surround and radial contrast; rigid shape filters removed true spots.
-  Their historical maximum was 8/14, without confirmed reproduction of the
-  consolidated script. Gill/lip shadows remained confounders for the ResNet18/U-Net
-  center detector; a few added negative crops did not resolve them.
-- **Rigid crops lost useful context.** Eye–mouth–gill triangles were sensitive to
-  alignment and hindered human comparison. Boundary expansion was tested only
-  on same-individual pairs, without identification validation. Display full
-  photos when reviewing local evidence.
-- **Restricting inputs helps auditability, not certainty.** Masking improved the
-  frozen MiewID result but does not prove use of stable identity marks. Local
-  matching exposes supporting regions; its neural descriptors remain learned.
-  MiewID was not fine-tuned locally; pretraining overlap with these photos is
-  unknown. Similarity scores are not calibrated identity probabilities.
-- **One annotated pair did not support transfer.** Metric training improved
-  retrieval on its training examples but worsened identification of other fish.
-  Keep verified correspondences for retrospective audits, but avoid further
-  parameter selection against the same finite collection of photographs.
-
-The existing photos have been repeatedly explored, and Rogerio participated in
-center-detector training. Although these photographs represent distinct encounters,
-only two identities have repeated observations. Do not rank the 12-query and
-14-query protocols together as evidence of generalization. Inspect actual supporting matches and permit
-insufficient evidence instead of forcing an identity. Temporal aggregation,
-long-term pattern stability, and unknown-individual rejection remain unvalidated.
-
-### Coordinate-only spot-verification campaign (2026 research consolidation)
-
-Following researcher confirmation, **all 18 eligible spot-annotated photographs
-represent distinct encounters from 2004–2013**. They cover six biological
-individuals, but only Rogerio (9) and Rafael (5) have repeated observations.
-The 46 genuine and 107 impostor photo pairs are highly dependent; no population
-false-match rate or independent model-selection evaluation can be established.
-The dataset is final and cannot be expanded. Earlier exploration written before
-this encounter confirmation should be read with that clarification.
-
-A separate coordinate-only research program (Cycles 1–6; E00–E28, with 17
-additional research questions after Cycle 1) investigated global/locally
-regularized registration, Shape Context/TPS, triangle/TPS, geometric holdouts,
-local motif distributions, rarity, graph consistency, structured impostor nulls,
-partial transport, pose normalization, angular descriptors, missing-spot stress,
-and open-set gallery policies. The key finding was that **no-warp statistical
-spot distributions separated identities better than flexible point fitting on
-this corpus**, but did not uniquely encode global spot arrangement.
-
-| Exploratory method | ROC-AUC | Average precision |
-| --- | ---: | ---: |
-| E04 nearest-neighbor/angular signature | 0.896 | 0.775 |
-| Shape Context + TPS | 0.709 | 0.652 |
-| Triangle + TPS | 0.799 | 0.721 |
-| E05 local 3-neighbor joint distribution | 0.932 | 0.895 |
-| **E24 local/global joint distribution** | **0.941** | **0.911** |
-| E26 radii/global without angles | 0.948 | 0.903 |
-
-The frozen **E24.global_joint0.25** was selected for stronger rejection of the
-hardest observed impostors despite E26's higher aggregate AUC. It compares
-local normalized radii and angular moments plus a lightly weighted global
-distance context using energy distance. No point correspondences, image pixels,
-eye/mouth landmarks, geometry warp or identity labels are required at inference.
-The compact implementation is `src/meros/sandbox/geometry/spot_signature.py`.
-Its scores are **not identity probabilities**.
-
-In the exploratory two-identity gallery with query-identity-held-out rejection,
-E24 accepted 12/14 known queries correctly, incorrectly accepted 0/4 singleton
-unknowns and abstained on 6/18. It still suffers missing-spot/crop sensitivity
-and high scores for spatially rearranged but locally similar spot patterns.
-All values were obtained during repeated method development on this one small
-dataset and **cannot justify an operational threshold or automatic identity
-assignment**. The investigation stopped when further selection risked overfit.
-
-See [the consolidated research history](docs/04_11_2026.md)
-for **every tested mechanism and its outcome**, failure examples, evaluation
-limits and archive links. The complete committed protocols, experimental code,
-ledgers and score tables remain available from historical commit
-[`d98da95`](https://github.com/lemuel-manske/meros/commit/d98da954d20f2d76d1e4921dd477e593bd72bffd)
-on the separate `experiment/coordinate-verification-audit` branch; they were
-not imported into the maintained tree. Generated files ignored by Git are not
-necessarily recoverable from the commit.
-

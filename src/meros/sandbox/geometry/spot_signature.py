@@ -1,16 +1,3 @@
-"""
-Coordinate-only spot signatures selected by the 2026 verification campaign.
-
-These descriptors compare distributions, not point correspondences or fitted
-geometric transformations. Scores are uncalibrated research evidence, not
-probabilities of identity or automatic known/unknown decisions.
-
-The local signature uses a three-neighbor feature distribution.
-The combined signature adds lightly weighted global distance context.
-
-Run: python -m meros.sandbox.geometry.spot_signature
-"""
-
 from __future__ import annotations
 
 import matplotlib.pyplot as plt
