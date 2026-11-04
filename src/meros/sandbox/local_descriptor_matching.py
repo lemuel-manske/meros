@@ -252,7 +252,6 @@ def diagnostic_report(
     axes[0].set_xlabel("1 = best candidate")
     axes[0].set_ylabel("Verified spots")
 
-    categories = {"confirmed": 0, "contradicted": 1, "unverified": 2}
     colors = {"confirmed": "#36b46b", "contradicted": "#df595a", "unverified": "#b6bdc9"}
 
     for i, j in matches:
