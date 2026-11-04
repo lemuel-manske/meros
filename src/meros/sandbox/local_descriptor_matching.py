@@ -163,6 +163,121 @@ def evaluate_verified(
     return truth, top1, top3, correct, len(annotations)
 
 
+def match_label(
+    source_index: int,
+    target_index: int,
+    truth: set[tuple[int, int]],
+) -> str:
+    """
+    Classify a proposed link using only explicitly verified annotations.
+    """
+    if (source_index, target_index) in truth:
+        return "confirmed"
+
+    known_source = {i for i, _ in truth}
+    known_target = {j for _, j in truth}
+
+    if source_index in known_source or target_index in known_target:
+        return "contradicted"
+
+    return "unverified"
+
+
+def diagnostic_report(
+    similarity: np.ndarray,
+    matches: np.ndarray,
+    truth: set[tuple[int, int]] | None,
+    title: str,
+) -> None:
+    """
+    Inspect proposal ambiguity without selecting a rejection threshold.
+    """
+    source_order = np.argsort(-similarity, axis=1)
+    source_gap = np.sort(similarity, axis=1)[:, -1] - np.sort(similarity, axis=1)[:, -2]
+    target_gap = np.sort(similarity, axis=0)[-1] - np.sort(similarity, axis=0)[-2]
+
+    print(f"\n{title}: mutual proposals with top-1 / top-2 cosine margins")
+    print("  source -> target | cosine | source margin | target margin | verification")
+
+    labels = []
+
+    for source_index, target_index in matches:
+        i, j = int(source_index), int(target_index)
+        label = match_label(i, j, truth) if truth is not None else "unknown identity"
+        labels.append(label)
+        print(
+            f"  {i:3d} -> {j:3d} | {similarity[i, j]:+.4f} | "
+            f"{source_gap[i]:.4f} | {target_gap[j]:.4f} | {label}"
+        )
+
+    if truth is None:
+        print("  No ground-truth correspondence labels are available for this impostor pair.")
+        return
+
+    for label in ("confirmed", "contradicted", "unverified"):
+        print(f"  {label}: {labels.count(label)}/{len(matches)} proposals")
+
+    print("\n  Verified marks: rank and ambiguity of their correct partner")
+    print("  source -> target | target rank | correct cosine | best cosine | gap to best")
+
+    ranks = []
+
+    for i, j in sorted(truth):
+        rank = int(np.flatnonzero(source_order[i] == j)[0]) + 1
+        ranks.append(rank)
+        best = float(similarity[i, source_order[i, 0]])
+        correct = float(similarity[i, j])
+        print(
+            f"  {i:3d} -> {j:3d} | {rank:3d} | {correct:+.4f} | "
+            f"{best:+.4f} | {best - correct:.4f}"
+        )
+
+    print(
+        f"  Verified top-1={sum(rank == 1 for rank in ranks)}/{len(ranks)}, "
+        f"top-3={sum(rank <= 3 for rank in ranks)}/{len(ranks)}."
+    )
+    print(
+        "  Margins are descriptive; neither a cosine margin nor a mutual match "
+        "is calibrated identity evidence."
+    )
+
+    figure, axes = plt.subplots(1, 2, figsize=(12, 4))
+    ranks_array = np.asarray(ranks)
+    axes[0].hist(
+        ranks_array,
+        bins=np.arange(0.5, similarity.shape[1] + 1.5),
+        edgecolor="black",
+    )
+    axes[0].set_title("Rank of manually verified partner")
+    axes[0].set_xlabel("1 = best candidate")
+    axes[0].set_ylabel("Verified spots")
+
+    categories = {"confirmed": 0, "contradicted": 1, "unverified": 2}
+    colors = {"confirmed": "#36b46b", "contradicted": "#df595a", "unverified": "#b6bdc9"}
+
+    for i, j in matches:
+        source_index, target_index = int(i), int(j)
+        label = match_label(source_index, target_index, truth)
+        axes[1].scatter(
+            source_gap[source_index],
+            target_gap[target_index],
+            color=colors[label],
+            label=label,
+            s=36,
+        )
+
+    handles, labels_for_legend = axes[1].get_legend_handles_labels()
+    unique = dict(zip(labels_for_legend, handles, strict=True))
+    axes[1].legend(unique.values(), unique.keys())
+    axes[1].set_title("Reciprocal match ambiguity")
+    axes[1].set_xlabel("Source best-vs-second cosine gap")
+    axes[1].set_ylabel("Target best-vs-second cosine gap")
+    figure.suptitle(title)
+    figure.tight_layout()
+    plt.show(block=True)
+    plt.close(figure)
+
+
 def show_matches(
     first_image: np.ndarray,
     second_image: np.ndarray,
@@ -173,7 +288,7 @@ def show_matches(
     title: str,
 ) -> None:
     """
-    Visualize inferred links: green verified, red contradicted, gray unverified.
+    Visualize inferred links: green confirmed, red contradicted, gray unverified.
     """
     height = 700
     first_scale = height / first_image.shape[0]
@@ -181,8 +296,6 @@ def show_matches(
     left = cv.resize(first_image, None, fx=first_scale, fy=first_scale)
     right = cv.resize(second_image, None, fx=second_scale, fy=second_scale)
     canvas = cv.cvtColor(np.concatenate((left, right), axis=1), cv.COLOR_BGR2RGB)
-    verified_by_source = {i: j for i, j in truth} if truth is not None else {}
-
     figure, axis = plt.subplots(figsize=(16, 8))
     axis.imshow(canvas)
 
@@ -190,12 +303,12 @@ def show_matches(
         source = first_points[i] * first_scale
         target = second_points[j] * second_scale + np.array([left.shape[1], 0])
 
-        if (int(i), int(j)) in (truth or set()):
-            color = "#36b46b"
-        elif int(i) in verified_by_source:
-            color = "#df595a"
-        else:
-            color = "#b6bdc9"
+        label = match_label(int(i), int(j), truth) if truth is not None else "unverified"
+        color = {
+            "confirmed": "#36b46b",
+            "contradicted": "#df595a",
+            "unverified": "#b6bdc9",
+        }[label]
 
         axis.plot((source[0], target[0]), (source[1], target[1]), color=color, alpha=0.75)
         axis.scatter((source[0], target[0]), (source[1], target[1]), s=7, color=color)
@@ -266,6 +379,8 @@ def run() -> None:
                 f"{BACKBONE} {source_id} -> {target_id}: "
                 f"proposals={len(matches)} (not a false acceptance rate)"
             )
+
+        diagnostic_report(similarity, matches, truth, f"{BACKBONE}: {source_id} vs {target_id}")
 
         show_matches(
             first_image,
