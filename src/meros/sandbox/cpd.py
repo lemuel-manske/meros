@@ -1,14 +1,12 @@
 """
-Compare Thin Plate Spline and non-rigid Coherent Point Drift on real grouper photos.
+Demonstrate non-rigid Coherent Point Drift alignment of real grouper photographs.
 
-The point sets come from annotated spots in rogerio/10 and rogerio/12. Both
-methods share a coarse similarity alignment. TPS uses tentative mutual-nearest
-spot links; CPD estimates soft correspondences without manually paired spots.
-The real source photograph is warped into target-image coordinates.
+Uses annotated spots and the actual photographs rogerio/10 and rogerio/12
+from Project. Compares a global similarity baseline with the local deformation.
+The alignment is exploratory; close spots do not prove fish-spot identity.
 
-Run with: python -m meros.sandbox.tps_cpd_real_fish
-Photos must be present locally (DVC media). The comparison is exploratory:
-nearest-spot proximity does not establish biological correspondence or identity.
+Run: python -m meros.sandbox.cpd
+Requires the DVC subject images to be available locally.
 """
 
 from __future__ import annotations
@@ -17,7 +15,6 @@ import cv2 as cv
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.widgets import RadioButtons, Slider
-from scipy.interpolate import RBFInterpolator
 from scipy.spatial.distance import cdist
 
 from meros.project import Project
@@ -29,11 +26,11 @@ TARGET_ID = 12
 
 MAX_IMAGE_SIDE = 1100
 WARP_GRID_STEP = 8
-TPS_MATCH_RADIUS = 1.0
-TPS_MAX_ANCHORS = 32
-TPS_SMOOTHING = 0.35
-TPS_FALLOFF = 4.0
-TPS_MAX_DISPLACEMENT = 2.5
+INITIAL_OVERLAY_ALPHA = 0.50
+MASK_HULL_MARGIN = 1.5
+COLOR_SOURCE = "#33ccdd"
+COLOR_TARGET = "#ffcc59"
+
 
 CPD_BETA = 2.5
 CPD_LAMBDA = 3.0
@@ -41,11 +38,6 @@ CPD_OUTLIER_FRACTION = 0.15
 CPD_ITERATIONS = 75
 CPD_MIN_VARIANCE = 0.025
 CPD_INVERSE_STEPS = 10
-
-INITIAL_OVERLAY_ALPHA = 0.50
-MASK_HULL_MARGIN = 1.5
-COLOR_SOURCE = "#33ccdd"
-COLOR_TARGET = "#ffcc59"
 
 
 def load_photo(project: Project, image_id: int) -> tuple[np.ndarray, np.ndarray]:
@@ -104,74 +96,6 @@ def initial_similarity(source: np.ndarray, target: np.ndarray) -> np.ndarray:
         candidates.append((float(symmetric_error), matrix))
 
     return min(candidates, key=lambda item: item[0])[1]
-
-
-def tentative_anchors(
-    aligned_source: np.ndarray, target: np.ndarray, spacing: float
-) -> tuple[np.ndarray, np.ndarray]:
-    distances = cdist(aligned_source, target)
-    nearest_target = distances.argmin(axis=1)
-    nearest_source = distances.argmin(axis=0)
-
-    pairs = [
-        (i, int(j))
-        for i, j in enumerate(nearest_target)
-        if nearest_source[j] == i and distances[i, j] < TPS_MATCH_RADIUS * spacing
-    ]
-    pairs.sort(key=lambda pair: distances[pair[0], pair[1]])
-
-    if len(pairs) < 6:
-        raise ValueError(
-            f"Only {len(pairs)} mutual spot links; TPS needs at least six. "
-            "Inspect the initial alignment before relaxing the radius."
-        )
-
-    if len(pairs) > TPS_MAX_ANCHORS:
-        chosen = [pairs[0]]
-        remaining = pairs[1:]
-
-        while len(chosen) < TPS_MAX_ANCHORS:
-            selected = max(
-                remaining,
-                key=lambda pair: (
-                    min(np.linalg.norm(target[pair[1]] - target[other[1]]) for other in chosen)
-                    - 0.25 * distances[pair[0], pair[1]]
-                ),
-            )
-            chosen.append(selected)
-            remaining.remove(selected)
-
-        pairs = chosen
-
-    left, right = zip(*pairs, strict=True)
-    return np.array(left, dtype=int), np.array(right, dtype=int)
-
-
-def tps_field(
-    aligned_source: np.ndarray, target: np.ndarray, spacing: float
-) -> tuple[object, np.ndarray, np.ndarray]:
-    source_indices, target_indices = tentative_anchors(aligned_source, target, spacing)
-    locations = target[target_indices]
-    residual = aligned_source[source_indices] - locations
-
-    interpolator = RBFInterpolator(
-        locations / spacing,
-        residual / spacing,
-        kernel="thin_plate_spline",
-        smoothing=TPS_SMOOTHING,
-    )
-
-    def inverse_displacement(points: np.ndarray) -> np.ndarray:
-        normalized = points / spacing
-        residuals = interpolator(normalized) * spacing
-        distance = cdist(points, locations).min(axis=1) / spacing
-        residuals *= np.exp(-0.5 * (distance / TPS_FALLOFF) ** 2)[:, None]
-        magnitude = np.linalg.norm(residuals, axis=1)
-        limit = TPS_MAX_DISPLACEMENT * spacing
-        residuals *= (np.minimum(magnitude, limit) / np.maximum(magnitude, 1e-8))[:, None]
-        return residuals
-
-    return inverse_displacement, source_indices, target_indices
 
 
 def nonrigid_cpd(
@@ -250,16 +174,6 @@ def cpd_inverse_displacement(
     return (estimate - normalized) * spacing
 
 
-def tps_forward(aligned_source: np.ndarray, inverse_displacement) -> np.ndarray:
-    positions = aligned_source.copy()
-
-    for _ in range(12):
-        proposed = aligned_source - inverse_displacement(positions)
-        positions = 0.5 * positions + 0.5 * proposed
-
-    return positions
-
-
 def warp_photo(
     source: np.ndarray,
     target: np.ndarray,
@@ -322,78 +236,70 @@ def show_comparison(
     target_spots: np.ndarray,
     warped: dict[str, tuple[np.ndarray, np.ndarray]],
     transformed: dict[str, np.ndarray],
-    anchors: tuple[np.ndarray, np.ndarray],
+    method: str,
 ) -> None:
-    figure, axes = plt.subplots(2, 3, figsize=(18, 11))
-    figure.subplots_adjust(left=0.025, right=0.975, top=0.90, bottom=0.15, wspace=0.06)
+    figure, axes = plt.subplots(2, 2, figsize=(15, 11))
+    figure.subplots_adjust(left=0.03, right=0.97, top=0.92, bottom=0.16, wspace=0.08)
 
-    def show_photo(axis, image: np.ndarray, title: str) -> None:
-        axis.imshow(cv.cvtColor(image, cv.COLOR_BGR2RGB))
-        axis.set_title(title, fontsize=11)
+    axes[0, 0].imshow(cv.cvtColor(source_image, cv.COLOR_BGR2RGB))
+    axes[0, 0].scatter(source_spots[:, 0], source_spots[:, 1], color=COLOR_SOURCE, s=9, alpha=0.8)
+    axes[0, 0].set_title(f"{SUBJECT}/{SOURCE_ID}: original source")
+
+    axes[0, 1].imshow(cv.cvtColor(target_image, cv.COLOR_BGR2RGB))
+    axes[0, 1].scatter(target_spots[:, 0], target_spots[:, 1], color=COLOR_TARGET, s=9, alpha=0.8)
+    axes[0, 1].set_title(f"{SUBJECT}/{TARGET_ID}: target")
+
+    axes[1, 0].imshow(cv.cvtColor(warped[method][0], cv.COLOR_BGR2RGB))
+    axes[1, 0].scatter(
+        transformed[method][:, 0], transformed[method][:, 1], color=COLOR_SOURCE, s=9
+    )
+    axes[1, 0].scatter(target_spots[:, 0], target_spots[:, 1], color=COLOR_TARGET, s=9)
+    axes[1, 0].set_title(f"{method}: warped real source photo")
+
+    overlay_axis = axes[1, 1]
+    overlay_axis.imshow(cv.cvtColor(target_image, cv.COLOR_BGR2RGB))
+    overlay_artist = overlay_axis.imshow(
+        cv.cvtColor(warped[method][0], cv.COLOR_BGR2RGB),
+        alpha=INITIAL_OVERLAY_ALPHA * (warped[method][1] > 0),
+    )
+    source_artist = overlay_axis.scatter(
+        transformed[method][:, 0],
+        transformed[method][:, 1],
+        color=COLOR_SOURCE,
+        s=9,
+    )
+    overlay_axis.scatter(target_spots[:, 0], target_spots[:, 1], color=COLOR_TARGET, s=9)
+    overlay_axis.set_title(f"Overlay on target: {method}")
+
+    for axis in axes.flat:
         axis.set_axis_off()
 
-    show_photo(axes[0, 0], source_image, f"{SUBJECT}/{SOURCE_ID}: original source")
-    axes[0, 0].scatter(source_spots[:, 0], source_spots[:, 1], c=COLOR_SOURCE, s=8, alpha=0.75)
-    show_photo(axes[0, 1], target_image, f"{SUBJECT}/{TARGET_ID}: target")
-    axes[0, 1].scatter(target_spots[:, 0], target_spots[:, 1], c=COLOR_TARGET, s=8, alpha=0.75)
-
-    for axis, name in (
-        (axes[0, 2], "Global"),
-        (axes[1, 0], "TPS"),
-        (axes[1, 1], "CPD"),
-    ):
-        show_photo(axis, warped[name][0], f"{name}: warped REAL source photo")
-        axis.scatter(target_spots[:, 0], target_spots[:, 1], c=COLOR_TARGET, s=8)
-        axis.scatter(transformed[name][:, 0], transformed[name][:, 1], c=COLOR_SOURCE, s=8)
-
-    axis = axes[1, 2]
-    axis.imshow(cv.cvtColor(target_image, cv.COLOR_BGR2RGB))
-    overlay_artist = axis.imshow(
-        cv.cvtColor(warped["TPS"][0], cv.COLOR_BGR2RGB),
-        alpha=INITIAL_OVERLAY_ALPHA * (warped["TPS"][1] > 0),
-    )
-    axis.set_title("Overlay on target: TPS", fontsize=11)
-    axis.set_axis_off()
-    target_artist = axis.scatter(
-        target_spots[:, 0], target_spots[:, 1], c=COLOR_TARGET, s=9, label="Target"
-    )
-    source_artist = axis.scatter(
-        transformed["TPS"][:, 0],
-        transformed["TPS"][:, 1],
-        c=COLOR_SOURCE,
-        s=9,
-        label="Warped source",
-    )
-    axis.legend(handles=[target_artist, source_artist], loc="lower right", fontsize=8)
-
-    method_axis = figure.add_axes((0.23, 0.02, 0.19, 0.105))
-    methods = RadioButtons(method_axis, ("Global", "TPS", "CPD"), active=1)
+    method_axis = figure.add_axes((0.21, 0.02, 0.19, 0.115))
+    methods = RadioButtons(method_axis, ("Global", method), active=1)
     opacity_axis = figure.add_axes((0.53, 0.055, 0.38, 0.025))
     opacity = Slider(opacity_axis, "Overlay opacity", 0.0, 1.0, valinit=INITIAL_OVERLAY_ALPHA)
 
     def update(_value) -> None:
-        name = methods.value_selected
-        image, region = warped[name]
+        selection = methods.value_selected
+        image, region = warped[selection]
         overlay_artist.set_data(cv.cvtColor(image, cv.COLOR_BGR2RGB))
         overlay_artist.set_alpha(opacity.val * (region > 0))
-        source_artist.set_offsets(transformed[name])
-        axis.set_title(f"Overlay on target: {name}", fontsize=11)
+        source_artist.set_offsets(transformed[selection])
+        overlay_axis.set_title(f"Overlay on target: {selection}")
         figure.canvas.draw_idle()
 
     methods.on_clicked(update)
     opacity.on_changed(update)
-    selected_source, selected_target = anchors
-    print(f"TPS tentative mutual-nearest anchors: {len(selected_source)}")
+
     print(
-        "Nearest-spot median distances (lower is not necessarily a correct match): "
+        "Nearest-spot median distances (not proof of correct correspondences): "
         + ", ".join(
             f"{name}={nearest_error(points, target_spots):.1f}px"
             for name, points in transformed.items()
         )
     )
     figure.suptitle(
-        "Real fish images | Global vs TPS vs non-rigid CPD | "
-        "Cyan: transformed source spots | Yellow: target spots"
+        f"Real grouper photos | Global versus {method} | Cyan: source spots | Yellow: target spots"
     )
     plt.show(block=True)
     plt.close(figure)
@@ -407,44 +313,32 @@ def run() -> None:
     initial_matrix = initial_similarity(source_points, target_points)
     global_points = transform_points(source_points, initial_matrix)
 
-    inverse_tps, source_indices, target_indices = tps_field(global_points, target_points, spacing)
     source_controls, cpd_weights, iterations, variance = nonrigid_cpd(
         global_points, target_points, spacing
     )
-
-    tps_points = tps_forward(global_points, inverse_tps)
     cpd_points = cpd_forward(source_controls, cpd_weights, global_points, spacing)
-    mask = source_region(source_points, source_image.shape, spot_spacing(source_points))
+    region = source_region(source_points, source_image.shape, spot_spacing(source_points))
 
     def zero_displacement(points: np.ndarray) -> np.ndarray:
         return np.zeros_like(points)
 
-    fields = {
-        "Global": zero_displacement,
-        "TPS": inverse_tps,
-        "CPD": lambda points: cpd_inverse_displacement(
-            points, source_controls, cpd_weights, spacing
-        ),
-    }
+    def inverse_cpd(points: np.ndarray) -> np.ndarray:
+        return cpd_inverse_displacement(points, source_controls, cpd_weights, spacing)
+
+    fields = {"Global": zero_displacement, "CPD": inverse_cpd}
     warped = {
-        name: warp_photo(source_image, target_image, initial_matrix, field, mask)
+        name: warp_photo(source_image, target_image, initial_matrix, field, region)
         for name, field in fields.items()
     }
-    transformed = {"Global": global_points, "TPS": tps_points, "CPD": cpd_points}
+    transformed = {"Global": global_points, "CPD": cpd_points}
 
     print(
-        f"Real images: {SUBJECT}/{SOURCE_ID} ({len(source_points)} spots) -> "
+        f"Real photos: {SUBJECT}/{SOURCE_ID} ({len(source_points)} spots) -> "
         f"{SUBJECT}/{TARGET_ID} ({len(target_points)} spots)"
     )
     print(f"CPD: {iterations} iterations, final normalized variance={variance:.4f}")
     show_comparison(
-        source_image,
-        target_image,
-        source_points,
-        target_points,
-        warped,
-        transformed,
-        (source_indices, target_indices),
+        source_image, target_image, source_points, target_points, warped, transformed, "CPD"
     )
 
 
