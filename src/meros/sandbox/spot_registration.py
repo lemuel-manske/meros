@@ -89,19 +89,27 @@ def show_predictions(
 
     axes[0].imshow(cv.cvtColor(example.source_image, cv.COLOR_BGR2RGB))
     axes[0].scatter(
-        example.source_spots[:, 0], example.source_spots[:, 1],
-        s=10, color=COLOR_SOURCE, alpha=0.5,
+        example.source_spots[:, 0],
+        example.source_spots[:, 1],
+        s=10,
+        color=COLOR_SOURCE,
+        alpha=0.5,
     )
     axes[0].scatter(
-        example.matched_source[:, 0], example.matched_source[:, 1],
-        s=32, facecolors="none", edgecolors="white",
+        example.matched_source[:, 0],
+        example.matched_source[:, 1],
+        s=32,
+        facecolors="none",
+        edgecolors="white",
     )
     axes[0].set_title("Source: annotated spots and known pairs")
 
     axes[1].imshow(cv.cvtColor(example.target_image, cv.COLOR_BGR2RGB))
     axes[1].scatter(
-        example.target_spots[:, 0], example.target_spots[:, 1],
-        s=12, color=COLOR_TARGET,
+        example.target_spots[:, 0],
+        example.target_spots[:, 1],
+        s=12,
+        color=COLOR_TARGET,
     )
     axes[1].set_title("Target: all annotated spots")
 
@@ -109,23 +117,36 @@ def show_predictions(
 
     if transformed_spots is not None:
         axes[2].scatter(
-            transformed_spots[:, 0], transformed_spots[:, 1],
-            s=10, color=COLOR_SOURCE, alpha=0.45,
+            transformed_spots[:, 0],
+            transformed_spots[:, 1],
+            s=10,
+            color=COLOR_SOURCE,
+            alpha=0.45,
         )
 
     for expected, estimate in zip(example.matched_target, predicted, strict=True):
         axes[2].plot(
-            (expected[0], estimate[0]), (expected[1], estimate[1]),
-            color="#ff5555", linewidth=0.8, alpha=0.8,
+            (expected[0], estimate[0]),
+            (expected[1], estimate[1]),
+            color="#ff5555",
+            linewidth=0.8,
+            alpha=0.8,
         )
 
     axes[2].scatter(
-        example.matched_target[:, 0], example.matched_target[:, 1],
-        s=35, color=COLOR_TARGET, label="Verified location",
+        example.matched_target[:, 0],
+        example.matched_target[:, 1],
+        s=35,
+        color=COLOR_TARGET,
+        label="Verified location",
     )
     axes[2].scatter(
-        predicted[:, 0], predicted[:, 1], s=42,
-        facecolors="none", edgecolors=COLOR_SOURCE, label="Prediction",
+        predicted[:, 0],
+        predicted[:, 1],
+        s=42,
+        facecolors="none",
+        edgecolors=COLOR_SOURCE,
+        label="Prediction",
     )
     axes[2].legend(loc="upper right")
     axes[2].set_title("Held-out or label-free predictions and residuals")
