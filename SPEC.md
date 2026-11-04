@@ -384,7 +384,7 @@ Repeated observations could then be used to reconstruct movement histories and i
 
 ## Findings from exploratory experiments
 
-The initial photo benchmark listed 18 images under eight catalog identities,
+The initial historical photo benchmark listed 18 images under eight catalog identities,
 including names that later proved to represent the same fish. Four catalog
 identities had multiple eligible images, yielding 14 queries. These historical
 results use the original labels and should not be treated as independent tests
@@ -425,14 +425,15 @@ variants scored 5/7 on Rogerio; training reduced the other individuals from
 
 After confirming Luana = Rogério and Yam = Rafael, the same 18 photos represent
 **six biological individuals**. Only Rafael and Rogério have multiple photos.
-The current frozen ImageNet ResNet18 spot-descriptor matcher combines local
+The historical frozen ImageNet ResNet18 spot-descriptor matcher combines local
 appearance with eye/mouth geometry and affine matching of manually annotated
-spots. On 14 leave-one-image-out queries, its **Rank-1 and Rank-3 are 14/14**;
-this is not validation on independent encounters or newly sampled identities.
+spots. On 14 leave-one-image-out queries, its **Rank-1 and Rank-3 were 14/14**.
+The photographs represent distinct encounters, but repeated exploration of the
+same small corpus prevents an independent estimate of performance on unseen identities.
 
 Experiments with kNN-based adaptive combinations of score, density, coverage,
 and spatial distribution degraded Rank-1 to 11/14 (12/14 with local features).
-The original matcher remains the retrieval baseline.
+The original matcher was the retrieval baseline for those historical image-and-anatomy experiments; it is distinct from the coordinate-only baseline below.
 
 A more useful hypothesis was to check the **geometric arrangement of all
 annotated spots surrounding each proposed correspondence**, including spots
@@ -450,8 +451,8 @@ identity confidence. When neighborhood evidence is incomparable, the score
 falls back to the original matcher. Convex hulls of sparse annotations do
 not guarantee the same visible skin, and missing spots are not verified
 biological negatives. Keep source images and proposed correspondences
-available for human audit, and require more independent individuals and
-encounters before adopting automatic identity or unknown-individual decisions.
+available for human audit. The final historical corpus cannot establish
+operational accuracy or calibrated unknown-individual rejection.
 
 ### Lessons and implications
 
@@ -478,13 +479,13 @@ encounters before adopting automatic identity or unknown-individual decisions.
   unknown. Similarity scores are not calibrated identity probabilities.
 - **One annotated pair did not support transfer.** Metric training improved
   retrieval on its training examples but worsened identification of other fish.
-  Prioritize verified correspondences and reviewed regions across more individuals
-  and independent encounters, including difficult negatives, before further tuning.
+  Keep verified correspondences for retrospective audits, but avoid further
+  parameter selection against the same finite collection of photographs.
 
 The existing photos have been repeatedly explored, and Rogerio participated in
-center-detector training. Separate individuals and recording sessions when
-validating future models; do not rank the 12-query and 14-query protocols together
-as evidence of generalization. Inspect actual supporting matches and permit
+center-detector training. Although these photographs represent distinct encounters,
+only two identities have repeated observations. Do not rank the 12-query and
+14-query protocols together as evidence of generalization. Inspect actual supporting matches and permit
 insufficient evidence instead of forcing an identity. Temporal aggregation,
 long-term pattern stability, and unknown-individual rejection remain unvalidated.
 
