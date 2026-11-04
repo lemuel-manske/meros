@@ -268,7 +268,12 @@ def run() -> None:
             )
 
         show_matches(
-            first_image, second_image, first_points, second_points, matches, truth,
+            first_image,
+            second_image,
+            first_points,
+            second_points,
+            matches,
+            truth,
             f"{BACKBONE}: {source_id} vs {target_id}",
         )
 
