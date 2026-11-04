@@ -532,7 +532,7 @@ All values were obtained during repeated method development on this one small
 dataset and **cannot justify an operational threshold or automatic identity
 assignment**. The investigation stopped when further selection risked overfit.
 
-See [the consolidated research history](research/coordinate-verification/history.md)
+See [the consolidated research history](docs/04_11_2026.md)
 for **every tested mechanism and its outcome**, failure examples, evaluation
 limits and archive links. The complete committed protocols, experimental code,
 ledgers and score tables remain available from historical commit
