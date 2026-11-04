@@ -9,7 +9,10 @@ import numpy as np
 from meros.project import Project
 
 
-SUBJECT_ID = None
+SUBJECT_ID = 'rogerio'
+
+IMAGE_ID_1 = 10
+IMAGE_ID_2 = 12
 
 
 def annotate_pair(
@@ -128,13 +131,49 @@ def annotate_pair(
 
 
 def run(project: Project) -> None:
-    first_image_id = 0
+    first_image_id = 0 or IMAGE_ID_1
 
     for subject in project.media.list_subjects():
         if SUBJECT_ID is not None and subject.subject_id != SUBJECT_ID:
             continue
 
         first_image = project.media.read_subject_image(subject.subject_id, first_image_id)
+
+        if IMAGE_ID_2 is not None:
+            second_image_id = IMAGE_ID_2
+            second_image = project.media.read_subject_image(subject.subject_id, second_image_id)
+
+            existing = project.metadata.read_subject_spot_correspondences(
+                subject.subject_id, first_image_id, second_image_id
+            )
+
+            selected = annotate_pair(
+                subject.subject_id,
+                first_image_id,
+                second_image_id,
+                first_image,
+                second_image,
+                existing,
+                (
+                    "Click a spot on the left, then the SAME spot on the right. "
+                    "Repeat to add numbered pairs.\n"
+                    "Backspace/R: undo | Enter/S: save | Esc/Q: skip"
+                ),
+            )
+
+            if selected is None:
+                print("Skipped without saving.")
+                return
+
+            project.metadata.write_subject_spot_correspondences(
+                subject.subject_id, first_image_id, second_image_id, selected
+            )
+
+            print(
+                f"Saved {len(selected)} correspondences for {subject.subject_id}/{first_image_id}-{second_image_id}"
+            )
+
+            return
 
         m = subject.images[1:]
 
