@@ -94,7 +94,7 @@ def sift_descriptors(image: np.ndarray, points: np.ndarray) -> tuple[np.ndarray,
     size = max(8.0, 2.0 * PATCH_SPACING_MULTIPLIER * median_spacing(points))
     keypoints = [cv.KeyPoint(float(x), float(y), size) for x, y in points]
     gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
-    returned, descriptors = cv.SIFT_create().compute(gray, keypoints)
+    returned, descriptors = getattr(cv, "SIFT_create")().compute(gray, keypoints)
 
     if descriptors is None or not returned:
         raise ValueError("No SIFT descriptors")
