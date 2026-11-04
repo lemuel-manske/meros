@@ -1,12 +1,5 @@
 """
-Demonstrate non-rigid Coherent Point Drift alignment of real grouper photographs.
-
-Uses annotated spots and the actual photographs rogerio/10 and rogerio/12
-from Project. Compares a global similarity baseline with the local deformation.
-The alignment is exploratory; close spots do not prove fish-spot identity.
-
-Run: python -m meros.sandbox.cpd
-Requires the DVC subject images to be available locally.
+Demo: non-rigid Coherent Point Drift alignment of real grouper photographs.
 """
 
 from __future__ import annotations
@@ -43,9 +36,6 @@ CPD_INVERSE_STEPS = 10
 def load_photo(project: Project, image_id: int) -> tuple[np.ndarray, np.ndarray]:
     image = project.media.read_subject_image(SUBJECT, image_id)
     points = np.asarray(project.metadata.read_subject_spots(SUBJECT, image_id), dtype=float)
-
-    if len(points) < 4:
-        raise ValueError(f"{SUBJECT}/{image_id} has too few annotated spots")
 
     height, width = image.shape[:2]
     scale = min(1.0, MAX_IMAGE_SIDE / max(height, width))
@@ -279,7 +269,7 @@ def show_comparison(
     opacity_axis = figure.add_axes((0.53, 0.055, 0.38, 0.025))
     opacity = Slider(opacity_axis, "Overlay opacity", 0.0, 1.0, valinit=INITIAL_OVERLAY_ALPHA)
 
-    def update(_value) -> None:
+    def update(_) -> None:
         selection = methods.value_selected
         image, region = warped[selection]
         overlay_artist.set_data(cv.cvtColor(image, cv.COLOR_BGR2RGB))

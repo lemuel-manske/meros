@@ -1,4 +1,6 @@
-"""Demo: perspective distortion from a square to a quadrilateral."""
+"""
+Demo: perspective distortion from a square to a quadrilateral.
+"""
 
 import cv2 as cv
 import numpy as np

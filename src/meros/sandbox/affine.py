@@ -1,4 +1,6 @@
-"""Demo: independent scaling, shear and translation."""
+"""
+Demo: independent scaling, shear and translation.
+"""
 
 import numpy as np
 

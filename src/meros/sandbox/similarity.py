@@ -1,4 +1,6 @@
-"""Demo: rotation, uniform scaling and translation."""
+"""
+Demo: rotation, uniform scaling and translation.
+"""
 
 from math import cos, radians, sin
 

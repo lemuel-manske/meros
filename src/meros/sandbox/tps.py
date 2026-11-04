@@ -1,12 +1,5 @@
 """
-Demonstrate Thin Plate Spline alignment of real grouper photographs.
-
-Uses annotated spots and the actual photographs rogerio/10 and rogerio/12
-from Project. Compares a global similarity baseline with the local deformation.
-The alignment is exploratory; close spots do not prove fish-spot identity.
-
-Run: python -m meros.sandbox.tps
-Requires the DVC subject images to be available locally.
+Demo: Thin Plate Spline alignment of real grouper photographs.
 """
 
 from __future__ import annotations

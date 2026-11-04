@@ -7,8 +7,8 @@ import numpy as np
 from meros.project import Project
 
 
-SUBJECT_ID = None
-IMAGE_ID = None
+SUBJECT_ID = 'rogerio'
+IMAGE_ID = 12
 
 
 def select_spots(image: np.ndarray, initial: list[list[int]], title: str) -> list[list[int]] | None:
@@ -75,11 +75,11 @@ def select_spots(image: np.ndarray, initial: list[list[int]], title: str) -> lis
 
 def run(project: Project) -> None:
     for subject in project.media.list_subjects():
-        if subject.subject_id != SUBJECT_ID:
+        if SUBJECT_ID is not None and subject.subject_id != SUBJECT_ID:
             continue
 
         for photo in subject.images:
-            if photo.image_id != IMAGE_ID:
+            if IMAGE_ID is not None and photo.image_id != IMAGE_ID:
                 continue
 
             image = project.media.read_subject_image(subject.subject_id, photo.image_id)
