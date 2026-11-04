@@ -104,9 +104,7 @@ def run() -> None:
 
         figure, axes = plt.subplots(1, 2, figsize=(11, 5))
 
-        for axis, points, label in zip(
-            axes, (source, target), (source_id, target_id), strict=True
-        ):
+        for axis, points, label in zip(axes, (source, target), (source_id, target_id), strict=True):
             axis.scatter(points[:, 0], points[:, 1], s=16)
             axis.set_aspect("equal", adjustable="box")
             axis.invert_yaxis()
