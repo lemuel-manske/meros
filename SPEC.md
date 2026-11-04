@@ -487,3 +487,57 @@ validating future models; do not rank the 12-query and 14-query protocols togeth
 as evidence of generalization. Inspect actual supporting matches and permit
 insufficient evidence instead of forcing an identity. Temporal aggregation,
 long-term pattern stability, and unknown-individual rejection remain unvalidated.
+
+### Coordinate-only spot-verification campaign (2026 research consolidation)
+
+Following researcher confirmation, **all 18 eligible spot-annotated photographs
+represent distinct encounters from 2004–2013**. They cover six biological
+individuals, but only Rogerio (9) and Rafael (5) have repeated observations.
+The 46 genuine and 107 impostor photo pairs are highly dependent; no population
+false-match rate or independent model-selection evaluation can be established.
+The dataset is final and cannot be expanded. Earlier exploration written before
+this encounter confirmation should be read with that clarification.
+
+A separate coordinate-only research program (Cycles 1–6; E00–E28, with 17
+additional research questions after Cycle 1) investigated global/locally
+regularized registration, Shape Context/TPS, triangle/TPS, geometric holdouts,
+local motif distributions, rarity, graph consistency, structured impostor nulls,
+partial transport, pose normalization, angular descriptors, missing-spot stress,
+and open-set gallery policies. The key finding was that **no-warp statistical
+spot distributions separated identities better than flexible point fitting on
+this corpus**, but did not uniquely encode global spot arrangement.
+
+| Exploratory method | ROC-AUC | Average precision |
+| --- | ---: | ---: |
+| E04 nearest-neighbor/angular signature | 0.896 | 0.775 |
+| Shape Context + TPS | 0.709 | 0.652 |
+| Triangle + TPS | 0.799 | 0.721 |
+| E05 local 3-neighbor joint distribution | 0.932 | 0.895 |
+| **E24 local/global joint distribution** | **0.941** | **0.911** |
+| E26 radii/global without angles | 0.948 | 0.903 |
+
+The frozen **E24.global_joint0.25** was selected for stronger rejection of the
+hardest observed impostors despite E26's higher aggregate AUC. It compares
+local normalized radii and angular moments plus a lightly weighted global
+distance context using energy distance. No point correspondences, image pixels,
+eye/mouth landmarks, geometry warp or identity labels are required at inference.
+The compact implementation is `src/meros/sandbox/geometry/spot_signature.py`.
+Its scores are **not identity probabilities**.
+
+In the exploratory two-identity gallery with query-identity-held-out rejection,
+E24 accepted 12/14 known queries correctly, incorrectly accepted 0/4 singleton
+unknowns and abstained on 6/18. It still suffers missing-spot/crop sensitivity
+and high scores for spatially rearranged but locally similar spot patterns.
+All values were obtained during repeated method development on this one small
+dataset and **cannot justify an operational threshold or automatic identity
+assignment**. The investigation stopped when further selection risked overfit.
+
+See [the consolidated research history](research/coordinate-verification/history.md)
+for **every tested mechanism and its outcome**, failure examples, evaluation
+limits and archive links. The complete committed protocols, experimental code,
+ledgers and score tables remain available from historical commit
+[`d98da95`](https://github.com/lemuel-manske/meros/commit/d98da954d20f2d76d1e4921dd477e593bd72bffd)
+on the separate `experiment/coordinate-verification-audit` branch; they were
+not imported into the maintained tree. Generated files ignored by Git are not
+necessarily recoverable from the commit.
+
