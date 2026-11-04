@@ -17,7 +17,7 @@ import cv2 as cv
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.interpolate import RBFInterpolator
-from scipy.spatial import Delaunay, cKDTree
+from scipy.spatial import Delaunay
 from scipy.spatial.distance import cdist
 
 from meros.project import Project
@@ -63,8 +63,9 @@ def spacing(points: np.ndarray) -> float:
     """
     Measure typical spot separation in native image coordinates.
     """
-    distances, _ = cKDTree(points).query(points, k=2)
-    return max(float(np.median(distances[:, 1])), 1.0)
+    distances = cdist(points, points)
+    np.fill_diagonal(distances, np.inf)
+    return max(float(np.median(np.min(distances, axis=1))), 1.0)
 
 
 def shape_context(points: np.ndarray) -> np.ndarray:
@@ -194,13 +195,9 @@ def unique_links(
     """
     Match spots greedily one-to-one within a fixed geometric gate.
     """
-    distances, neighbors = cKDTree(target).query(projected, k=min(4, len(target)))
-    distances = np.atleast_2d(distances)
-    neighbors = np.atleast_2d(neighbors)
-
-    if distances.shape[0] != len(projected):
-        distances = distances.T
-        neighbors = neighbors.T
+    matrix = cdist(projected, target)
+    neighbors = np.argsort(matrix, axis=1)[:, :4]
+    distances = np.take_along_axis(matrix, neighbors, axis=1)
 
     proposals = []
 
