@@ -11,6 +11,9 @@ Verified spot correspondences are read only after inference.
 
 from __future__ import annotations
 
+from importlib import import_module
+from typing import Any
+
 import cv2 as cv
 import matplotlib.pyplot as plt
 import numpy as np
@@ -59,11 +62,11 @@ def image_patches(image: np.ndarray, points: np.ndarray) -> np.ndarray:
     return np.stack(patches)
 
 
-def dinov2_descriptors(image: np.ndarray, points: np.ndarray, model: object) -> np.ndarray:
+def dinov2_descriptors(image: np.ndarray, points: np.ndarray, model: Any) -> np.ndarray:
     """
     Extract frozen DINOv2 class tokens from image patches.
     """
-    import torch
+    torch = import_module("torch")
 
     patches = image_patches(image, points)
     device = next(model.parameters()).device
@@ -213,7 +216,7 @@ def run() -> None:
 
     if BACKBONE == "dinov2":
         try:
-            import torch
+            torch = import_module("torch")
         except ImportError as error:
             raise RuntimeError("Install PyTorch for DINOv2") from error
 
