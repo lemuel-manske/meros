@@ -1,6 +1,6 @@
 # Meros
 
-Computer-vision research for identifying individual Goliath Groupers (*Epinephelus itajara*) with Instituto Meros do Brasil.
+Computer-vision research for identifying individual Goliath Groupers (*Epinephelus itajara*).
 
 ## Setup
 
@@ -13,3 +13,8 @@ make data-pull
 ```
 
 DVC access requires credentials for the configured Backblaze S3 remote. No credentials are stored here.
+
+## Documentation
+
+- [Project specification and research findings](SPEC.md)
+- [Historical docs](docs)
