@@ -50,13 +50,11 @@ data-save:
 data-push:
 	$(PYTHON) -m dvc push
 
+
 results-save:
 	@test -n "$(RUN_DIR)" || { printf '%s\n' 'Set RUN_DIR to a completed run.'; exit 2; }
 	$(PYTHON) -m dvc add "$(RUN_DIR)"
 
-
-subjects:
-	$(PYTHON) -m meros.subjects
 
 pipeline:
 	$(PYTHON) -m meros.pipeline.engine
