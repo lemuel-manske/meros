@@ -59,6 +59,7 @@ lint:
 	$(PYTHON) -m ruff check src
 
 format:
+	$(PYTHON) -m ruff check --select I --fix src
 	$(PYTHON) -m ruff format src
 
 format-check:

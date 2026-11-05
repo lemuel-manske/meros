@@ -1,16 +1,16 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from pathlib import Path
+
 import cv2 as cv
 import numpy as np
-
-from collections.abc import Callable
-from meros.project import Project
-from pathlib import Path
 
 from meros.domain import VideoPredictor
 from meros.external import build_sam2_predictor
 from meros.processing.common import frame_batches, sam2_frame_sequence
 from meros.processing.extract_tracks import tracks_complete
+from meros.project import Project
 from meros.utils import valid_image
 
 

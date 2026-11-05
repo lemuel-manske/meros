@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Literal, TypedDict
 
-
 type BBox = list[int]
 type BBoxMap = dict[str, BBox]
 

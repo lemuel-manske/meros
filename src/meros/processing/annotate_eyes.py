@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import cv2 as cv
+from matplotlib.patches import Ellipse, Rectangle
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.patches import Ellipse, Rectangle
 
 from meros.domain import EyeAnnotation
 from meros.project import Project
-
 
 SUBJECT_ID = None
 

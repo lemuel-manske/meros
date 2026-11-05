@@ -6,7 +6,6 @@ from tempfile import TemporaryDirectory
 
 from meros.project import Project
 
-
 MAX_SAM2_FRAMES = 124
 
 

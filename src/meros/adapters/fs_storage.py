@@ -1,20 +1,19 @@
-import json
+from dataclasses import asdict, dataclass
 import hashlib
+import json
+from pathlib import Path
 
 import cv2 as cv
 import numpy as np
 
-from dataclasses import asdict, dataclass
-from pathlib import Path
-
 from meros.domain import (
     BBoxMap,
     EyeAnnotation,
+    Individual,
+    Interval,
     SpotRegionReview,
     Subject,
     SubjectImage,
-    Individual,
-    Interval,
     Track,
     TrackMetadata,
     TrackObservation,
@@ -22,7 +21,6 @@ from meros.domain import (
     VideoAnnotation,
 )
 from meros.utils import read_image, read_json, write_image, write_json_atomic
-
 
 MEDIA_ROOT = Path("data/media")
 METADATA_ROOT = Path("data/metadata")

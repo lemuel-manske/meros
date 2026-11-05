@@ -3,9 +3,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 import numpy as np
-
 from numpy.typing import NDArray
-
 
 type BinaryMask = NDArray[np.bool_]
 type SeedBox = NDArray[np.float32]

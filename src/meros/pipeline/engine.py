@@ -5,12 +5,12 @@ from pathlib import Path
 
 from meros.domain import VideoPredictor
 from meros.external import build_sam2_predictor
-from meros.project import Project
 from meros.processing import (
     extract_frames,
     extract_masked_crops,
     extract_tracks,
 )
+from meros.project import Project
 
 
 @dataclass(frozen=True)

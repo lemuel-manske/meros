@@ -1,13 +1,11 @@
 import json
 import os
-import tempfile
-
 from pathlib import Path
+import tempfile
 from typing import TypeVar, cast
 
 import cv2 as cv
 import numpy as np
-
 
 T = TypeVar("T")
 

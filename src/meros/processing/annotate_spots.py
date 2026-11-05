@@ -6,7 +6,6 @@ import numpy as np
 
 from meros.project import Project
 
-
 SUBJECT_ID = "rogerio"
 IMAGE_ID = 12
 

@@ -1,6 +1,5 @@
-import importlib
-
 from collections.abc import Iterator, Sequence
+import importlib
 from pathlib import Path
 from typing import Protocol, cast
 

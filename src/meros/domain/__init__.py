@@ -1,12 +1,18 @@
+from .prediction import (
+    BinaryMask,
+    Prediction,
+    SeedBox,
+    VideoPredictor,
+)
 from .storage import (
     BBox,
-    Subject,
-    SubjectImage,
-    EyeAnnotation,
-    SpotRegionReview,
     BBoxMap,
+    EyeAnnotation,
     Individual,
     Interval,
+    SpotRegionReview,
+    Subject,
+    SubjectImage,
     Track,
     TrackMetadata,
     TrackObservation,
@@ -15,13 +21,6 @@ from .storage import (
     Video,
     VideoAnnotation,
     Viewpoint,
-)
-
-from .prediction import (
-    BinaryMask,
-    Prediction,
-    SeedBox,
-    VideoPredictor,
 )
 
 __all__ = [
