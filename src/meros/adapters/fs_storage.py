@@ -11,6 +11,7 @@ from meros.domain import (
     EyeAnnotation,
     Individual,
     Interval,
+    SegmentationPrompt,
     SpotRegionReview,
     Subject,
     SubjectImage,
@@ -42,6 +43,8 @@ SPOTS_DIR = "spots"
 BBOXES_PATH = VIDEOS_METADATA_ROOT / "bboxes.json"
 VIDEOS_PATH = VIDEOS_METADATA_ROOT / "videos.json"
 TRACK_METADATA_FILENAME = "metadata.json"
+
+SUBJECT_SEGMENTATION_FILENAME = "segmentation.json"
 
 
 @dataclass(frozen=True)
@@ -92,8 +95,21 @@ class LocalFsMediaStore:
         if not directory.is_dir():
             return []
 
+        annotations = read_json(
+            metadata_paths.subject_segmentation(subject_id), default={"images": {}}
+        )["images"]
+        prompts = {
+            int(image_id): SegmentationPrompt(
+                points=[(point[0], point[1]) for point in annotation["points"]],
+                labels=annotation["labels"],
+            )
+            for image_id, annotation in annotations.items()
+        }
+
         records = [
-            SubjectImage(subject_id, int(path.stem), str(path))
+            SubjectImage(
+                subject_id, int(path.stem), str(path), segmentation=prompts.get(int(path.stem))
+            )
             for path in directory.iterdir()
             if path.is_file() and path.suffix.lower() == ".jpg" and path.stem.isdecimal()
         ]
@@ -136,6 +152,9 @@ class LocalFsMediaStore:
 
 @dataclass(frozen=True)
 class MetadataPaths:
+    def subject_segmentation(self, subject_id: str) -> Path:
+        return METADATA_SUBJECTS_ROOT / subject_id / SUBJECT_SEGMENTATION_FILENAME
+
     def subject_spot_region_reviews(self, subject_id: str, image_id: int) -> Path:
         return METADATA_SUBJECTS_ROOT / subject_id / SPOT_REGION_REVIEWS_DIR / f"{image_id}.json"
 

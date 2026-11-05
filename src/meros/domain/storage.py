@@ -113,10 +113,19 @@ class Video:
 
 
 @dataclass(frozen=True)
+class SegmentationPrompt:
+    # Coordinates are normalized (x, y); labels are 1 for foreground and 0 for background.
+
+    points: list[tuple[float, float]]
+    labels: list[int]
+
+
+@dataclass(frozen=True)
 class SubjectImage:
     subject_id: str
     image_id: int
     path: str
+    segmentation: SegmentationPrompt | None = None
 
 
 @dataclass(frozen=True)
