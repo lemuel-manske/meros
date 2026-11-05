@@ -82,9 +82,7 @@ def process(image: np.ndarray) -> list[np.ndarray]:
     corrected = light.astype(np.float32) - illumination + float(np.median(illumination))
     corrected = np.clip(corrected, 0, 255).astype(np.uint8)
     corrected = cv.createCLAHE(clipLimit=1.8, tileGridSize=(9, 7)).apply(corrected)
-    corrected_color = cv.cvtColor(
-        cv.merge((corrected, channel_a, channel_b)), cv.COLOR_LAB2BGR
-    )
+    corrected_color = cv.cvtColor(cv.merge((corrected, channel_a, channel_b)), cv.COLOR_LAB2BGR)
 
     smooth = cv.bilateralFilter(light, 9, 26, 26).astype(np.float32)
     dog_small = cv.GaussianBlur(smooth, (0, 0), sigmaX=3) - cv.GaussianBlur(
@@ -126,9 +124,7 @@ def comparison_sheet(images: dict[int, list[np.ndarray]]) -> np.ndarray:
 
     for row, label in enumerate(LABELS):
         y = heading + row * cell_height
-        cv.putText(
-            sheet, label, (margin, y + 27), font, 0.75, (225, 225, 225), 2, cv.LINE_AA
-        )
+        cv.putText(sheet, label, (margin, y + 27), font, 0.75, (225, 225, 225), 2, cv.LINE_AA)
 
         for column, image_id in enumerate(CROPS):
             x = margin + column * (WIDTH + margin)
