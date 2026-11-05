@@ -89,9 +89,7 @@ def binary_pattern(luminance: np.ndarray, valid: np.ndarray) -> np.ndarray:
     values = luminance.astype(np.float32)
     weights = valid.astype(np.float32)
 
-    weighted_light = cv.GaussianBlur(
-        values * weights, (0, 0), sigmaX=ILLUMINATION_SIGMA
-    )
+    weighted_light = cv.GaussianBlur(values * weights, (0, 0), sigmaX=ILLUMINATION_SIGMA)
     weighted_area = cv.GaussianBlur(weights, (0, 0), sigmaX=ILLUMINATION_SIGMA)
     background = weighted_light / np.maximum(weighted_area, 1e-6)
 
@@ -99,19 +97,13 @@ def binary_pattern(luminance: np.ndarray, valid: np.ndarray) -> np.ndarray:
     residual = smoothed - background
 
     low, high = np.percentile(residual[interior], (2, 98))
-    scaled = np.clip((residual - low) * 255 / max(high - low, 1e-6), 0, 255).astype(
-        np.uint8
-    )
+    scaled = np.clip((residual - low) * 255 / max(high - low, 1e-6), 0, 255).astype(np.uint8)
 
     valid_pixels = scaled[interior].reshape(-1, 1)
-    threshold, _ = cv.threshold(
-        valid_pixels, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU
-    )
+    threshold, _ = cv.threshold(valid_pixels, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)
 
     binary = ((scaled > threshold) & interior).astype(np.uint8) * 255
-    kernel = cv.getStructuringElement(
-        cv.MORPH_ELLIPSE, (MORPHOLOGY_SIZE, MORPHOLOGY_SIZE)
-    )
+    kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (MORPHOLOGY_SIZE, MORPHOLOGY_SIZE))
     binary = cv.morphologyEx(binary, cv.MORPH_OPEN, kernel)
     binary = cv.morphologyEx(binary, cv.MORPH_CLOSE, kernel)
     binary[~interior] = 0
@@ -173,7 +165,9 @@ def run() -> None:
 
         for row, (view, title, color_map) in enumerate(panels):
             axis = axes[row, column]
-            axis.imshow(view, cmap=color_map, vmin=0 if color_map else None, vmax=255 if color_map else None)
+            axis.imshow(
+                view, cmap=color_map, vmin=0 if color_map else None, vmax=255 if color_map else None
+            )
             axis.set_title(f"{SUBJECT}/{image_id}: {title}")
             axis.set_axis_off()
 
