@@ -42,9 +42,9 @@ def responses(image: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     Enhance local contrast and retain positive/negative deviations at two scales.
     """
     light = cv.cvtColor(image, cv.COLOR_BGR2LAB)[:, :, 0]
-    equalized = cv.createCLAHE(
-        clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=CLAHE_TILE_GRID
-    ).apply(light)
+    equalized = cv.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=CLAHE_TILE_GRID).apply(
+        light
+    )
 
     side = min(equalized.shape)
     values = equalized.astype(np.float32)
