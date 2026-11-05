@@ -120,7 +120,9 @@ def run() -> None:
         print("No regions selected.")
         return
 
-    figure, axes = plt.subplots(5, len(selections), figsize=(6 * len(selections), 17), squeeze=False)
+    figure, axes = plt.subplots(
+        5, len(selections), figsize=(6 * len(selections), 17), squeeze=False
+    )
 
     for column, (image_id, crop) in enumerate(selections.items()):
         equalized, fine, medium = responses(crop)
@@ -165,6 +167,7 @@ def run() -> None:
     figure.tight_layout()
     plt.show(block=True)
     plt.close(figure)
+
 
 if __name__ == "__main__":
     run()
