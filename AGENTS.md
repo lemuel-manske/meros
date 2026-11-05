@@ -42,6 +42,9 @@ These rules apply across the Meros codebase.
   but also with plots. You can also use `src/meros/sandbox` to add rapid & quick scripts
   to demonstrate things, but use visual debugging on ml and processing modules.
 
+- **Python docs.** Should only be used to document public things. Do not waste time adding docs
+  for every single function, class, module or method.
+
 # Code style
 
 Python docs should be like
