@@ -80,8 +80,7 @@ def candidate_windows(
         cx, cy = x + size / 2, y + size / 2
 
         if any(
-            (cx - (px + ps / 2)) ** 2 + (cy - (py + ps / 2)) ** 2 < 26**2
-            for px, py, ps in selected
+            (cx - (px + ps / 2)) ** 2 + (cy - (py + ps / 2)) ** 2 < 26**2 for px, py, ps in selected
         ):
             continue
 
@@ -167,9 +166,7 @@ def mutual_correspondences(
     return pairs, scores[order], centers_first, centers_second
 
 
-def geometric_consistency(
-    pairs: np.ndarray, first: np.ndarray, second: np.ndarray
-) -> np.ndarray:
+def geometric_consistency(pairs: np.ndarray, first: np.ndarray, second: np.ndarray) -> np.ndarray:
     """
     Flag similarity-consistent matches for visualization; not identity evidence.
     """
