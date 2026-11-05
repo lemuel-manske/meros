@@ -75,9 +75,9 @@ def binary_pattern(luminance: np.ndarray, valid: np.ndarray) -> np.ndarray:
     """
     Segment light, medium-scale skin markings as a single binary foreground.
 
-    Contrast is measured relative to neighboring skin; Otsu selects one threshold
-    from the valid pixels. Normalized convolution prevents outside-mask pixels
-    from distorting the local illumination estimate.
+    Contrast is measured relative to neighboring skin. The Otsu threshold
+    is capped by a relaxed percentile to retain pale, low-contrast regions.
+    Normalized convolution avoids bias from the area outside the SAM2 mask.
     """
     margin = 2 * MASK_EDGE_MARGIN + 1
     edge_kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (margin, margin))
@@ -100,7 +100,9 @@ def binary_pattern(luminance: np.ndarray, valid: np.ndarray) -> np.ndarray:
     scaled = np.clip((residual - low) * 255 / max(high - low, 1e-6), 0, 255).astype(np.uint8)
 
     valid_pixels = scaled[interior].reshape(-1, 1)
-    threshold, _ = cv.threshold(valid_pixels, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)
+    otsu, _ = cv.threshold(valid_pixels, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)
+    relaxed = float(np.percentile(valid_pixels, RELAXED_PERCENTILE))
+    threshold = min(otsu, relaxed)
 
     binary = ((scaled > threshold) & interior).astype(np.uint8) * 255
     kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (MORPHOLOGY_SIZE, MORPHOLOGY_SIZE))
@@ -117,7 +119,7 @@ def binary_pattern(luminance: np.ndarray, valid: np.ndarray) -> np.ndarray:
     for label in range(1, count):
         area = int(statistics[label, cv.CC_STAT_AREA])
 
-        if minimum <= area <= maximum:
+        if area >= minimum:
             result[labels == label] = 255
 
     return result
