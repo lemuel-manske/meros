@@ -112,7 +112,6 @@ def binary_pattern(luminance: np.ndarray, valid: np.ndarray) -> np.ndarray:
 
     size = int(np.count_nonzero(interior))
     minimum = max(1, round(MIN_REGION_FRACTION * size))
-    maximum = round(MAX_REGION_FRACTION * size)
     count, labels, statistics, _ = cv.connectedComponentsWithStats(binary, connectivity=8)
     result = np.zeros_like(binary)
 
