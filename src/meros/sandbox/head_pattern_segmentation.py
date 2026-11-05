@@ -113,7 +113,7 @@ def segment_tonal_regions(
         binary = cv.morphologyEx(binary, cv.MORPH_OPEN, kernel)
         binary = cv.morphologyEx(binary, cv.MORPH_CLOSE, kernel)
 
-        count, labels, statistics, _ = cv.connectedComponentsWithStats(binary, 8)
+        count, labels, statistics, _ = cv.connectedComponentsWithStats(binary, connectivity=8)
         kept = np.zeros_like(binary)
 
         for label in range(1, count):
