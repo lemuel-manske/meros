@@ -2,7 +2,7 @@ VENV ?= .venv
 
 PYTHON ?= $(if $(wildcard $(VENV)/bin/python),$(VENV)/bin/python,python3)
 
-EXTRAS ?= data,dev
+EXTRAS ?= data,dev,ml
 
 PORT ?= 8080
 
