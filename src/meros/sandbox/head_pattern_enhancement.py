@@ -48,7 +48,7 @@ def uint8_percentile(image: np.ndarray, lower: float = 1.0, upper: float = 99.0)
     Scale an image to uint8 using percentile limits for visualization.
     """
     low, high = np.percentile(image, (lower, upper))
-    return np.uint8(np.clip((image - low) * 255 / max(high - low, 1e-6), 0, 255))
+    return np.clip((image - low) * 255 / max(high - low, 1e-6), 0, 255).astype(np.uint8)
 
 
 def fit_canvas(image: np.ndarray) -> np.ndarray:
@@ -80,7 +80,7 @@ def process(image: np.ndarray) -> list[np.ndarray]:
 
     illumination = cv.GaussianBlur(light.astype(np.float32), (0, 0), sigmaX=35)
     corrected = light.astype(np.float32) - illumination + float(np.median(illumination))
-    corrected = np.uint8(np.clip(corrected, 0, 255))
+    corrected = np.clip(corrected, 0, 255).astype(np.uint8)
     corrected = cv.createCLAHE(clipLimit=1.8, tileGridSize=(9, 7)).apply(corrected)
     corrected_color = cv.cvtColor(
         cv.merge((corrected, channel_a, channel_b)), cv.COLOR_LAB2BGR
