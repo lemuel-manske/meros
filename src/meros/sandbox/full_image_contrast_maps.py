@@ -25,9 +25,9 @@ DISPLAY_PERCENTILE = 97
 
 def contrast_maps(image: np.ndarray) -> tuple[np.ndarray, list[np.ndarray]]:
     light = cv.cvtColor(image, cv.COLOR_BGR2LAB)[:, :, 0]
-    enhanced = cv.createCLAHE(
-        clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=CLAHE_TILES
-    ).apply(light)
+    enhanced = cv.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=CLAHE_TILES).apply(
+        light
+    )
     values = enhanced.astype(np.float32)
     maps: list[np.ndarray] = []
 
@@ -53,9 +53,13 @@ def show(image: np.ndarray, name: str) -> None:
     axes[0, 1].imshow(enhanced, cmap="gray", vmin=0, vmax=255)
     axes[0, 1].set_title("CLAHE luminance")
 
-    axes[0, 2].imshow(np.minimum(maps[0], 0), cmap="coolwarm", vmin=-max(
-        1.0, float(np.percentile(np.abs(maps[0]), DISPLAY_PERCENTILE))
-    ), vmax=max(1.0, float(np.percentile(np.abs(maps[0]), DISPLAY_PERCENTILE))))
+    fine_limit = max(1.0, float(np.percentile(np.abs(maps[0]), DISPLAY_PERCENTILE)))
+    axes[0, 2].imshow(
+        np.minimum(maps[0], 0),
+        cmap="coolwarm",
+        vmin=-fine_limit,
+        vmax=fine_limit,
+    )
     axes[0, 2].set_title("Fine scale: dark response only")
 
     for axis, response, (inner_sigma, outer_sigma) in zip(
