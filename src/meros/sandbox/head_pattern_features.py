@@ -61,7 +61,9 @@ def fit_canvas(image: np.ndarray) -> np.ndarray:
 def enhance(image: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     light, channel_a, channel_b = cv.split(cv.cvtColor(image, cv.COLOR_BGR2LAB))
 
-    luminance = cv.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=CLAHE_TILE_GRID).apply(light)
+    luminance = cv.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=CLAHE_TILE_GRID).apply(
+        light
+    )
 
     color = cv.cvtColor(cv.merge((luminance, channel_a, channel_b)), cv.COLOR_LAB2BGR)
 
@@ -80,9 +82,7 @@ def contrast_map(luminance: np.ndarray) -> np.ndarray:
 
     lower, upper = np.percentile(difference, (3, 97))
 
-    return np.clip((difference - lower) * 255 / max(upper - lower, 1e-6), 0, 255).astype(
-        np.uint8
-    )
+    return np.clip((difference - lower) * 255 / max(upper - lower, 1e-6), 0, 255).astype(np.uint8)
 
 
 def detect_regions(luminance: np.ndarray) -> list[cv.KeyPoint]:
