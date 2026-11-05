@@ -97,12 +97,9 @@ def segment_tonal_regions(
     residual = luminance.astype(np.float32) - background
     kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5))
 
-    interior = cv.erode(
-        (valid.astype(np.uint8) * 255),
-        cv.getStructuringElement(
-            cv.MORPH_ELLIPSE, (2 * MASK_EDGE_MARGIN + 1, 2 * MASK_EDGE_MARGIN + 1)
-        ),
-    ) > 0
+    margin = 2 * MASK_EDGE_MARGIN + 1
+    erosion_kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (margin, margin))
+    interior = cv.erode(valid.astype(np.uint8) * 255, erosion_kernel) > 0
 
     minimum = MIN_REGION_AREA
     maximum = int(MAX_REGION_AREA_FRACTION * np.count_nonzero(interior))
