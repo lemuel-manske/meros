@@ -32,9 +32,7 @@ MAX_ASPECT_RATIO = 3.5
 
 def responses(image: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     light = cv.cvtColor(image, cv.COLOR_BGR2LAB)[:, :, 0]
-    enhanced = cv.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=CLAHE_TILES).apply(
-        light
-    )
+    enhanced = cv.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=CLAHE_TILES).apply(light)
     values = enhanced.astype(np.float32)
 
     fine = cv.GaussianBlur(values, (0, 0), sigmaX=INNER_SIGMA)
