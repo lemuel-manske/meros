@@ -1,5 +1,3 @@
-"""Annotate corresponding spots in two photographs of one subject."""
-
 from __future__ import annotations
 
 import cv2 as cv

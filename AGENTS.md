@@ -47,25 +47,7 @@ These rules apply across the Meros codebase.
 
 # Code style
 
-Python docs should be like
-
-```python
-def my_function(param1: int, param2: str) -> bool:
-    """
-    This function does something important.
-    """
-    # Implementation goes here
-```
-
-Or at module level:
-
-```python
-"""
-This module provides utilities for processing images.
-
-It includes functions for resizing, filtering, and transforming images.
-"""
-```
+- Do not wr
 
 - Never use `#` for module-level documentation. Use triple quotes instead.
 

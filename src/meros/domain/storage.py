@@ -35,7 +35,7 @@ class Track:
 
 
 @dataclass(frozen=True)
-class TrackMetadata:  # bound to metadata.json
+class TrackMetadata:
     video_id: str
     tracks: dict[str, Track]
     processed_frame_count: int
@@ -97,7 +97,7 @@ class Video:
     annotations: list[VideoAnnotation] = field(default_factory=list)
     individuals: list[Individual] = field(default_factory=list)
 
-    def matching_annotations(
+    def filter(
         self,
         *,
         viewpoint: Viewpoint | None = None,
@@ -128,8 +128,6 @@ class Subject:
 
 @dataclass(frozen=True)
 class EyeAnnotation:
-    """Visible left-eye outline in original subject-image pixels."""
-
     center: tuple[float, float]
     radius_x: float
     radius_y: float

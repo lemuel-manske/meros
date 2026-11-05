@@ -1,5 +1,3 @@
-"""Map original video frame IDs to contiguous sequence indices for SAM2."""
-
 from collections.abc import Generator, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass

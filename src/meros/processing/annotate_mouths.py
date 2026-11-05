@@ -1,5 +1,3 @@
-"""Mark the posterior mouth commissure on left-side subject photographs."""
-
 from __future__ import annotations
 
 import cv2 as cv
@@ -11,8 +9,6 @@ from meros.project import Project
 
 SUBJECT_ID = None
 IMAGE_ID = None
-
-ONLY_WITH_EYE_AND_SPOTS = True
 
 
 def select_mouth(
@@ -90,9 +86,6 @@ def run(project: Project) -> None:
 
             spots = project.metadata.read_subject_spots(subject.subject_id, photo.image_id)
             eye = project.metadata.read_subject_eye(subject.subject_id, photo.image_id)
-
-            if ONLY_WITH_EYE_AND_SPOTS and (not spots or eye is None):
-                continue
 
             image = project.media.read_subject_image(subject.subject_id, photo.image_id)
             existing = project.metadata.read_subject_mouth(subject.subject_id, photo.image_id)

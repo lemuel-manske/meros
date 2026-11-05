@@ -1,9 +1,3 @@
-"""
-Coordinate-only spot signatures without alignment or known spot correspondences.
-
-Scores are uncalibrated distribution similarities, not identity probabilities.
-"""
-
 from __future__ import annotations
 
 import numpy as np

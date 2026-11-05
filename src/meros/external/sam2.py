@@ -1,5 +1,3 @@
-"""Translate the untyped SAM2 library into the application's predictor contract."""
-
 import importlib
 
 from collections.abc import Iterator, Sequence

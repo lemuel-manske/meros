@@ -1,5 +1,3 @@
-"""Typed CPU-facing predictions; inference state stays owned by the predictor."""
-
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Protocol
