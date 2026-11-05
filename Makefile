@@ -9,8 +9,14 @@ PORT ?= 8080
 BIND ?= 127.0.0.1
 
 
+ifneq (,$(wildcard .env))
+  include .env
+  export
+endif
+
+
 .PHONY: init install install-sam2 sam2-submodule
-.PHONY: data-pull data-save data-push results-save pipeline subjects
+.PHONY: data-login data-pull data-save data-push results-save pipeline subjects
 .PHONY: typecheck lint format format-check check serve-media checkpoint
 
 
@@ -30,6 +36,10 @@ sam2-submodule:
 install-sam2: sam2-submodule
 	$(PYTHON) -m pip install -e external/sam2
 
+
+data-login:
+	$(PYTHON) -m dvc remote modify --local b2 access_key_id "$(ACCESS_KEY_ID)"
+	$(PYTHON) -m dvc remote modify --local b2 secret_access_key "$(APPLICATION_KEY)"
 
 data-pull:
 	$(PYTHON) -m dvc pull data/media.dvc
