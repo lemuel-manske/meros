@@ -1,13 +1,12 @@
 """
-Segment candidate light and dark skin patches in Rogerio/9 and Rogerio/12.
+Experiment with a binary mask of pale skin markings on Rogerio/9 and Rogerio/12.
 
-From the repository root:
-    make install-sam2
+Run from the repository root after setting up SAM2:
     python -m meros.sandbox.head_pattern_segmentation
 
-Uses the official SAM2 image predictor with a head-region box prompt.
-The box is not a ground-truth mask: review the SAM2 mask before trusting
-the CLAHE/tonal segmentations. Shows plots only; writes no files.
+SAM2 limits the region to the fish, not to skin alone. The binary mask is
+an exploratory candidate pattern, not verified biological segmentation.
+Nothing is saved to disk.
 """
 
 from importlib import import_module
@@ -28,17 +27,15 @@ HEAD_BOXES = {
 
 CLAHE_CLIP_LIMIT = 2.0
 CLAHE_TILE_GRID = (9, 7)
-BACKGROUND_SIGMA = 22.0
-RESIDUAL_THRESHOLD = 12.0
-MIN_REGION_AREA = 45
-MAX_REGION_AREA_FRACTION = 0.08
-MASK_EDGE_MARGIN = 8
+PATTERN_SIGMA = 4.0
+ILLUMINATION_SIGMA = 35.0
+MASK_EDGE_MARGIN = 12
+MORPHOLOGY_SIZE = 7
+MIN_REGION_FRACTION = 0.0003
+MAX_REGION_FRACTION = 0.08
 
 
 def image_predictor(checkpoint: str) -> Any:
-    """
-    Build SAM2's still-image predictor instead of the existing video predictor.
-    """
     torch = import_module("torch")
     builder = import_module("sam2.build_sam")
     module = import_module("sam2.sam2_image_predictor")
@@ -54,9 +51,6 @@ def image_predictor(checkpoint: str) -> Any:
 
 
 def subject_mask(predictor: Any, image: np.ndarray, box: tuple[int, int, int, int]) -> np.ndarray:
-    """
-    Segment the head-prompted fish region using the unmodified full photograph.
-    """
     rgb = cv.cvtColor(image, cv.COLOR_BGR2RGB)
     predictor.set_image(rgb)
 
@@ -69,72 +63,80 @@ def subject_mask(predictor: Any, image: np.ndarray, box: tuple[int, int, int, in
 
 
 def enhance(image: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    light, channel_a, channel_b = cv.split(cv.cvtColor(image, cv.COLOR_BGR2LAB))
+    clahe = cv.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=CLAHE_TILE_GRID)
+    equalized = clahe.apply(light)
+    color = cv.cvtColor(cv.merge((equalized, channel_a, channel_b)), cv.COLOR_LAB2BGR)
+
+    return color, equalized
+
+
+def binary_pattern(luminance: np.ndarray, valid: np.ndarray) -> np.ndarray:
     """
-    Equalize LAB luminance without altering the chroma channels.
+    Segment light, medium-scale skin markings as a single binary foreground.
+
+    Contrast is measured relative to neighboring skin; Otsu selects one threshold
+    from the valid pixels. Normalized convolution prevents outside-mask pixels
+    from distorting the local illumination estimate.
     """
-    luminance, channel_a, channel_b = cv.split(cv.cvtColor(image, cv.COLOR_BGR2LAB))
-    equalized = cv.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=CLAHE_TILE_GRID)
-    light = equalized.apply(luminance)
-    color = cv.cvtColor(cv.merge((light, channel_a, channel_b)), cv.COLOR_LAB2BGR)
-
-    return color, light
-
-
-def segment_tonal_regions(
-    luminance: np.ndarray, valid: np.ndarray
-) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Find local light/dark deviations within the masked fish skin.
-
-    Validity is eroded to suppress artificial mask edges. The outputs
-    are exploratory tonal regions, not verified biological markings.
-    """
-    background = cv.GaussianBlur(
-        luminance.astype(np.float32),
-        (0, 0),
-        sigmaX=BACKGROUND_SIGMA,
-    )
-    residual = luminance.astype(np.float32) - background
-    kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5))
-
     margin = 2 * MASK_EDGE_MARGIN + 1
-    erosion_kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (margin, margin))
-    interior = cv.erode(valid.astype(np.uint8) * 255, erosion_kernel) > 0
+    edge_kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (margin, margin))
+    interior = cv.erode(valid.astype(np.uint8) * 255, edge_kernel) > 0
 
-    minimum = MIN_REGION_AREA
-    maximum = int(MAX_REGION_AREA_FRACTION * np.count_nonzero(interior))
-    masks = []
+    if not np.any(interior):
+        raise ValueError("SAM2 mask has no interior area for pattern segmentation")
 
-    for selected in (residual >= RESIDUAL_THRESHOLD, residual <= -RESIDUAL_THRESHOLD):
-        binary = (selected & interior).astype(np.uint8) * 255
-        binary = cv.morphologyEx(binary, cv.MORPH_OPEN, kernel)
-        binary = cv.morphologyEx(binary, cv.MORPH_CLOSE, kernel)
+    values = luminance.astype(np.float32)
+    weights = valid.astype(np.float32)
 
-        count, labels, statistics, _ = cv.connectedComponentsWithStats(binary, connectivity=8)
-        kept = np.zeros_like(binary)
+    weighted_light = cv.GaussianBlur(
+        values * weights, (0, 0), sigmaX=ILLUMINATION_SIGMA
+    )
+    weighted_area = cv.GaussianBlur(weights, (0, 0), sigmaX=ILLUMINATION_SIGMA)
+    background = weighted_light / np.maximum(weighted_area, 1e-6)
 
-        for label in range(1, count):
-            area = int(statistics[label, cv.CC_STAT_AREA])
+    smoothed = cv.GaussianBlur(values, (0, 0), sigmaX=PATTERN_SIGMA)
+    residual = smoothed - background
 
-            if minimum <= area <= maximum:
-                kept[labels == label] = 255
+    low, high = np.percentile(residual[interior], (2, 98))
+    scaled = np.clip((residual - low) * 255 / max(high - low, 1e-6), 0, 255).astype(
+        np.uint8
+    )
 
-        masks.append(kept)
+    valid_pixels = scaled[interior].reshape(-1, 1)
+    threshold, _ = cv.threshold(
+        valid_pixels, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU
+    )
 
-    return masks[0], masks[1]
+    binary = ((scaled > threshold) & interior).astype(np.uint8) * 255
+    kernel = cv.getStructuringElement(
+        cv.MORPH_ELLIPSE, (MORPHOLOGY_SIZE, MORPHOLOGY_SIZE)
+    )
+    binary = cv.morphologyEx(binary, cv.MORPH_OPEN, kernel)
+    binary = cv.morphologyEx(binary, cv.MORPH_CLOSE, kernel)
+    binary[~interior] = 0
+
+    size = int(np.count_nonzero(interior))
+    minimum = max(1, round(MIN_REGION_FRACTION * size))
+    maximum = round(MAX_REGION_FRACTION * size)
+    count, labels, statistics, _ = cv.connectedComponentsWithStats(binary, connectivity=8)
+    result = np.zeros_like(binary)
+
+    for label in range(1, count):
+        area = int(statistics[label, cv.CC_STAT_AREA])
+
+        if minimum <= area <= maximum:
+            result[labels == label] = 255
+
+    return result
 
 
-def draw_regions(image: np.ndarray, bright: np.ndarray, dark: np.ndarray) -> np.ndarray:
-    """
-    Overlay bright and dark region outlines without replacing original pixels.
-    """
-    overlay = image.copy()
+def overlay_contours(image: np.ndarray, binary: np.ndarray) -> np.ndarray:
+    marked = image.copy()
+    contours, _ = cv.findContours(binary, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+    cv.drawContours(marked, contours, -1, (0, 255, 255), 2)
 
-    for mask, color in ((bright, (0, 255, 255)), (dark, (255, 120, 40))):
-        contours, _ = cv.findContours(mask, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-        cv.drawContours(overlay, contours, -1, color, 2)
-
-    return overlay
+    return marked
 
 
 def run() -> None:
@@ -150,29 +152,28 @@ def run() -> None:
             raise ValueError(f"Invalid head box for {SUBJECT}/{image_id}")
 
         mask = subject_mask(predictor, image, (x1, y1, x2, y2))
-        region = image[y1:y2, x1:x2]
+        crop = image[y1:y2, x1:x2]
         valid = mask[y1:y2, x1:x2]
-        enhanced, light = enhance(region)
-        bright, dark = segment_tonal_regions(light, valid)
-        overlay = draw_regions(enhanced, bright, dark)
+        enhanced, luminance = enhance(crop)
+        binary = binary_pattern(luminance, valid)
+        overlay = overlay_contours(enhanced, binary)
 
-        boundary = enhanced.copy()
-        boundary[~valid] = (20, 20, 20)
+        region_count = cv.connectedComponents(binary)[0] - 1
         print(
-            f"{SUBJECT}/{image_id}: mask={np.mean(valid):.1%} of crop, "
-            f"bright={cv.connectedComponents(bright)[0] - 1}, "
-            f"dark={cv.connectedComponents(dark)[0] - 1} regions"
+            f"{SUBJECT}/{image_id}: SAM2={np.mean(valid):.1%} of crop, "
+            f"pattern={np.count_nonzero(binary) / binary.size:.1%} of crop, "
+            f"regions={region_count}"
         )
 
         panels = (
-            (cv.cvtColor(region, cv.COLOR_BGR2RGB), "Original head crop"),
-            (cv.cvtColor(boundary, cv.COLOR_BGR2RGB), "SAM2 mask + CLAHE"),
-            (cv.cvtColor(overlay, cv.COLOR_BGR2RGB), "Light / dark tonal contours"),
+            (cv.cvtColor(enhanced, cv.COLOR_BGR2RGB), "CLAHE (head crop)", None),
+            (binary, "Binary pattern: white = candidate marking", "gray"),
+            (cv.cvtColor(overlay, cv.COLOR_BGR2RGB), "Pattern contours", None),
         )
 
-        for row, (panel, title) in enumerate(panels):
+        for row, (view, title, color_map) in enumerate(panels):
             axis = axes[row, column]
-            axis.imshow(panel)
+            axis.imshow(view, cmap=color_map, vmin=0 if color_map else None, vmax=255 if color_map else None)
             axis.set_title(f"{SUBJECT}/{image_id}: {title}")
             axis.set_axis_off()
 
