@@ -11,7 +11,7 @@ BIND ?= 127.0.0.1
 
 .PHONY: init install install-sam2 sam2-submodule
 .PHONY: data-pull data-save data-push results-save pipeline subjects
-.PHONY: typecheck lint format format-check check serve-media
+.PHONY: typecheck lint format format-check check serve-media checkpoint
 
 
 init:
@@ -69,3 +69,6 @@ check: typecheck lint format-check
 
 serve-media:
 	$(PYTHON) -m http.server $(PORT) --bind $(BIND) --directory data/media
+
+checkpoint:
+	@bash scripts/checkpoint.sh "$(NAME)" "$(MESSAGE)" "$(DATE)"
