@@ -4,9 +4,10 @@ Inspect faint head-marking constellations at multiple spatial scales.
 Run from the repository root:
     python -m meros.sandbox.local_head_constellation
 
-The two regions were located visually in the original Rogerio/9 and Rogerio/12
-photographs. They are hypotheses for inspection, not verified correspondences.
-Nothing is saved to disk or used to predict individual identity.
+Select a rectangular region in each photograph (drag, then press Enter or Space).
+Press Escape or cancel to skip a photograph. Selected regions are hypotheses
+for inspection, not verified correspondences. Nothing is saved to disk or used
+to predict individual identity.
 """
 
 import cv2 as cv
@@ -19,10 +20,8 @@ from meros.project import Project
 
 
 SUBJECT = "rogerio"
-REGIONS = {
-    9: (510, 333, 622, 424),
-    12: (744, 530, 997, 737),
-}
+IMAGE_IDS = (9, 12)
+MAX_SELECTION_SIDE = 1200
 
 CLAHE_CLIP_LIMIT = 2.0
 CLAHE_TILE_GRID = (5, 5)
@@ -35,6 +34,29 @@ PEAK_SPACING_FRACTION = 0.12
 PEAK_BORDER_FRACTION = 0.08
 PEAK_MIN_PERCENTILE = 80
 MAX_DISPLAY_PEAKS = 12
+
+
+def select_region(image: np.ndarray, image_id: int) -> np.ndarray | None:
+    """
+    Select a region interactively on a scaled display of the original photograph.
+    """
+    height, width = image.shape[:2]
+    scale = min(1.0, MAX_SELECTION_SIDE / max(height, width))
+    shown = cv.resize(image, None, fx=scale, fy=scale) if scale < 1 else image
+
+    window = f"{SUBJECT}/{image_id}: select region (Enter/Space confirms, Esc skips)"
+    x, y, w, h = cv.selectROI(window, shown, showCrosshair=True, fromCenter=False)
+    cv.destroyWindow(window)
+
+    if w <= 0 or h <= 0:
+        return None
+
+    x1 = max(0, round(x / scale))
+    y1 = max(0, round(y / scale))
+    x2 = min(width, round((x + w) / scale))
+    y2 = min(height, round((y + h) / scale))
+
+    return image[y1:y2, x1:x2]
 
 
 def responses(image: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -85,16 +107,22 @@ def candidate_peaks(response: np.ndarray) -> np.ndarray:
 
 def run() -> None:
     project = Project.open()
-    figure, axes = plt.subplots(5, len(REGIONS), figsize=(12, 17))
+    selections: dict[int, np.ndarray] = {}
 
-    for column, (image_id, (x1, y1, x2, y2)) in enumerate(REGIONS.items()):
+    for image_id in IMAGE_IDS:
         image = project.media.read_subject_image(SUBJECT, image_id)
-        height, width = image.shape[:2]
+        crop = select_region(image, image_id)
 
-        if not (0 <= x1 < x2 <= width and 0 <= y1 < y2 <= height):
-            raise ValueError(f"Invalid local region for {SUBJECT}/{image_id}")
+        if crop is not None:
+            selections[image_id] = crop
 
-        crop = image[y1:y2, x1:x2]
+    if not selections:
+        print("No regions selected.")
+        return
+
+    figure, axes = plt.subplots(5, len(selections), figsize=(6 * len(selections), 17), squeeze=False)
+
+    for column, (image_id, crop) in enumerate(selections.items()):
         equalized, fine, medium = responses(crop)
         peaks = candidate_peaks(fine)
 
@@ -102,7 +130,7 @@ def run() -> None:
 
         axis = axes[0, column]
         axis.imshow(cv.cvtColor(crop, cv.COLOR_BGR2RGB))
-        axis.set_title(f"{SUBJECT}/{image_id}: original")
+        axis.set_title(f"{SUBJECT}/{image_id}: selected region")
 
         axis = axes[1, column]
         axis.imshow(equalized, cmap="gray", vmin=0, vmax=255)
@@ -137,7 +165,6 @@ def run() -> None:
     figure.tight_layout()
     plt.show(block=True)
     plt.close(figure)
-
 
 if __name__ == "__main__":
     run()
