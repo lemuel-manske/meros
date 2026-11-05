@@ -10,6 +10,7 @@ detected SIFT regions. No matching, identity scoring, or output files.
 
 import cv2 as cv
 import matplotlib.pyplot as plt
+from matplotlib.patches import Circle
 import numpy as np
 
 from meros.project import Project
@@ -60,9 +61,7 @@ def fit_canvas(image: np.ndarray) -> np.ndarray:
 def enhance(image: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     light, channel_a, channel_b = cv.split(cv.cvtColor(image, cv.COLOR_BGR2LAB))
 
-    luminance = cv.createCLAHE(
-        clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=CLAHE_TILE_GRID
-    ).apply(light)
+    luminance = cv.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=CLAHE_TILE_GRID).apply(light)
 
     color = cv.cvtColor(cv.merge((luminance, channel_a, channel_b)), cv.COLOR_LAB2BGR)
 
@@ -152,8 +151,8 @@ def run() -> None:
         axes[2, column].imshow(rgb)
 
         for point in regions:
-            circle = plt.Circle(
-                point.pt,
+            circle = Circle(
+                (float(point.pt[0]), float(point.pt[1])),
                 radius=point.size / 2,
                 fill=False,
                 edgecolor="#ffdd44",
