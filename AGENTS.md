@@ -33,8 +33,12 @@
 - Always separate code blocks with blank lines. If in doubt, add a blank line. Keep a blank line between logical steps, branches, loops, and groups of statements whenever it improves readability.
 - DO NOT write tests
 - Keep experimental chages isolated
-- DO NOT add unecessary validation and scaffolding (e.g. extra abstractions, unrelated cleanup, speculative validation layers)
+- DO NOT add unnecessary validation and scaffolding (e.g. extra abstractions, unrelated cleanup, speculative validation layers)
 - Keep documentation durable (update READMEs only when an architectural convention, public interface, or established workflow is intended to remain)
+- DO NOT add unnecessary manifests, summaries, reports, etc. Keep experiment results focused and small, direct
+- Prefer named constants on the top of the file over arguments passed to the script
+- DO NOT parametrize things that will not or are very difficult to change
+- Use `assert` for sanity checks and invariants
 
 ## Commits
 

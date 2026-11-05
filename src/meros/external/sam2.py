@@ -3,6 +3,9 @@ import importlib
 from pathlib import Path
 from typing import Protocol, cast
 
+import numpy as np
+from numpy.typing import NDArray
+
 from meros.domain import BinaryMask, Prediction, SeedBox
 
 
@@ -34,7 +37,9 @@ class Sam2Backend(Protocol):
         inference_state: object,
         frame_idx: int,
         obj_id: int,
-        box: SeedBox,
+        box: SeedBox | None = None,
+        points: NDArray[np.float32] | None = None,
+        labels: NDArray[np.int32] | None = None,
     ) -> object: ...
 
     def propagate_in_video(
@@ -70,13 +75,18 @@ class SAM2Predictor:
         inference_state: object,
         frame_idx: int,
         obj_id: int,
-        box: SeedBox,
+        box: SeedBox | None = None,
+        *,
+        points: NDArray[np.float32] | None = None,
+        labels: NDArray[np.int32] | None = None,
     ) -> None:
         self.backend.add_new_points_or_box(
             inference_state=inference_state,
             frame_idx=frame_idx,
             obj_id=obj_id,
             box=box,
+            points=points,
+            labels=labels,
         )
 
     def propagate_in_video(self, state: object) -> Iterator[Prediction]:
@@ -99,6 +109,8 @@ class SAM2Predictor:
 
 def build_sam2_predictor(
     checkpoint: Path = Path("external/sam2/checkpoints/sam2.1_hiera_large.pt"),
+    *,
+    device: str = "cuda",
 ) -> SAM2Predictor:
     module = importlib.import_module("sam2.build_sam")
 
@@ -109,7 +121,7 @@ def build_sam2_predictor(
     backend = builder(
         "configs/sam2.1/sam2.1_hiera_l.yaml",
         str(checkpoint),
-        device="cuda",
+        device=device,
     )
 
     return SAM2Predictor(backend)
