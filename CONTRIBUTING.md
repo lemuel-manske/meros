@@ -43,15 +43,24 @@ A checkpoint can recover only what was actually saved.
 After the experimental work is complete:
 
 1. Commit all files needed to understand and recover the campaign. Ensure the working tree is clean.
-2. Push the research branch and any required DVC objects.
-3. Create and publish an **annotated Git tag** at the final research commit.
+2. From the experiment branch, run:
 
 ```sh
-git status --short
-git push -u origin HEAD
-git tag -a research/<topic>/YYYY-MM-DD -m "Short summary of the campaign and outcome"
-git push origin research/<topic>/YYYY-MM-DD
+make checkpoint NAME=head-pattern-enhancement MESSAGE="CLAHE improves visibility of head markings"
 ```
+
+The script pushes the branch, publishes an **annotated Git tag** named
+`research/<topic>/YYYY-MM-DD` using the local date, and verifies the remote tag
+points to the intended commit. Use `DATE=YYYY-MM-DD` when a specific checkpoint
+date is needed. It refuses a dirty working tree, `main`, and an existing tag.
+
+When DVC tracking files changed relative to the base branch, the script runs
+`python -m dvc push` before publishing. Commit any new DVC tracking metadata
+first; ignored and untracked-by-DVC outputs are **not** preserved automatically.
+Verify remote artifact recovery separately before deleting an experimental branch.
+
+If a research branch predates this command, update it from `main` before using
+`make checkpoint`. The command does not merge experiment code into `main`.
 
 Use a short descriptive topic and the checkpoint date; if multiple checkpoints share a date, add a meaningful suffix. **Published research tags are permanent checkpoints by convention:** never move, reuse, delete, or force-update them.
 
