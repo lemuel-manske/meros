@@ -13,6 +13,10 @@ class Project:
     sam2_model: Path = Path("external/sam2/checkpoints/sam2.1_hiera_large.pt")
     yolo_model: Path = Path("external/yolo/yolo26n-cls.pt")
     fishial_model: Path = Path("external/yolo/fishial-detector.pt")
+
+    """
+    Finetuned Fishial model for detecting Goliath Groupers.
+    """
     mero_detector: Path = Path("data/ml/detection/20261109-104626/weights/best.pt")
 
     @classmethod

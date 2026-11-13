@@ -34,7 +34,7 @@ def prepare_dataset(
 
     for video in project.videos.get_all():
         for frame in video.frames:
-            annotation = frame.annotation
+            annotation = frame.annotations
 
             if annotation is None:
                 continue
@@ -135,7 +135,7 @@ def evaluate(
     counter = ConfusionMatrix(names={0: "mero"})
 
     for frame, image_path in validation:
-        annotation = frame.annotation
+        annotation = frame.annotations
         assert annotation is not None
 
         boxes = model.predict(

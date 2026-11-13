@@ -12,6 +12,12 @@ SCAN_MULTIPLIER = 2
 IMAGE_SIZE = 640
 CONFIDENCE = 0.25
 
+"""
+Prepares the frames for review by running the Fishial model.
+
+Those extract frames are meant to be used for finetuning a YOLO model later, to detect Goliath Groupers only.
+"""
+
 
 def allocate_frames(videos: list[Video]) -> list[int]:
     capacities = [
@@ -41,7 +47,7 @@ def prepare_video(project: Project, model, video: Video, count: int) -> None:
     if count == 0:
         return
 
-    existing = sum(frame.annotation is not None for frame in video.frames)
+    existing = sum(frame.annotations is not None for frame in video.frames)
 
     if existing >= count:
         print(f"{video.video_id}: {existing} frames already prepared", flush=True)
@@ -63,7 +69,7 @@ def prepare_video(project: Project, model, video: Video, count: int) -> None:
     for step, index in enumerate(indexes):
         frame = video.frames[int(index)]
 
-        if frame.annotation is not None:
+        if frame.annotations is not None:
             continue
 
         image = frame.im

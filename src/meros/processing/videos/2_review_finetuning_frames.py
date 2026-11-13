@@ -124,13 +124,13 @@ def run(project: Project) -> None:
         for video in project.videos.get_all()
         if not VIDEO_IDS or video.video_id in VIDEO_IDS
         for frame in video.frames
-        if frame.annotation is not None and (not ONLY_PENDING or not frame.annotation.reviewed)
+        if frame.annotations is not None and (not ONLY_PENDING or not frame.annotations.reviewed)
     ]
 
     print(f"{len(frames)} frames to review")
 
     for frame in frames:
-        annotation = frame.annotation
+        annotation = frame.annotations
 
         assert annotation is not None
 

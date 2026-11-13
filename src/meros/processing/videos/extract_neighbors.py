@@ -6,7 +6,7 @@ STEPS_EACH_SIDE = 5
 
 def run(project: Project) -> None:
     for video in project.videos.get_all():
-        pivots = [frame for frame in video.frames if frame.selected_detections]
+        pivots = [frame for frame in video.selected_frames]
 
         for pivot in pivots:
             indexes = range(

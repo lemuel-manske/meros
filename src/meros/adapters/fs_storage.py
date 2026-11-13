@@ -11,7 +11,6 @@ from meros.domain.storage import (
     BBox,
     FrameAnnotation,
     FrameDetection,
-    FrameSelection,
     Subject,
     SubjectImage,
     Subjects,
@@ -36,9 +35,9 @@ VIDEO_FRAME_NEIGHBORS_ROOT = VIDEOS_ROOT / "neighbors"
 
 METADATA_SUBJECTS_ROOT = METADATA_ROOT / "subjects"
 VIDEOS_METADATA_ROOT = METADATA_ROOT / "videos"
-VIDEO_ANNOTATIONS_ROOT = VIDEOS_METADATA_ROOT / "detection"
+
+VIDEO_DETECTIONS_ROOT = VIDEOS_METADATA_ROOT / "detections"
 VIDEO_PREDICTIONS_ROOT = VIDEOS_METADATA_ROOT / "predictions"
-VIDEO_SELECTIONS_ROOT = VIDEOS_METADATA_ROOT / "selections"
 
 
 class MediaPaths:
@@ -65,14 +64,14 @@ class MediaPaths:
 
 
 class MetadataPaths:
-    def video_selection(self, video_id: str) -> Path:
-        return VIDEO_SELECTIONS_ROOT / f"{video_id}.json"
-
     def video_predictions(self, video_id: str) -> Path:
         return VIDEO_PREDICTIONS_ROOT / f"{video_id}.json"
 
-    def video_annotations(self, video_id: str) -> Path:
-        return VIDEO_ANNOTATIONS_ROOT / f"{video_id}.json"
+    def video_detections(self, video_id: str) -> Path:
+        return VIDEO_DETECTIONS_ROOT / f"{video_id}.json"
+
+    def video_annotations(self) -> Path:
+        return VIDEOS_METADATA_ROOT / "annotations.csv"
 
     def subject_annotations(self, subject_id: str) -> Path:
         return METADATA_SUBJECTS_ROOT / subject_id / "annotations.csv"
@@ -98,7 +97,47 @@ def read_videos() -> list[Path]:
 
 
 def read_video(path: Path) -> Video:
-    return Video(video_id=path.stem, path=str(path), frames=read_video_frames(path))
+    return Video(
+        video_id=path.stem,
+        path=str(path),
+        selected_frames=read_selected_frames(path),
+        frames=read_video_frames(path),
+    )
+
+
+def read_video_capture_date(video_id: str) -> date:
+    path = metadata_paths.video_annotations()
+
+    with path.open(newline="") as stream:
+        for row in csv.DictReader(stream):
+            if row["id"] == video_id:
+                return date.fromisoformat(row["capture_date"])
+
+    assert False, f"Video {video_id} not found in {path}"
+
+
+def read_selected_frames(path: Path) -> list[VideoFrame]:
+    directory = media_paths.selected_video_frames(path.stem)
+
+    if not directory.exists():
+        return []
+
+    fps = cv.VideoCapture(str(path)).get(cv.CAP_PROP_FPS)
+
+    return [
+        VideoFrame(
+            video_id=path.stem,
+            capture_date=read_video_capture_date(path.stem),
+            path=str(frame_path),
+            frame_index=int(frame_path.stem),
+            timestamp=float(frame_path.stem) / fps,
+            _load_im=partial(read_image, frame_path),
+            annotations=None,
+            detections=[],
+        )
+        for frame_path in sorted(directory.iterdir())
+        if is_image_file(frame_path)
+    ]
 
 
 def read_video_frames(path: Path) -> list[VideoFrame]:
@@ -115,27 +154,21 @@ def read_video_frames(path: Path) -> list[VideoFrame]:
     finally:
         capture.release()
 
-    annotations = read_json(metadata_paths.video_annotations(path.stem), default={})
-    detections = read_json(metadata_paths.video_predictions(path.stem), default={})
-    selection = read_json(metadata_paths.video_selection(path.stem), default={})
-    saved_indexes = {
-        image.stem for image in media_paths.selected_video_frames(path.stem).glob("*.jpg")
-    }
-    selection = {
-        index: items for index, items in selection.items() if f"{int(index):08d}" in saved_indexes
-    }
+    annotations = read_json(metadata_paths.video_detections(path.stem), default={})
+    predictions = read_json(metadata_paths.video_predictions(path.stem), default={})
 
     return [
         VideoFrame(
             video_id=path.stem,
+            capture_date=read_video_capture_date(path.stem),
+            path=str(path),
             frame_index=index,
             timestamp=index / fps,
             _load_im=partial(read_video_frame, path, index),
-            annotation=(
+            annotations=(
                 FrameAnnotation(**annotations[str(index)]) if str(index) in annotations else None
             ),
-            detections=[FrameDetection(**item) for item in detections.get(str(index), [])],
-            selected_detections=[FrameSelection(**item) for item in selection.get(str(index), [])],
+            detections=[FrameDetection(**item) for item in predictions.get(str(index), [])],
         )
         for index in range(frame_count)
     ]
@@ -181,17 +214,15 @@ def read_subject_crop(subject_id: str, image_id: int) -> np.ndarray:
     return read_image(media_paths.subject_crop(subject_id, image_id), cv.IMREAD_UNCHANGED)
 
 
-def read_subject_capture_dates(subject_id: str) -> dict[int, date]:
+def read_subject_capture_date(subject_id: str, frame_idx: int) -> date:
     path = metadata_paths.subject_annotations(subject_id)
 
-    if not path.is_file():
-        return {}
-
     with path.open(newline="") as stream:
-        return {
-            int(row["id"]): date(int(row["year"]), int(row["month"]), int(row["day"]))
-            for row in csv.DictReader(stream)
-        }
+        for row in csv.DictReader(stream):
+            if int(row["id"]) == frame_idx:
+                return date.fromisoformat(row["capture_date"])
+
+    assert False, f"Frame {frame_idx} not found in {path}"
 
 
 def read_subject_images(subject_id: str) -> list[SubjectImage]:
@@ -200,18 +231,16 @@ def read_subject_images(subject_id: str) -> list[SubjectImage]:
     if not directory.exists():
         return []
 
-    capture_dates = read_subject_capture_dates(subject_id)
-
     records = [
         SubjectImage(
             subject_id=subject_id,
             image_id=int(path.stem),
+            capture_date=read_subject_capture_date(subject_id, int(path.stem)),
             path=str(path),
             _load_im=partial(read_image, path),
             _load_crop=partial(read_subject_crop, subject_id, int(path.stem)),
             bbox=read_subject_bbox(subject_id, int(path.stem)),
             spots=read_subject_spots(subject_id, int(path.stem)),
-            capture_date=capture_dates.get(int(path.stem)),
         )
         for path in directory.iterdir()
         if is_image_file(path)
@@ -243,6 +272,47 @@ class SubjectsAdapter(Subjects):
 
         raise ValueError(f"Subject {subject_id} not found")
 
+    def write_subject(self, subject: Subject, source_video_id: str | None = None) -> None:
+        directory = media_paths.subject(subject.subject_id)
+
+        directory.mkdir(parents=True, exist_ok=True)
+
+        for image in subject.images:
+            write_image(media_paths.subject_image(subject.subject_id, image.image_id), image.im)
+
+            if image.bbox:
+                path = metadata_paths.subject_segmentation(subject.subject_id)
+                bboxes = read_json(path, default={})
+
+                bboxes.setdefault("bboxes", {})[str(image.image_id)] = image.bbox
+
+                write_json(path, bboxes)
+
+            if image.spots:
+                self.write_subject_spots(subject.subject_id, image.image_id, image.spots)
+
+            if image.capture_date:
+                path = metadata_paths.subject_annotations(subject.subject_id)
+
+                if not path.exists():
+                    path.parent.mkdir(parents=True, exist_ok=True)
+
+                    with path.open("w", newline="") as stream:
+                        writer = csv.DictWriter(
+                            stream, fieldnames=["id", "capture_date", "source_video_id"]
+                        )
+                        writer.writeheader()
+
+                with path.open("a", newline="") as stream:
+                    writer = csv.DictWriter(stream, fieldnames=["id", "capture_date", "source_video_id"])
+                    writer.writerow(
+                        {
+                            "id": image.image_id,
+                            "capture_date": image.capture_date.isoformat(),
+                            "source_video_id": source_video_id,
+                        }
+                    )
+
     def write_subject_spots(self, subject_id: str, image_id: int, spots: list[SubjectSpot]) -> None:
         path = metadata_paths.subject_spots(subject_id, image_id)
 
@@ -266,7 +336,8 @@ class VideosAdapter(Videos):
         raise ValueError(f"Video {video_id} not found")
 
     def write_frame_annotation(self, frame: VideoFrame, annotation: FrameAnnotation) -> None:
-        path = metadata_paths.video_annotations(frame.video_id)
+        path = metadata_paths.video_detections(frame.video_id)
+
         annotations = read_json(path, default={})
         annotations[str(frame.frame_index)] = asdict(annotation)
 
@@ -280,31 +351,6 @@ class VideosAdapter(Videos):
         write_json(
             path,
             {str(index): [asdict(item) for item in items] for index, items in detections.items()},
-        )
-
-    def write_video_selection(
-        self, video: Video, selection: dict[int, list[FrameSelection]]
-    ) -> None:
-        path = metadata_paths.video_selection(video.video_id)
-        directory = media_paths.selected_video_frames(video.video_id)
-        directory.mkdir(parents=True, exist_ok=True)
-
-        selected_paths = set()
-
-        for index in selection:
-            image_path = directory / f"{index:08d}.jpg"
-            selected_paths.add(image_path)
-
-            if not image_path.is_file():
-                write_image(image_path, video.frames[index].im)
-
-        for image_path in directory.glob("*.jpg"):
-            if image_path not in selected_paths:
-                image_path.unlink()
-
-        write_json(
-            path,
-            {str(index): [asdict(item) for item in items] for index, items in selection.items()},
         )
 
     def write_frame_neighbors(

@@ -4,7 +4,7 @@ import cv2 as cv
 import numpy as np
 from ultralytics.engine.results import Results
 
-from meros.domain.storage import FrameDetection, FrameSelection
+from meros.domain.storage import FrameDetection
 from meros.models.yolo import YOLO
 from meros.project import Project
 from meros.utils import configure_torch
@@ -37,34 +37,6 @@ def measure_sharpness(crop: np.ndarray) -> float:
     return float(cv.magnitude(dx, dy).mean())
 
 
-def select_detections(image: np.ndarray, detections: list[FrameDetection]) -> list[FrameSelection]:
-    height, width = image.shape[:2]
-    selected = []
-
-    for detection in detections:
-        x1, y1, x2, y2 = detection.bbox
-        area_ratio = (x2 - x1) * (y2 - y1) / (width * height)
-
-        if area_ratio < MIN_AREA_RATIO:
-            continue
-
-        sharpness = measure_sharpness(image[y1:y2, x1:x2])
-
-        if sharpness < MIN_SHARPNESS:
-            continue
-
-        selected.append(
-            FrameSelection(
-                bbox=detection.bbox,
-                confidence=detection.confidence,
-                area_ratio=area_ratio,
-                sharpness=sharpness,
-            )
-        )
-
-    return selected
-
-
 def run(project: Project) -> None:
     configure_torch()
 
@@ -74,7 +46,6 @@ def run(project: Project) -> None:
     assert model.names == {0: "mero"}
 
     detections: dict[int, list[FrameDetection]] = {}
-    windows: dict[int, tuple[int, list[FrameSelection]]] = {}
 
     results = model.predict(
         source=video.path,
@@ -109,26 +80,12 @@ def run(project: Project) -> None:
 
         detections[index] = items
 
-        selected = select_detections(result.orig_img, items)
-
-        if selected:
-            window = int(video.frames[index].timestamp // WINDOW_SECONDS)
-            previous = windows.get(window)
-
-            if previous is None or max(item.sharpness for item in selected) > max(
-                item.sharpness for item in previous[1]
-            ):
-                windows[window] = (index, selected)
-
         if (index + 1) % PROGRESS_INTERVAL == 0:
             print(f"{video.video_id}: {index + 1}/{len(video.frames)} frames", flush=True)
 
     assert len(detections) == len(video.frames), "Video was not fully decoded"
 
-    selection = {index: items for index, items in sorted(windows.values())}
-
     project.videos.write_video_detections(video, detections)
-    project.videos.write_video_selection(video, selection)
 
 
 if __name__ == "__main__":

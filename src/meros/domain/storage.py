@@ -56,14 +56,14 @@ class SubjectImage(DomainObject):
 
     path: str
 
+    capture_date: date
+
     _load_im: Callable[[], np.ndarray] = field(repr=False, compare=False)
 
     _load_crop: Callable[[], np.ndarray] = field(repr=False, compare=False)
 
     bbox: BBox = field(default_factory=list)
     spots: list[SubjectSpot] = field(default_factory=list)
-
-    capture_date: date | None = None
 
     @cached_property
     def im(self) -> np.ndarray:
@@ -94,6 +94,8 @@ class Subjects(Store, Protocol):
 
     def get_all(self) -> list[Subject]: ...
 
+    def write_subject(self, subject: Subject, source_video_id: str | None = None) -> None: ...
+
     def write_subject_crop(self, subject_id: str, image_id: int, crop: np.ndarray) -> None: ...
 
     def write_subject_spots(
@@ -105,6 +107,8 @@ class Subjects(Store, Protocol):
 class FrameAnnotation(DomainObject):
     """
     A frame annotation is a single annotation of a video frame, along with its associated metadata.
+
+    It's used to annootate the bounding boxes of Goliath Groupers in a video frame, as well as to indicate whether the frame has been reviewed or excluded from further processing.
     """
 
     recording_id: str
@@ -112,6 +116,13 @@ class FrameAnnotation(DomainObject):
     suggestions: list[BBox] = field(default_factory=list)
     bboxes: list[BBox] = field(default_factory=list)
 
+    """
+    Reviewed indicates whether the frame has been reviewed by a human annotator.
+
+    If True, the bboxes field contains the final bounding boxes for the frame.
+
+    If False, the suggestions field contains the suggested bounding boxes for the frame (might include false positives).
+    """
     reviewed: bool = False
 
     excluded: bool = False
@@ -119,18 +130,10 @@ class FrameAnnotation(DomainObject):
 
 @dataclass(frozen=True)
 class FrameDetection(DomainObject):
-    """A predicted mero bounding box and its confidence in a video frame."""
+    """A predicted Goliath Grouper bounding box and its confidence in a video frame."""
 
     bbox: BBox
     confidence: float
-
-
-@dataclass(frozen=True)
-class FrameSelection(FrameDetection):
-    """A detection selected for its size and sharpness in the source frame."""
-
-    area_ratio: float
-    sharpness: float
 
 
 @dataclass(frozen=True)
@@ -142,13 +145,17 @@ class VideoFrame(DomainObject):
     video_id: str
     frame_index: int
 
+    capture_date: date
+
+    path: str
+
     timestamp: float
 
     _load_im: Callable[[], np.ndarray] = field(repr=False, compare=False)
 
-    annotation: FrameAnnotation | None = None
+    annotations: FrameAnnotation | None = None
+
     detections: list[FrameDetection] = field(default_factory=list)
-    selected_detections: list[FrameSelection] = field(default_factory=list)
 
     @property
     def im(self) -> np.ndarray:
@@ -163,6 +170,11 @@ class Video(DomainObject):
 
     video_id: str
     path: str
+
+    """
+    The frames selected by the finetuned model for further processing.
+    """
+    selected_frames: list[VideoFrame] = field(default_factory=list)
 
     frames: list[VideoFrame] = field(default_factory=list)
 
@@ -180,10 +192,6 @@ class Videos(Store, Protocol):
 
     def write_video_detections(
         self, video: Video, detections: dict[int, list[FrameDetection]]
-    ) -> None: ...
-
-    def write_video_selection(
-        self, video: Video, selection: dict[int, list[FrameSelection]]
     ) -> None: ...
 
     def write_frame_neighbors(
