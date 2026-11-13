@@ -1,8 +1,4 @@
 {
-  "subject_id": "rogerio",
-  "image_id": 12,
-  "image": "data/media/subjects/rogerio/12.jpg",
-  "coordinate_system": "subject_image_pixels",
   "points": [
     [
       1243,
@@ -255,6 +251,10 @@
     [
       1398,
       836
+    ],
+    [
+      2365,
+      177
     ]
   ]
 }

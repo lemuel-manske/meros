@@ -1,54 +1,56 @@
-from dataclasses import asdict, dataclass
-import hashlib
-import json
+import csv
+from dataclasses import asdict
+from datetime import date
+from functools import partial
 from pathlib import Path
 
 import cv2 as cv
 import numpy as np
 
-from meros.domain import (
-    BBoxMap,
-    EyeAnnotation,
-    Individual,
-    Interval,
-    SegmentationPrompt,
-    SpotRegionReview,
+from meros.domain.storage import (
+    BBox,
+    FrameAnnotation,
+    FrameDetection,
+    FrameSelection,
     Subject,
     SubjectImage,
-    Track,
-    TrackMetadata,
-    TrackObservation,
+    Subjects,
+    SubjectSpot,
     Video,
-    VideoAnnotation,
+    VideoFrame,
+    Videos,
 )
-from meros.utils import read_image, read_json, write_image, write_json_atomic
+from meros.utils import is_video_file, read_image, read_json, write_image, write_json
+
+"""
+Always extract constants for paths and directories.
+"""
 
 MEDIA_ROOT = Path("data/media")
 METADATA_ROOT = Path("data/metadata")
 
 MEDIA_SUBJECTS_ROOT = MEDIA_ROOT / "subjects"
-FRAMES_ROOT = MEDIA_ROOT / "frames"
-MASKED_CROPS_ROOT = MEDIA_ROOT / "masked_crops"
+VIDEOS_ROOT = MEDIA_ROOT / "videos"
+SELECTED_VIDEO_FRAMES_ROOT = VIDEOS_ROOT / "selected"
+VIDEO_FRAME_NEIGHBORS_ROOT = VIDEOS_ROOT / "neighbors"
 
 METADATA_SUBJECTS_ROOT = METADATA_ROOT / "subjects"
 VIDEOS_METADATA_ROOT = METADATA_ROOT / "videos"
-TRACKS_METADATA_ROOT = METADATA_ROOT / "tracks"
-
-SPOT_REGION_REVIEWS_DIR = "spot_region_reviews"
-SPOT_CORRESPONDENCES_DIR = "spot_correspondences"
-MOUTHS_DIR = "mouths"
-EYES_DIR = "eyes"
-SPOTS_DIR = "spots"
-
-BBOXES_PATH = VIDEOS_METADATA_ROOT / "bboxes.json"
-VIDEOS_PATH = VIDEOS_METADATA_ROOT / "videos.json"
-TRACK_METADATA_FILENAME = "metadata.json"
-
-SUBJECT_SEGMENTATION_FILENAME = "segmentation.json"
+VIDEO_ANNOTATIONS_ROOT = VIDEOS_METADATA_ROOT / "detection"
+VIDEO_PREDICTIONS_ROOT = VIDEOS_METADATA_ROOT / "predictions"
+VIDEO_SELECTIONS_ROOT = VIDEOS_METADATA_ROOT / "selections"
 
 
-@dataclass(frozen=True)
 class MediaPaths:
+    def videos(self) -> Path:
+        return VIDEOS_ROOT
+
+    def selected_video_frames(self, video_id: str) -> Path:
+        return SELECTED_VIDEO_FRAMES_ROOT / video_id
+
+    def frame_neighbors(self, video_id: str, pivot_index: int) -> Path:
+        return VIDEO_FRAME_NEIGHBORS_ROOT / video_id / f"{pivot_index:08d}"
+
     def subjects(self) -> Path:
         return MEDIA_SUBJECTS_ROOT
 
@@ -58,339 +60,283 @@ class MediaPaths:
     def subject_image(self, subject_id: str, image_id: int) -> Path:
         return MEDIA_SUBJECTS_ROOT / subject_id / f"{image_id}.jpg"
 
-    def frames(self, video_id: str) -> Path:
-        return FRAMES_ROOT / video_id
+    def subject_crop(self, subject_id: str, image_id: int) -> Path:
+        return self.subject(subject_id) / "crops" / f"{image_id}.png"
 
-    def frame(self, video_id: str, frame_idx: int) -> Path:
-        return FRAMES_ROOT / video_id / f"{frame_idx}.jpg"
 
-    def masked_crop(self, video_id: str, track_id: str, frame_idx: int) -> Path:
-        return MASKED_CROPS_ROOT / video_id / track_id / f"{frame_idx}.png"
+class MetadataPaths:
+    def video_selection(self, video_id: str) -> Path:
+        return VIDEO_SELECTIONS_ROOT / f"{video_id}.json"
+
+    def video_predictions(self, video_id: str) -> Path:
+        return VIDEO_PREDICTIONS_ROOT / f"{video_id}.json"
+
+    def video_annotations(self, video_id: str) -> Path:
+        return VIDEO_ANNOTATIONS_ROOT / f"{video_id}.json"
+
+    def subject_annotations(self, subject_id: str) -> Path:
+        return METADATA_SUBJECTS_ROOT / subject_id / "annotations.csv"
+
+    def subject_segmentation(self, subject_id: str) -> Path:
+        return METADATA_SUBJECTS_ROOT / subject_id / "segmentation.json"
+
+    def subject_spot_correspondences(self, subject_id: str) -> Path:
+        return METADATA_SUBJECTS_ROOT / subject_id / "spot_correspondences"
+
+    def subject_spots(self, subject_id: str, image_id: int) -> Path:
+        return METADATA_SUBJECTS_ROOT / subject_id / "spots" / f"{image_id}.json"
 
 
 media_paths = MediaPaths()
+metadata_paths = MetadataPaths()
 
 
-class LocalFsMediaStore:
-    def subject_image_hash(self, subject_id: str, image_id: int) -> str:
-        return hashlib.sha256(
-            self.subject_image_path(subject_id, image_id).read_bytes()
-        ).hexdigest()
+def read_videos() -> list[Path]:
+    root = media_paths.videos()
 
-    def list_subjects(self) -> list[Subject]:
+    return sorted(path for path in root.iterdir() if is_video_file(path))
+
+
+def read_video(path: Path) -> Video:
+    return Video(video_id=path.stem, path=str(path), frames=read_video_frames(path))
+
+
+def read_video_frames(path: Path) -> list[VideoFrame]:
+    capture = cv.VideoCapture(str(path), cv.CAP_FFMPEG, [cv.CAP_PROP_N_THREADS, 2])
+
+    try:
+        assert capture.isOpened(), f"Could not open video: {path}"
+
+        fps = capture.get(cv.CAP_PROP_FPS)
+
+        frame_count = int(capture.get(cv.CAP_PROP_FRAME_COUNT))
+
+        assert fps > 0 and frame_count >= 0
+    finally:
+        capture.release()
+
+    annotations = read_json(metadata_paths.video_annotations(path.stem), default={})
+    detections = read_json(metadata_paths.video_predictions(path.stem), default={})
+    selection = read_json(metadata_paths.video_selection(path.stem), default={})
+    saved_indexes = {
+        image.stem for image in media_paths.selected_video_frames(path.stem).glob("*.jpg")
+    }
+    selection = {
+        index: items for index, items in selection.items() if f"{int(index):08d}" in saved_indexes
+    }
+
+    return [
+        VideoFrame(
+            video_id=path.stem,
+            frame_index=index,
+            timestamp=index / fps,
+            _load_im=partial(read_video_frame, path, index),
+            annotation=(
+                FrameAnnotation(**annotations[str(index)]) if str(index) in annotations else None
+            ),
+            detections=[FrameDetection(**item) for item in detections.get(str(index), [])],
+            selected_detections=[FrameSelection(**item) for item in selection.get(str(index), [])],
+        )
+        for index in range(frame_count)
+    ]
+
+
+def read_video_frame(path: Path, index: int) -> np.ndarray:
+    capture = cv.VideoCapture(str(path), cv.CAP_FFMPEG, [cv.CAP_PROP_N_THREADS, 2])
+
+    try:
+        assert capture.isOpened(), f"Could not open video: {path}"
+
+        capture.set(cv.CAP_PROP_POS_FRAMES, index)
+
+        ok, image = capture.read()
+        assert ok, f"Could not decode {path}, frame {index}"
+
+        return image
+    finally:
+        capture.release()
+
+
+def is_image_file(path: Path) -> bool:
+    return path.is_file() and path.suffix.lower() == ".jpg" and path.stem.isdecimal()
+
+
+def read_subject_bbox(subject_id: str, image_id: int) -> BBox:
+    path = metadata_paths.subject_segmentation(subject_id)
+
+    bboxes = read_json(path, default={})
+
+    return bboxes.get("bboxes", {}).get(str(image_id), [])
+
+
+def read_subject_spots(subject_id: str, image_id: int) -> list[SubjectSpot]:
+    path = metadata_paths.subject_spots(subject_id, image_id)
+
+    data = read_json(path, default={"points": []})
+
+    return data["points"]
+
+
+def read_subject_crop(subject_id: str, image_id: int) -> np.ndarray:
+    return read_image(media_paths.subject_crop(subject_id, image_id), cv.IMREAD_UNCHANGED)
+
+
+def read_subject_capture_dates(subject_id: str) -> dict[int, date]:
+    path = metadata_paths.subject_annotations(subject_id)
+
+    if not path.is_file():
+        return {}
+
+    with path.open(newline="") as stream:
+        return {
+            int(row["id"]): date(int(row["year"]), int(row["month"]), int(row["day"]))
+            for row in csv.DictReader(stream)
+        }
+
+
+def read_subject_images(subject_id: str) -> list[SubjectImage]:
+    directory = media_paths.subject(subject_id)
+
+    if not directory.exists():
+        return []
+
+    capture_dates = read_subject_capture_dates(subject_id)
+
+    records = [
+        SubjectImage(
+            subject_id=subject_id,
+            image_id=int(path.stem),
+            path=str(path),
+            _load_im=partial(read_image, path),
+            _load_crop=partial(read_subject_crop, subject_id, int(path.stem)),
+            bbox=read_subject_bbox(subject_id, int(path.stem)),
+            spots=read_subject_spots(subject_id, int(path.stem)),
+            capture_date=capture_dates.get(int(path.stem)),
+        )
+        for path in directory.iterdir()
+        if is_image_file(path)
+    ]
+
+    return sorted(records, key=lambda item: item.image_id)
+
+
+class SubjectsAdapter(Subjects):
+    def get_all(self) -> list[Subject]:
         root = media_paths.subjects()
 
         if not root.exists():
             return []
 
         return [
-            Subject(directory.name, self.list_subject_images(directory.name))
+            Subject(
+                subject_id=directory.name,
+                images=read_subject_images(directory.name),
+            )
             for directory in sorted(root.iterdir())
             if directory.is_dir()
         ]
 
-    def list_subject_images(self, subject_id: str) -> list[SubjectImage]:
-        directory = self.subject_image_path(subject_id, 0).parent
+    def get(self, subject_id: str) -> Subject:
+        for subject in self.get_all():
+            if subject.subject_id == subject_id:
+                return subject
 
-        if not directory.is_dir():
-            return []
+        raise ValueError(f"Subject {subject_id} not found")
 
-        annotations = read_json(
-            metadata_paths.subject_segmentation(subject_id), default={"images": {}}
-        )["images"]
-        prompts = {
-            int(image_id): SegmentationPrompt(
-                points=[(point[0], point[1]) for point in annotation["points"]],
-                labels=annotation["labels"],
-            )
-            for image_id, annotation in annotations.items()
-        }
+    def write_subject_spots(self, subject_id: str, image_id: int, spots: list[SubjectSpot]) -> None:
+        path = metadata_paths.subject_spots(subject_id, image_id)
 
-        records = [
-            SubjectImage(
-                subject_id, int(path.stem), str(path), segmentation=prompts.get(int(path.stem))
-            )
-            for path in directory.iterdir()
-            if path.is_file() and path.suffix.lower() == ".jpg" and path.stem.isdecimal()
-        ]
-        return sorted(records, key=lambda item: item.image_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
 
-    def subject_image_path(self, subject_id: str, image_id: int) -> Path:
-        return media_paths.subject_image(subject_id, image_id)
+        write_json(path, {"points": spots})
 
-    def read_subject_image(self, subject_id: str, image_id: int) -> np.ndarray:
-        return read_image(self.subject_image_path(subject_id, image_id))
-
-    def frame_path(self, video_id: str, frame_idx: int) -> Path:
-        return media_paths.frame(video_id, frame_idx)
-
-    def frames_path(self, video_id: str) -> Path:
-        return media_paths.frames(video_id)
-
-    def frame_ids(self, video_id: str) -> list[int]:
-        return sorted(int(p.stem) for p in self.frames_path(video_id).glob("*.jpg"))
-
-    def read_frame(self, video_id: str, frame_idx: int) -> np.ndarray:
-        return read_image(media_paths.frame(video_id, frame_idx))
-
-    def write_frame(self, video_id: str, frame_idx: int, frame: np.ndarray) -> None:
-        write_image(media_paths.frame(video_id, frame_idx), frame)
-
-    def masked_crop_path(self, video_id: str, track_id: str, frame_idx: int) -> Path:
-        return media_paths.masked_crop(video_id, track_id, frame_idx)
-
-    def read_masked_crop(self, video_id: str, track_id: str, frame_idx: int) -> np.ndarray:
-        return read_image(
-            media_paths.masked_crop(video_id, track_id, frame_idx), cv.IMREAD_UNCHANGED
-        )
-
-    def write_masked_crop(
-        self, video_id: str, track_id: str, frame_idx: int, masked_crop: np.ndarray
-    ) -> None:
-        write_image(media_paths.masked_crop(video_id, track_id, frame_idx), masked_crop)
+    def write_subject_crop(self, subject_id: str, image_id: int, crop: np.ndarray) -> None:
+        write_image(media_paths.subject_crop(subject_id, image_id), crop)
 
 
-@dataclass(frozen=True)
-class MetadataPaths:
-    def subject_segmentation(self, subject_id: str) -> Path:
-        return METADATA_SUBJECTS_ROOT / subject_id / SUBJECT_SEGMENTATION_FILENAME
+class VideosAdapter(Videos):
+    def get_all(self) -> list[Video]:
+        return [read_video(path) for path in read_videos()]
 
-    def subject_spot_region_reviews(self, subject_id: str, image_id: int) -> Path:
-        return METADATA_SUBJECTS_ROOT / subject_id / SPOT_REGION_REVIEWS_DIR / f"{image_id}.json"
-
-    def subject_spot_correspondences(self, subject_id: str, first_id: int, second_id: int) -> Path:
-        return (
-            METADATA_SUBJECTS_ROOT
-            / subject_id
-            / SPOT_CORRESPONDENCES_DIR
-            / f"{first_id}-{second_id}.json"
-        )
-
-    def subject_mouth(self, subject_id: str, image_id: int) -> Path:
-        return METADATA_SUBJECTS_ROOT / subject_id / MOUTHS_DIR / f"{image_id}.json"
-
-    def subject_eye(self, subject_id: str, image_id: int) -> Path:
-        return METADATA_SUBJECTS_ROOT / subject_id / EYES_DIR / f"{image_id}.json"
-
-    def subject_spots(self, subject_id: str, image_id: int) -> Path:
-        return METADATA_SUBJECTS_ROOT / subject_id / SPOTS_DIR / f"{image_id}.json"
-
-    def bboxes(self) -> Path:
-        return BBOXES_PATH
-
-    def track(self, video_id: str) -> Path:
-        return TRACKS_METADATA_ROOT / video_id / TRACK_METADATA_FILENAME
-
-    def videos(self) -> Path:
-        return VIDEOS_PATH
-
-
-metadata_paths = MetadataPaths()
-
-
-class LocalFsMetadataStore:
-    def read_subject_spot_region_reviews(
-        self, subject_id: str, image_id: int
-    ) -> list[SpotRegionReview]:
-        path = metadata_paths.subject_spot_region_reviews(subject_id, image_id)
-
-        return read_json(path, default={"regions": []})["regions"]
-
-    def write_subject_spot_region_reviews(
-        self, subject_id: str, image_id: int, regions: list[SpotRegionReview]
-    ) -> None:
-        write_json_atomic(
-            metadata_paths.subject_spot_region_reviews(subject_id, image_id),
-            {
-                "subject_id": subject_id,
-                "image_id": image_id,
-                "coordinate_system": "subject_image_pixels",
-                "regions": regions,
-            },
-        )
-
-    def read_bboxes(self) -> dict[str, BBoxMap]:
-        path = metadata_paths.bboxes()
-
-        return read_json(path, default={})
-
-    def write_bboxes(self, boxes: dict[str, BBoxMap]) -> None:
-        write_json_atomic(metadata_paths.bboxes(), boxes)
-
-    def read_video(self, video_id: str) -> Video:
-        with metadata_paths.videos().open("r", encoding="utf-8") as f:
-            metadata = json.load(f)
-
-        for video_metadata in metadata:
-            if video_metadata.get("video_id") == video_id:
-                return Video(
-                    **{
-                        **video_metadata,
-                        "intervals": [
-                            Interval(**interval) for interval in video_metadata.get("intervals", [])
-                        ],
-                        "annotations": [
-                            VideoAnnotation(**annotation)
-                            for annotation in video_metadata.get("annotations", [])
-                        ],
-                        "individuals": [
-                            Individual(**individual)
-                            for individual in video_metadata.get("individuals", [])
-                        ],
-                    }
-                )
+    def get(self, video_id: str) -> Video:
+        for path in read_videos():
+            if path.stem == video_id:
+                return read_video(path)
 
         raise ValueError(f"Video {video_id} not found")
 
-    def read_videos(self) -> list[Video]:
-        with metadata_paths.videos().open("r", encoding="utf-8") as f:
-            metadata = json.load(f)
+    def write_frame_annotation(self, frame: VideoFrame, annotation: FrameAnnotation) -> None:
+        path = metadata_paths.video_annotations(frame.video_id)
+        annotations = read_json(path, default={})
+        annotations[str(frame.frame_index)] = asdict(annotation)
 
-        return [
-            Video(
-                **{
-                    **video_metadata,
-                    "intervals": [
-                        Interval(**interval) for interval in video_metadata.get("intervals", [])
-                    ],
-                    "annotations": [
-                        VideoAnnotation(**annotation)
-                        for annotation in video_metadata.get("annotations", [])
-                    ],
-                    "individuals": [
-                        Individual(**individual)
-                        for individual in video_metadata.get("individuals", [])
-                    ],
-                }
-            )
-            for video_metadata in metadata
-        ]
+        write_json(path, annotations)
 
-    def read_track(self, video_id: str) -> TrackMetadata:
-        path = metadata_paths.track(video_id)
+    def write_video_detections(
+        self, video: Video, detections: dict[int, list[FrameDetection]]
+    ) -> None:
+        path = metadata_paths.video_predictions(video.video_id)
 
-        with path.open("r", encoding="utf-8") as f:
-            metadata = json.load(f)
+        write_json(
+            path,
+            {str(index): [asdict(item) for item in items] for index, items in detections.items()},
+        )
 
-        tracks = {
-            track_id: Track(
-                initial_frame=track["initial_frame"],
-                initial_bbox=track["initial_bbox"],
-                frames={
-                    frame_idx: TrackObservation(**observation)
-                    for frame_idx, observation in track["frames"].items()
-                },
-            )
-            for track_id, track in metadata["tracks"].items()
+    def write_video_selection(
+        self, video: Video, selection: dict[int, list[FrameSelection]]
+    ) -> None:
+        path = metadata_paths.video_selection(video.video_id)
+        directory = media_paths.selected_video_frames(video.video_id)
+        directory.mkdir(parents=True, exist_ok=True)
+
+        selected_paths = set()
+
+        for index in selection:
+            image_path = directory / f"{index:08d}.jpg"
+            selected_paths.add(image_path)
+
+            if not image_path.is_file():
+                write_image(image_path, video.frames[index].im)
+
+        for image_path in directory.glob("*.jpg"):
+            if image_path not in selected_paths:
+                image_path.unlink()
+
+        write_json(
+            path,
+            {str(index): [asdict(item) for item in items] for index, items in selection.items()},
+        )
+
+    def write_frame_neighbors(
+        self, video: Video, pivot: VideoFrame, frames: list[VideoFrame]
+    ) -> None:
+        directory = media_paths.frame_neighbors(video.video_id, pivot.frame_index)
+        pending = {
+            frame.frame_index: directory / f"{frame.frame_index:08d}.jpg"
+            for frame in frames
+            if not (directory / f"{frame.frame_index:08d}.jpg").is_file()
         }
 
-        return TrackMetadata(
-            video_id=metadata["video_id"],
-            tracks=tracks,
-            processed_frame_count=metadata["processed_frame_count"],
-        )
+        if not pending:
+            return
 
-    def write_track(self, video_id: str, metadata: TrackMetadata) -> None:
-        path = metadata_paths.track(video_id)
+        capture = cv.VideoCapture(video.path, cv.CAP_FFMPEG, [cv.CAP_PROP_N_THREADS, 2])
 
-        write_json_atomic(path, asdict(metadata))
+        try:
+            assert capture.isOpened(), f"Could not open video: {video.path}"
 
-    def read_subject_spots(self, subject_id: str, image_id: int) -> list[list[int]]:
-        path = metadata_paths.subject_spots(subject_id, image_id)
+            capture.set(cv.CAP_PROP_POS_FRAMES, min(pending))
 
-        data = read_json(path, default={"points": []})
+            for index in range(min(pending), max(pending) + 1):
+                ok = capture.grab()
+                assert ok, f"Could not decode {video.path}, frame {index}"
 
-        return data["points"]
+                if index not in pending:
+                    continue
 
-    def write_subject_spots(self, subject_id: str, image_id: int, points: list[list[int]]) -> None:
-        image_path = media_paths.subject_image(subject_id, image_id)
-        write_json_atomic(
-            metadata_paths.subject_spots(subject_id, image_id),
-            {
-                "subject_id": subject_id,
-                "image_id": image_id,
-                "image": str(image_path),
-                "coordinate_system": "subject_image_pixels",
-                "points": points,
-            },
-        )
+                ok, image = capture.retrieve()
+                assert ok, f"Could not decode {video.path}, frame {index}"
 
-    def read_subject_eye(self, subject_id: str, image_id: int) -> EyeAnnotation | None:
-        path = metadata_paths.subject_eye(subject_id, image_id)
-
-        payload = read_json(path, default={"eye": None})
-
-        eye = payload["eye"]
-
-        if eye is None:
-            return None
-
-        return EyeAnnotation(
-            center=tuple(eye["center"]),
-            radius_x=eye["radius_x"],
-            radius_y=eye["radius_y"],
-            angle_degrees=eye["angle_degrees"],
-        )
-
-    def write_subject_eye(self, subject_id: str, image_id: int, eye: EyeAnnotation) -> None:
-        write_json_atomic(
-            metadata_paths.subject_eye(subject_id, image_id),
-            {
-                "subject_id": subject_id,
-                "image_id": image_id,
-                "side": "left",
-                "coordinate_system": "subject_image_pixels",
-                "eye": {
-                    "center": list(eye.center),
-                    "radius_x": eye.radius_x,
-                    "radius_y": eye.radius_y,
-                    "angle_degrees": eye.angle_degrees,
-                },
-            },
-        )
-
-    def read_subject_mouth(self, subject_id: str, image_id: int) -> tuple[float, float] | None:
-        path = metadata_paths.subject_mouth(subject_id, image_id)
-
-        data = read_json(path, default={"point": None})
-
-        return tuple(data["point"]) if data["point"] is not None else None
-
-    def write_subject_mouth(
-        self, subject_id: str, image_id: int, point: tuple[float, float]
-    ) -> None:
-        write_json_atomic(
-            metadata_paths.subject_mouth(subject_id, image_id),
-            {
-                "subject_id": subject_id,
-                "image_id": image_id,
-                "side": "left",
-                "point": list(point),
-            },
-        )
-
-    def read_subject_spot_correspondences(
-        self, subject_id: str, first_id: int, second_id: int
-    ) -> list[dict]:
-        path = metadata_paths.subject_spot_correspondences(subject_id, first_id, second_id)
-
-        payload = read_json(path, default={"pairs": []})
-
-        return payload["pairs"]
-
-    def write_subject_spot_correspondences(
-        self,
-        subject_id: str,
-        first_id: int,
-        second_id: int,
-        pairs: list[dict],
-    ) -> None:
-        write_json_atomic(
-            metadata_paths.subject_spot_correspondences(subject_id, first_id, second_id),
-            {
-                "subject_id": subject_id,
-                "image_ids": [first_id, second_id],
-                "coordinate_system": "subject_image_pixels",
-                "pairs": pairs,
-            },
-        )
+                write_image(pending[index], image)
+        finally:
+            capture.release()

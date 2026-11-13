@@ -1,0 +1,463 @@
+{
+  "0": {
+    "recording_id": "0350",
+    "suggestions": [],
+    "bboxes": [],
+    "reviewed": true,
+    "excluded": false
+  },
+  "1157": {
+    "recording_id": "0350",
+    "suggestions": [
+      [
+        517,
+        204,
+        1918,
+        973
+      ]
+    ],
+    "bboxes": [
+      [
+        517,
+        204,
+        1918,
+        973
+      ]
+    ],
+    "reviewed": true,
+    "excluded": false
+  },
+  "2315": {
+    "recording_id": "0350",
+    "suggestions": [
+      [
+        737,
+        585,
+        945,
+        680
+      ],
+      [
+        1211,
+        500,
+        1400,
+        559
+      ],
+      [
+        1425,
+        462,
+        1621,
+        518
+      ],
+      [
+        1114,
+        604,
+        1250,
+        652
+      ],
+      [
+        1619,
+        598,
+        1810,
+        656
+      ],
+      [
+        919,
+        480,
+        1049,
+        555
+      ],
+      [
+        1400,
+        570,
+        1501,
+        614
+      ],
+      [
+        369,
+        967,
+        469,
+        1027
+      ]
+    ],
+    "bboxes": [],
+    "reviewed": true,
+    "excluded": false
+  },
+  "3761": {
+    "recording_id": "0350",
+    "suggestions": [
+      [
+        5,
+        382,
+        1919,
+        1080
+      ]
+    ],
+    "bboxes": [
+      [
+        5,
+        382,
+        1919,
+        1080
+      ]
+    ],
+    "reviewed": true,
+    "excluded": false
+  },
+  "4919": {
+    "recording_id": "0350",
+    "suggestions": [
+      [
+        346,
+        882,
+        504,
+        940
+      ],
+      [
+        199,
+        775,
+        312,
+        897
+      ]
+    ],
+    "bboxes": [],
+    "reviewed": true,
+    "excluded": false
+  },
+  "6077": {
+    "recording_id": "0350",
+    "suggestions": [
+      [
+        474,
+        308,
+        1323,
+        909
+      ]
+    ],
+    "bboxes": [
+      [
+        474,
+        308,
+        1323,
+        909
+      ]
+    ],
+    "reviewed": true,
+    "excluded": false
+  },
+  "7523": {
+    "recording_id": "0350",
+    "suggestions": [
+      [
+        825,
+        312,
+        1366,
+        893
+      ]
+    ],
+    "bboxes": [
+      [
+        825,
+        312,
+        1366,
+        893
+      ],
+      [
+        102,
+        351,
+        560,
+        785
+      ]
+    ],
+    "reviewed": true,
+    "excluded": false
+  },
+  "8681": {
+    "recording_id": "0350",
+    "suggestions": [
+      [
+        0,
+        287,
+        611,
+        1078
+      ]
+    ],
+    "bboxes": [
+      [
+        0,
+        287,
+        611,
+        1078
+      ]
+    ],
+    "reviewed": true,
+    "excluded": false
+  },
+  "9839": {
+    "recording_id": "0350",
+    "suggestions": [
+      [
+        1485,
+        548,
+        1570,
+        578
+      ],
+      [
+        932,
+        992,
+        995,
+        1056
+      ]
+    ],
+    "bboxes": [],
+    "reviewed": true,
+    "excluded": false
+  },
+  "11286": {
+    "recording_id": "0350",
+    "suggestions": [],
+    "bboxes": [],
+    "reviewed": true,
+    "excluded": false
+  },
+  "4630": {
+    "recording_id": "0350",
+    "suggestions": [
+      [
+        134,
+        484,
+        1920,
+        1080
+      ]
+    ],
+    "bboxes": [
+      [
+        134,
+        484,
+        1920,
+        1080
+      ]
+    ],
+    "reviewed": true,
+    "excluded": false
+  },
+  "868": {
+    "recording_id": "0350",
+    "suggestions": [
+      [
+        233,
+        113,
+        1309,
+        1007
+      ]
+    ],
+    "bboxes": [
+      [
+        233,
+        113,
+        1309,
+        1007
+      ]
+    ],
+    "reviewed": true,
+    "excluded": false
+  },
+  "9260": {
+    "recording_id": "0350",
+    "suggestions": [
+      [
+        13,
+        0,
+        1784,
+        421
+      ]
+    ],
+    "bboxes": [
+      [
+        13,
+        0,
+        1784,
+        421
+      ]
+    ],
+    "reviewed": true,
+    "excluded": false
+  },
+  "3472": {
+    "recording_id": "0350",
+    "suggestions": [
+      [
+        348,
+        579,
+        1690,
+        1079
+      ]
+    ],
+    "bboxes": [
+      [
+        348,
+        579,
+        1690,
+        1079
+      ]
+    ],
+    "reviewed": true,
+    "excluded": false
+  },
+  "7813": {
+    "recording_id": "0350",
+    "suggestions": [
+      [
+        1004,
+        281,
+        1920,
+        1080
+      ]
+    ],
+    "bboxes": [
+      [
+        1004,
+        281,
+        1920,
+        1080
+      ]
+    ],
+    "reviewed": true,
+    "excluded": false
+  },
+  "3183": {
+    "recording_id": "0350",
+    "suggestions": [
+      [
+        1741,
+        585,
+        1864,
+        642
+      ],
+      [
+        12,
+        0,
+        1841,
+        762
+      ]
+    ],
+    "bboxes": [
+      [
+        430,
+        269,
+        1041,
+        477
+      ]
+    ],
+    "reviewed": true,
+    "excluded": false
+  },
+  "8102": {
+    "recording_id": "0350",
+    "suggestions": [
+      [
+        721,
+        660,
+        1919,
+        1080
+      ],
+      [
+        0,
+        362,
+        649,
+        1023
+      ]
+    ],
+    "bboxes": [
+      [
+        721,
+        660,
+        1919,
+        1080
+      ],
+      [
+        0,
+        362,
+        649,
+        1023
+      ]
+    ],
+    "reviewed": true,
+    "excluded": false
+  },
+  "578": {
+    "recording_id": "0350",
+    "suggestions": [
+      [
+        0,
+        271,
+        1243,
+        841
+      ]
+    ],
+    "bboxes": [
+      [
+        0,
+        271,
+        1243,
+        841
+      ]
+    ],
+    "reviewed": true,
+    "excluded": false
+  },
+  "1446": {
+    "recording_id": "0350",
+    "suggestions": [
+      [
+        621,
+        91,
+        1645,
+        612
+      ]
+    ],
+    "bboxes": [
+      [
+        621,
+        91,
+        1645,
+        612
+      ]
+    ],
+    "reviewed": true,
+    "excluded": false
+  },
+  "8970": {
+    "recording_id": "0350",
+    "suggestions": [
+      [
+        126,
+        286,
+        1108,
+        734
+      ],
+      [
+        0,
+        595,
+        234,
+        776
+      ]
+    ],
+    "bboxes": [
+      [
+        126,
+        286,
+        1108,
+        734
+      ],
+      [
+        0,
+        595,
+        234,
+        776
+      ]
+    ],
+    "reviewed": true,
+    "excluded": false
+  }
+}

@@ -1,142 +1,191 @@
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Literal, TypedDict
+from datetime import date
+from functools import cached_property
+from typing import Protocol
 
+import numpy as np
+
+"""
+A bounding box is a rectangle that surrounds a subject in an image.
+"""
 type BBox = list[int]
-type BBoxMap = dict[str, BBox]
 
-type Viewpoint = Literal["frontal", "left", "right", "back"]
-
-
-class SpotRegionReview(TypedDict):
-    region_id: str
-    bounds: list[int]
-    purpose: Literal["train", "evaluation"]
-    points: list[list[int]]
-    ambiguous: list[list[int]]
-    ambiguous_radius: float
-    image_sha256: str
+"""
+A spot is a tiny, rounded, dark dot on the Goliath Grouper head.
+"""
+type SubjectSpot = list[int]
 
 
-type TrackSelectionKey = tuple[str, str, int, int]  # (video_id, track_id, start_frame, end_frame)
+class DomainObject:
+    """
+    Defines a DomainObject.
+
+    It's a databag. May contain methods for logic.
+
+    Only for heavy properties, use a _load_ fn property and expose as a cached_property.
+
+    DomainObjects should aggregate their own reads.
+
+    Always add python docs for DomainObjects.
+    """
+
+    ...
 
 
-@dataclass(frozen=True)
-class TrackObservation:
-    bbox: BBox
-    mask_area: int
+class Store(Protocol):
+    """
+    Defines a Store.
 
+    It's a collection of DomainObjects. May contain methods for writes.
 
-@dataclass(frozen=True)
-class Track:
-    initial_frame: int
-    initial_bbox: BBox
-    frames: dict[str, TrackObservation]
+    Usually do not contain methods for reads, only for top-level reads.
+    """
 
-
-@dataclass(frozen=True)
-class TrackMetadata:
-    video_id: str
-    tracks: dict[str, Track]
-    processed_frame_count: int
+    ...
 
 
 @dataclass(frozen=True)
-class TrackSelection:
-    video_id: str
-    track_id: str
-    start_frame: int
-    end_frame: int
+class SubjectImage(DomainObject):
+    """
+    A subject image is a single image of a subject, along with its associated metadata.
+    """
 
-    @property
-    def id(self) -> TrackSelectionKey:
-        return (
-            self.video_id,
-            self.track_id,
-            self.start_frame,
-            self.end_frame,
-        )
-
-    @property
-    def selection_id(self) -> str:
-        return f"{self.video_id}--{self.track_id}"
-
-
-@dataclass(frozen=True)
-class Individual:
-    individual_id: str
-    track_id: str
-    start_frame: int
-    end_frame: int
-
-
-@dataclass(frozen=True)
-class VideoAnnotation:
-    track_id: str
-    start_frame: int
-    end_frame: int
-    viewpoint: Viewpoint
-    quality: int
-
-
-@dataclass(frozen=True)
-class Interval:
-    start: int
-    end: int
-
-
-@dataclass(frozen=True)
-class Video:
-    video_id: str
-    fname: str
-    path: str
-
-    mirrored: bool = False
-
-    intervals: list[Interval] = field(default_factory=list)
-    annotations: list[VideoAnnotation] = field(default_factory=list)
-    individuals: list[Individual] = field(default_factory=list)
-
-    def filter(
-        self,
-        *,
-        viewpoint: Viewpoint | None = None,
-        min_quality: int | None = None,
-        track_id: str | None = None,
-    ) -> list[VideoAnnotation]:
-        return [
-            annotation
-            for annotation in self.annotations
-            if (viewpoint is None or annotation.viewpoint == viewpoint)
-            and (min_quality is None or annotation.quality >= min_quality)
-            and (track_id is None or annotation.track_id == track_id)
-        ]
-
-
-@dataclass(frozen=True)
-class SegmentationPrompt:
-    # Coordinates are normalized (x, y); labels are 1 for foreground and 0 for background.
-
-    points: list[tuple[float, float]]
-    labels: list[int]
-
-
-@dataclass(frozen=True)
-class SubjectImage:
     subject_id: str
     image_id: int
+
     path: str
-    segmentation: SegmentationPrompt | None = None
+
+    _load_im: Callable[[], np.ndarray] = field(repr=False, compare=False)
+
+    _load_crop: Callable[[], np.ndarray] = field(repr=False, compare=False)
+
+    bbox: BBox = field(default_factory=list)
+    spots: list[SubjectSpot] = field(default_factory=list)
+
+    capture_date: date | None = None
+
+    @cached_property
+    def im(self) -> np.ndarray:
+        return self._load_im()
+
+    @cached_property
+    def crop(self) -> np.ndarray:
+        return self._load_crop()
 
 
 @dataclass(frozen=True)
-class Subject:
+class Subject(DomainObject):
+    """
+    A subject is a single Goliath Grouper, along with its associated images.
+    """
+
     subject_id: str
+
     images: list[SubjectImage] = field(default_factory=list)
 
 
+class Subjects(Store, Protocol):
+    """
+    A store for Subjects and their associated images and metadata.
+    """
+
+    def get(self, subject_id: str) -> Subject: ...
+
+    def get_all(self) -> list[Subject]: ...
+
+    def write_subject_crop(self, subject_id: str, image_id: int, crop: np.ndarray) -> None: ...
+
+    def write_subject_spots(
+        self, subject_id: str, image_id: int, spots: list[SubjectSpot]
+    ) -> None: ...
+
+
 @dataclass(frozen=True)
-class EyeAnnotation:
-    center: tuple[float, float]
-    radius_x: float
-    radius_y: float
-    angle_degrees: float = 0.0
+class FrameAnnotation(DomainObject):
+    """
+    A frame annotation is a single annotation of a video frame, along with its associated metadata.
+    """
+
+    recording_id: str
+
+    suggestions: list[BBox] = field(default_factory=list)
+    bboxes: list[BBox] = field(default_factory=list)
+
+    reviewed: bool = False
+
+    excluded: bool = False
+
+
+@dataclass(frozen=True)
+class FrameDetection(DomainObject):
+    """A predicted mero bounding box and its confidence in a video frame."""
+
+    bbox: BBox
+    confidence: float
+
+
+@dataclass(frozen=True)
+class FrameSelection(FrameDetection):
+    """A detection selected for its size and sharpness in the source frame."""
+
+    area_ratio: float
+    sharpness: float
+
+
+@dataclass(frozen=True)
+class VideoFrame(DomainObject):
+    """
+    A video frame is a single frame of a video, along with its associated metadata.
+    """
+
+    video_id: str
+    frame_index: int
+
+    timestamp: float
+
+    _load_im: Callable[[], np.ndarray] = field(repr=False, compare=False)
+
+    annotation: FrameAnnotation | None = None
+    detections: list[FrameDetection] = field(default_factory=list)
+    selected_detections: list[FrameSelection] = field(default_factory=list)
+
+    @property
+    def im(self) -> np.ndarray:
+        return self._load_im()
+
+
+@dataclass(frozen=True)
+class Video(DomainObject):
+    """
+    A video is a single video, along with its associated frames.
+    """
+
+    video_id: str
+    path: str
+
+    frames: list[VideoFrame] = field(default_factory=list)
+
+
+class Videos(Store, Protocol):
+    """
+    A store for Videos and their associated frames and metadata.
+    """
+
+    def get(self, video_id: str) -> Video: ...
+
+    def get_all(self) -> list[Video]: ...
+
+    def write_frame_annotation(self, frame: VideoFrame, annotation: FrameAnnotation) -> None: ...
+
+    def write_video_detections(
+        self, video: Video, detections: dict[int, list[FrameDetection]]
+    ) -> None: ...
+
+    def write_video_selection(
+        self, video: Video, selection: dict[int, list[FrameSelection]]
+    ) -> None: ...
+
+    def write_frame_neighbors(
+        self, video: Video, pivot: VideoFrame, frames: list[VideoFrame]
+    ) -> None: ...

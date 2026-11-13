@@ -128,6 +128,23 @@ Fish may be:
 
 An identification system must therefore tolerate incomplete observations.
 
+## The system
+
+The future we envision is a website just like https://www.grouperspotter.org/, where users can report encounters with Goliath Groupers:
+
+- Submit a video, with optional information, such as location, date of capture, and other metadata.
+- The system will automatically detect and track the fish in the video, extract visual features, and attempt to identify the individual.
+- The system will return a report indicating whether the fish is a known individual or a previously unseen one, along with the confidence of the identification.
+- Also, the system will provide a way to visualize the encounter, including the video frames, the detected fish, and the extracted features used for identification.
+- Finally, the system will store the encounter in a database for future reference and research.
+
+> What for?
+
+- Population estimation
+- Population monitoring
+- Understanding individual displacement
+- Understanding breeding aggregation behavior
+
 ## Key research challenges
 
 ### Open-set identification
@@ -150,23 +167,39 @@ This distinction is especially important if the system will eventually be used f
 
 ## Research questions
 
+Main question:
+
+> Can Goliath Groupers be reliably identified from natural skin patterns in unconstrained underwater video?
+
 The project should investigate questions such as:
 
-1. **Can Goliath Groupers be reliably identified from natural skin patterns in unconstrained underwater video?**
+1. **Which anatomical regions provide the strongest individual identity signal?**
 
-2. **Which anatomical regions provide the strongest individual identity signal?**
+The Goliath Grouper has a set of markings all over the body: spots, blotches, stripes.
 
-3. **How stable are those patterns across different recording dates, environmental conditions, and viewpoints?**
+The head also shows a set of spots and some irregular markings that may provide a useful biometric signature for distinguishing individuals, but, some Groupers might have no spots at all.
 
-4. **How much does video-level aggregation improve identification compared with single-frame recognition?**
+2. **How stable are those patterns across different recording dates, environmental conditions, and viewpoints?**
 
-5. **How should frames of different quality and viewpoints be combined?**
+The Goliath Grouper has a "default" pattern that can change over time, but the default pattern will appear again. We shall treat the default pattern as the "identity" of the individual.
 
-6. **How well can an identification model generalize to encounters recorded at different locations or times?**
+Some Groupers can become very dark, while others can become very light. The transitions is instantaneous.
 
-7. **Can the system reliably distinguish known individuals from previously unseen individuals?**
+3. **How well can an identification model generalize to encounters recorded at different locations or times?**
 
-8. **What minimum image quality or visible anatomical area is required before an identification should be considered reliable?**
+SIFT could be used to find correspondences between images of the same individual, years apart.
+
+The combination with gray-scaling and CLAHE did help to reduce the effect of color and illumination changes.
+
+4. **Can the system reliably distinguish known individuals from previously unseen individuals?**
+
+That's the most important question, because the system should be able to say: "this is a new individual" or "this is a known individual".
+
+5. **What minimum image quality or visible anatomical area is required before an identification should be considered reliable?**
+
+When considering the head of the individual, it's safe to say that the image has to be sharp and the head has to be fully visible. Otherwise, the identification will be unreliable.
+
+Although, the body, which also can be used, can be used even if the image is not sharp and the body is partially visible: we can combine frames to get a better identification.
 
 ## Long-term objective
 

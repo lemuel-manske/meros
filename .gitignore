@@ -9,4 +9,9 @@
 **/__pycache__
 
 /data/media
+/data/ml/
 !/data/*.dvc
+
+/runs
+
+/external/yolo/

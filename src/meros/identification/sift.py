@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from itertools import combinations
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
 import cv2 as cv
 from kornia.feature.adalam.adalam import AdalamFilter, get_adalam_default_config
@@ -10,13 +9,10 @@ from kornia.feature.adalam.utils import dist_matrix
 import numpy as np
 import torch
 
-from meros.external import build_sam2_predictor
 from meros.project import Project
 from meros.utils import write_image
 
 OUTPUT = Path("data/media/sandbox/sift")
-
-SUBJECTS = {"rogerio": [0, 9], "rafael": [1, 4], "athila": [0]}
 
 MAX_SIZE = 1600
 CLAHE_CLIP_LIMIT = 2.0
@@ -39,17 +35,13 @@ class ComparisonResult:
     local_inliers: np.ndarray
 
 
-# Crops the image to the bounding box of the mask, resizes it if necessary, and extracts SIFT features.
-def prepare_photo(name: str, image: np.ndarray, mask: np.ndarray) -> Features:
-    ys, xs = np.where(mask)
+def prepare_photo(name: str, crop: np.ndarray) -> Features:
+    assert crop.ndim == 3 and crop.shape[2] == 4, f"{name}: expected a BGRA crop"
 
-    assert len(xs), f"{name}: empty SAM2 mask"
+    crop_mask = crop[:, :, 3]
+    assert crop_mask.any(), f"{name}: empty crop mask"
 
-    x1, y1 = int(xs.min()), int(ys.min())
-    x2, y2 = int(xs.max()) + 1, int(ys.max()) + 1
-
-    crop = image[y1:y2, x1:x2]
-    crop_mask = mask[y1:y2, x1:x2]
+    crop = crop[:, :, :3]
 
     scale = min(1.0, MAX_SIZE / max(crop.shape[:2]))
 
@@ -110,7 +102,6 @@ def global_consistency(first: Features, second: Features, matches: list[cv.DMatc
     return retained
 
 
-# Applies the AdaLAM local consistency filter to the candidate matches. Returns a boolean array indicating which matches are retained.
 def local_consistency(
     first: Features, second: Features, matches: list[cv.DMatch], scores: torch.Tensor
 ) -> np.ndarray:
@@ -200,7 +191,6 @@ def local_consistency(
     return retained
 
 
-# Compares two photos (taken as Features)
 def compare(first: Features, second: Features) -> ComparisonResult:
     neighbors = []
 
@@ -313,55 +303,15 @@ def run() -> None:
     cv.setNumThreads(2)
 
     project = Project.open()
-    subject_images = [
-        image
-        for subject_id, image_ids in SUBJECTS.items()
-        for image in project.media.list_subject_images(subject_id)
-        if image.image_id in image_ids
-    ]
 
     photos = []
 
-    predictor = build_sam2_predictor(device="cpu")
+    for subject in project.subjects.get_all():
+        for im in subject.images:
+            name = f"{im.subject_id}/{im.image_id}"
 
-    # First, extract the SAM2 masks for each photo. This is done in a separate loop to avoid memory fragmentation.
-    with torch.inference_mode():
-        for photo in subject_images:
-            prompt = photo.segmentation
+            photos.append(prepare_photo(name, im.crop))
 
-            if prompt is None:
-                continue
-
-            name = f"{photo.subject_id}/{photo.image_id}"
-            image = project.media.read_subject_image(photo.subject_id, photo.image_id)
-
-            # Each unrelated photo is a separate one-frame sequence.
-            with TemporaryDirectory(prefix="meros-sift-") as directory:
-                frame = Path(directory) / "00000000.jpg"
-                frame.symlink_to(Path(photo.path).resolve())
-
-                state = predictor.init_state(directory)
-
-                predictor.add_new_points_or_box(
-                    inference_state=state,
-                    frame_idx=0,
-                    obj_id=1,
-                    points=np.asarray(prompt.points, dtype=np.float32)
-                    * np.asarray(image.shape[1::-1], dtype=np.float32),
-                    labels=np.asarray(prompt.labels, dtype=np.int32),
-                )
-
-                prediction = next(predictor.propagate_in_video(state))
-
-                mask = prediction.masks["1"].astype(np.uint8) * 255
-
-                del state
-
-            photos.append(prepare_photo(name, image, mask))
-
-    del predictor
-
-    # Then, compare each pair of photos and save the results.
     for a, b in combinations(range(len(photos)), 2):
         first, second = photos[a], photos[b]
 

@@ -1,36 +1,25 @@
-"""Explicit storage and execution dependencies for subject photos and optional video processing."""
-
 from dataclasses import dataclass
 from pathlib import Path
 
-from meros.adapters import LocalFsMediaStore, LocalFsMetadataStore, MediaPaths, MetadataPaths
-
-
-class LocalFsMediaStoreWithPaths(LocalFsMediaStore):
-    paths: MediaPaths
-
-
-class LocalFsMetadataStoreWithPaths(LocalFsMetadataStore):
-    paths: MetadataPaths
+from meros.adapters import SubjectsAdapter, VideosAdapter
+from meros.domain.storage import Subjects, Videos
 
 
 @dataclass(frozen=True)
 class Project:
-    media: LocalFsMediaStoreWithPaths
-    metadata: LocalFsMetadataStoreWithPaths
+    subjects: Subjects
+    videos: Videos
 
-    checkpoint: Path = Path("external/sam2/checkpoints/sam2.1_hiera_large.pt")
+    sam2_model: Path = Path("external/sam2/checkpoints/sam2.1_hiera_large.pt")
+    yolo_model: Path = Path("external/yolo/yolo26n-cls.pt")
+    fishial_model: Path = Path("external/yolo/fishial-detector.pt")
+    mero_detector: Path = Path("data/ml/detection/20261109-104626/weights/best.pt")
 
     @classmethod
     def open(
         cls,
-        *,
-        checkpoint: Path = Path("external/sam2/checkpoints/sam2.1_hiera_large.pt"),
     ) -> "Project":
-        metadata = LocalFsMetadataStoreWithPaths()
-        media = LocalFsMediaStoreWithPaths()
+        subjects = SubjectsAdapter()
+        videos = VideosAdapter()
 
-        metadata.paths = MetadataPaths()
-        media.paths = MediaPaths()
-
-        return cls(media, metadata, checkpoint=checkpoint)
+        return cls(subjects, videos)

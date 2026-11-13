@@ -27,7 +27,7 @@ jobs:
           python-version: '3.12'
 
       - name: install deps
-        run: make install EXTRAS=dev
+        run: make install
 
       - name: run checks
         run: make check
