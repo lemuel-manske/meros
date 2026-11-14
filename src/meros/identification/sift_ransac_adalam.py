@@ -8,7 +8,7 @@ from kornia.feature.adalam.utils import dist_matrix
 import numpy as np
 import torch
 
-from meros.identification.common import save_matches, all_pairs
+from meros.identification.common import all_pairs, save_matches
 from meros.project import Project
 from meros.utils import configure_torch
 
@@ -33,6 +33,7 @@ class ComparisonResult:
     matches: list[cv.DMatch]
     global_inliers: np.ndarray
     local_inliers: np.ndarray
+    homography: np.ndarray | None
 
 
 def prepare_photo(name: str, crop: np.ndarray) -> Features:
@@ -77,11 +78,13 @@ def prepare_photo(name: str, crop: np.ndarray) -> Features:
     return Features(name, gray, keypoints, descriptors)
 
 
-def global_consistency(first: Features, second: Features, matches: list[cv.DMatch]) -> np.ndarray:
+def global_consistency(
+    first: Features, second: Features, matches: list[cv.DMatch]
+) -> tuple[np.ndarray | None, np.ndarray]:
     retained = np.zeros(len(matches), dtype=bool)
 
     if len(matches) < 4:
-        return retained
+        return None, retained
 
     source = np.asarray([first.keypoints[m.queryIdx].pt for m in matches], dtype=np.float32)
     target = np.asarray([second.keypoints[m.trainIdx].pt for m in matches], dtype=np.float32)
@@ -99,7 +102,7 @@ def global_consistency(first: Features, second: Features, matches: list[cv.DMatc
     if homography is not None and status is not None:
         retained = status.ravel().astype(bool)
 
-    return retained
+    return homography, retained
 
 
 def local_consistency(
@@ -215,10 +218,13 @@ def compare(first: Features, second: Features) -> ComparisonResult:
     }
     scores = torch.tensor([ratios[m.queryIdx] for m in matches], dtype=torch.float32)
 
+    homography, global_inliers = global_consistency(first, second, matches)
+
     return ComparisonResult(
         matches=matches,
-        global_inliers=global_consistency(first, second, matches),
+        global_inliers=global_inliers,
         local_inliers=local_consistency(first, second, matches, scores),
+        homography=homography,
     )
 
 
@@ -261,7 +267,10 @@ def run(project: Project) -> None:
 
         save_pair(first, second, result)
 
-        print(f"\nAligning {subject_a.subject_id}/{a.image_id} with {subject_b.subject_id}/{b.image_id}")
+        print(
+            f"\nAligning {subject_a.subject_id}/{a.image_id} "
+            f"with {subject_b.subject_id}/{b.image_id}"
+        )
 
 
 if __name__ == "__main__":

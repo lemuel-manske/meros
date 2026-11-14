@@ -5,15 +5,19 @@ import cv2 as cv
 import matplotlib.pyplot as plt
 import numpy as np
 
-from meros.identification.common import save_matches, all_pairs
+from meros.identification.common import all_pairs, save_matches
+from meros.identification.sift_ransac_adalam import (
+    ComparisonResult,
+    Features,
+    compare,
+    prepare_photo,
+)
 from meros.project import Project
+from meros.utils import configure_torch
 
 OUTPUT = Path("data/media/sandbox/sift_ransac_adalam_bin_mask/results.csv")
 
 MIN_INLIERS = 20
-MIN_MATCHES = 4
-RANSAC_THRESHOLD = 4.0
-RATIO_THRESHOLD = 0.80
 
 SHOW_PLOTS = False
 
@@ -50,12 +54,6 @@ def to_bgr(image: np.ndarray) -> np.ndarray:
     if image.shape[2] == 4:
         return cv.cvtColor(image, cv.COLOR_BGRA2BGR)
     return image
-
-
-def to_gray(image: np.ndarray) -> np.ndarray:
-    if image.ndim == 2:
-        return image
-    return cv.cvtColor(to_bgr(image), cv.COLOR_BGR2GRAY)
 
 
 def body_silhouette(image: np.ndarray) -> np.ndarray:
@@ -160,63 +158,26 @@ def inlier_coverage(
     return hull_area / overlap_area
 
 def estimate_alignment(
-    image_a: np.ndarray,
-    image_b: np.ndarray,
-    silhouette_a: np.ndarray,
-    silhouette_b: np.ndarray,
+    first: Features,
+    second: Features,
+    comparison: ComparisonResult,
 ) -> AlignmentResult | None:
-    sift = cv.SIFT.create(nfeatures=4000)
+    matrix = comparison.homography
 
-    kp_a, des_a = sift.detectAndCompute(
-        to_gray(image_a),
-        silhouette_a * 255,
-    )
-    kp_b, des_b = sift.detectAndCompute(
-        to_gray(image_b),
-        silhouette_b * 255,
-    )
-
-    if des_a is None or des_b is None:
-        print("No descriptors found in one of the images")
-
+    if matrix is None:
         return None
 
-    matcher = cv.BFMatcher(cv.NORM_L2)
+    matches = comparison.matches
 
-    pairs = matcher.knnMatch(des_b, des_a, k=2)
+    src = np.asarray(
+        [first.keypoints[m.queryIdx].pt for m in matches],
+        dtype=np.float32,
+    ).reshape(-1, 1, 2)
 
-    matches = [
-        m
-        for pair in pairs
-        if len(pair) == 2
-        for m, n in [pair]
-        if m.distance < RATIO_THRESHOLD * n.distance
-    ]
-
-    if len(matches) < MIN_MATCHES:
-        print(f"Not enough matches found: {len(matches)} (need at least {MIN_MATCHES})")
-
-        return None
-
-    src = np.array([kp_b[m.queryIdx].pt for m in matches], dtype=np.float32).reshape(-1, 1, 2)
-
-    dst = np.array([kp_a[m.trainIdx].pt for m in matches], dtype=np.float32).reshape(-1, 1, 2)
-
-    matrix, inliers = cv.findHomography(
-        src,
-        dst,
-        cv.RANSAC,
-        RANSAC_THRESHOLD,
-        maxIters=5000,
-        confidence=0.995,
-    )
-
-    if matrix is None or inliers is None:
-        print("Failed to estimate transformation")
-
-        return None
-
-    inliers = inliers.ravel().astype(bool)
+    dst = np.asarray(
+        [second.keypoints[m.trainIdx].pt for m in matches],
+        dtype=np.float32,
+    ).reshape(-1, 1, 2)
 
     projected = cv.perspectiveTransform(src, matrix)
 
@@ -227,13 +188,12 @@ def estimate_alignment(
 
     return AlignmentResult(
         matrix=matrix,
-        inliers=inliers,
+        inliers=comparison.global_inliers,
         matches=matches,
-        kp_a=list(kp_a),
-        kp_b=list(kp_b),
+        kp_a=second.keypoints,
+        kp_b=first.keypoints,
         errors=errors,
     )
-
 
 def warp(
     image: np.ndarray,
@@ -436,6 +396,8 @@ def run(project: Project) -> None:
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.unlink(missing_ok=True)
 
+    configure_torch()
+
     for subject_a, subject_b, a, b in all_pairs(project):
         image_a = a.crop_im
         image_b = b.crop_im
@@ -445,89 +407,103 @@ def run(project: Project) -> None:
 
         assert image_a is not None
         assert image_b is not None
-
         assert mask_a is not None
         assert mask_b is not None
 
-        pattern_a = load_pattern(mask_a, image_a.shape[:2])
-        pattern_b = load_pattern(mask_b, image_b.shape[:2])
+        first = prepare_photo(f"{subject_a.subject_id}/{a.image_id}", image_a)
+        second = prepare_photo(f"{subject_b.subject_id}/{b.image_id}", image_b)
 
-        silhouette_a = body_silhouette(image_a)
-        silhouette_b = body_silhouette(image_b)
+        comparison = compare(first, second)
+        result = estimate_alignment(first, second, comparison)
 
-        print(f"\nAligning {subject_a.subject_id}/{a.image_id} with {subject_b.subject_id}/{b.image_id}")
-
-        result = estimate_alignment(
-            image_a,
-            image_b,
-            silhouette_a,
-            silhouette_b,
-        )
+        matches = len(comparison.matches)
+        global_inliers = int(comparison.global_inliers.sum())
+        local_inliers = int(comparison.local_inliers.sum())
+        both_inliers = int((comparison.global_inliers & comparison.local_inliers).sum())
 
         if result is None:
-            save_matches(
-                OUTPUT,
-                method="sift_ransac",
-                subject_a=subject_a.subject_id,
-                image_a=a.image_id,
-                subject_b=subject_b.subject_id,
-                image_b=b.image_id,
-                status="rejected",
-            )
-            continue
-
-        if result.num_inliers < MIN_INLIERS:
+            status = "no_homography"
+        elif result.num_inliers < MIN_INLIERS:
             status = "insufficient_inliers"
-        elif not is_valid_homography(result.matrix, image_b.shape[:2]):
+        elif not is_valid_homography(result.matrix, first.gray.shape):
             status = "invalid_homography"
         else:
             status = "ok"
 
-        if status != "ok":
-            save_matches(
-                OUTPUT,
-                method="sift_ransac",
-                subject_a=subject_a.subject_id,
-                image_a=a.image_id,
-                subject_b=subject_b.subject_id,
-                image_b=b.image_id,
-                status=status,
-                matches=result.num_matches,
-                global_inliers=result.num_inliers,
-                median_error=result.median_error if result.num_inliers else None,
+        metrics: dict[str, float] = {}
+
+        if status == "ok":
+            # The legacy homography maps image A to image B.
+            # Evaluate the patterns in image B's reference coordinate system.
+            resized_a = cv.resize(
+                image_a,
+                (first.gray.shape[1], first.gray.shape[0]),
+                interpolation=cv.INTER_AREA,
+            )
+            resized_b = cv.resize(
+                image_b,
+                (second.gray.shape[1], second.gray.shape[0]),
+                interpolation=cv.INTER_AREA,
             )
 
-            continue
+            pattern_a = load_pattern(mask_a, first.gray.shape)
+            pattern_b = load_pattern(mask_b, second.gray.shape)
 
-        if SHOW_PLOTS:
-            visualize_matches(image_a, image_b, result)
+            silhouette_a = cv.resize(
+                body_silhouette(image_a),
+                (first.gray.shape[1], first.gray.shape[0]),
+                interpolation=cv.INTER_NEAREST,
+            )
+            silhouette_b = cv.resize(
+                body_silhouette(image_b),
+                (second.gray.shape[1], second.gray.shape[0]),
+                interpolation=cv.INTER_NEAREST,
+            )
 
-        coverage_a, coverage_b, iou, inlier_cov = visualize_alignment(
-            image_a,
-            image_b,
-            pattern_a,
-            pattern_b,
-            silhouette_a,
-            silhouette_b,
-            result
-        )
+            assert result is not None
+
+            if SHOW_PLOTS:
+                visualize_matches(resized_b, resized_a, result)
+
+            coverage_b, coverage_a, iou, inlier_cov = visualize_alignment(
+                resized_b,
+                resized_a,
+                pattern_b,
+                pattern_a,
+                silhouette_b,
+                silhouette_a,
+                result,
+            )
+
+            metrics = {
+                "coverage_a": coverage_a,
+                "coverage_b": coverage_b,
+                "pattern_iou": iou,
+                "inlier_coverage": inlier_cov,
+            }
 
         save_matches(
             OUTPUT,
-            method="sift_ransac",
+            method="sift_ransac_adalam_bin_mask",
             subject_a=subject_a.subject_id,
             image_a=a.image_id,
             subject_b=subject_b.subject_id,
             image_b=b.image_id,
-            status="ok",
-            matches=result.num_matches,
-            global_inliers=result.num_inliers,
-            median_error=result.median_error,
-            coverage_a=coverage_a,
-            coverage_b=coverage_b,
-            pattern_iou=iou,
-            inlier_coverage=inlier_cov,
+            status=status,
+            matches=matches,
+            global_inliers=global_inliers,
+            local_inliers=local_inliers,
+            both_inliers=both_inliers,
+            median_error=result.median_error if result is not None and result.num_inliers else None,
+            **metrics,
         )
+
+        print(
+            f"{first.name} vs {second.name}: {status}, "
+            f"global {global_inliers}, local {local_inliers} / {matches}",
+            flush=True,
+        )
+
 
 if __name__ == "__main__":
     run(Project.open())
