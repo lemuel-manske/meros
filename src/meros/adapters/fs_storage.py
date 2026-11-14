@@ -13,7 +13,6 @@ from meros.domain.storage import (
     FrameDetection,
     Subject,
     SubjectImage,
-    SubjectMark,
     Subjects,
     SubjectSpot,
     Video,
@@ -63,6 +62,12 @@ class MediaPaths:
     def subject_crop(self, subject_id: str, image_id: int) -> Path:
         return self.subject(subject_id) / "crops" / f"{image_id}.png"
 
+    def subject_bodies(self, subject_id: str) -> Path:
+        return MEDIA_SUBJECTS_ROOT / subject_id / "body"
+
+    def subject_body(self, subject_id: str, image_id: int) -> Path:
+        return MEDIA_SUBJECTS_ROOT / subject_id / "body" / f"{image_id}.png"
+
 
 class MetadataPaths:
     def video_predictions(self, video_id: str) -> Path:
@@ -85,9 +90,6 @@ class MetadataPaths:
 
     def subject_spots(self, subject_id: str, image_id: int) -> Path:
         return METADATA_SUBJECTS_ROOT / subject_id / "spots" / f"{image_id}.json"
-
-    def subject_body(self, subject_id: str) -> Path:
-        return METADATA_SUBJECTS_ROOT / subject_id / "body.json"
 
 
 media_paths = MediaPaths()
@@ -195,7 +197,7 @@ def read_video_frame(path: Path, index: int) -> np.ndarray:
 
 
 def is_image_file(path: Path) -> bool:
-    return path.is_file() and path.suffix.lower() == ".jpg" and path.stem.isdecimal()
+    return path.is_file() and path.suffix.lower() in [".jpg", ".jpeg", ".png", ".bmp", ".tiff"]
 
 
 def read_subject_bbox(subject_id: str, image_id: int) -> BBox:
@@ -214,13 +216,17 @@ def read_subject_spots(subject_id: str, image_id: int) -> list[SubjectSpot]:
     return data["points"]
 
 
-def read_subject_body(subject_id: str, image_id: int) -> list[SubjectMark]:
-    data = read_json(metadata_paths.subject_body(subject_id), default={})
-    return data.get("images", {}).get(str(image_id), [])
-
-
 def read_subject_crop(subject_id: str, image_id: int) -> np.ndarray:
     return read_image(media_paths.subject_crop(subject_id, image_id), cv.IMREAD_UNCHANGED)
+
+
+def read_body(subject_id: str, image_id: int) -> np.ndarray | None:
+    p = media_paths.subject_body(subject_id, image_id)
+
+    if not p.exists():
+        return None
+
+    return read_image(p, cv.IMREAD_UNCHANGED)
 
 
 def read_subject_capture_date(subject_id: str, frame_idx: int) -> date:
@@ -247,10 +253,10 @@ def read_subject_images(subject_id: str) -> list[SubjectImage]:
             capture_date=read_subject_capture_date(subject_id, int(path.stem)),
             path=str(path),
             _load_im=partial(read_image, path),
-            _load_crop=partial(read_subject_crop, subject_id, int(path.stem)),
+            _load_crop_im=partial(read_subject_crop, subject_id, int(path.stem)),
+            _load_binary_im=partial(read_body, subject_id, int(path.stem)),
             bbox=read_subject_bbox(subject_id, int(path.stem)),
             spots=read_subject_spots(subject_id, int(path.stem)),
-            body=read_subject_body(subject_id, int(path.stem)),
         )
         for path in directory.iterdir()
         if is_image_file(path)
@@ -281,6 +287,13 @@ class SubjectsAdapter(Subjects):
                 return subject
 
         raise ValueError(f"Subject {subject_id} not found")
+
+    def write_body(self, im: np.ndarray, subject_id: str, image_id: int) -> None:
+        path = media_paths.subject_body(subject_id, image_id)
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        write_image(path, im)
 
     def write_subject(self, subject: Subject, source_video_id: str | None = None) -> None:
         directory = media_paths.subject(subject.subject_id)
@@ -314,7 +327,9 @@ class SubjectsAdapter(Subjects):
                         writer.writeheader()
 
                 with path.open("a", newline="") as stream:
-                    writer = csv.DictWriter(stream, fieldnames=["id", "capture_date", "source_video_id"])
+                    writer = csv.DictWriter(
+                        stream, fieldnames=["id", "capture_date", "source_video_id"]
+                    )
                     writer.writerow(
                         {
                             "id": image.image_id,
@@ -334,14 +349,6 @@ class SubjectsAdapter(Subjects):
         path = metadata_paths.subject_segmentation(subject_id)
         data = read_json(path, default={})
         data.setdefault("bboxes", {})[str(image_id)] = bbox
-        write_json(path, data)
-
-    def write_subject_body(
-        self, subject_id: str, image_id: int, body: list[SubjectMark]
-    ) -> None:
-        path = metadata_paths.subject_body(subject_id)
-        data = read_json(path, default={})
-        data.setdefault("images", {})[str(image_id)] = body
         write_json(path, data)
 
     def write_subject_crop(self, subject_id: str, image_id: int, crop: np.ndarray) -> None:

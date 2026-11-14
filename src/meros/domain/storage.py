@@ -16,11 +16,6 @@ A spot is a tiny, rounded, dark dot on the Goliath Grouper head.
 """
 type SubjectSpot = list[int]
 
-"""
-A polygon marking a visible feature on a subject's body crop.
-"""
-type SubjectMark = dict[str, list[list[int]]]
-
 
 class DomainObject:
     """
@@ -65,19 +60,24 @@ class SubjectImage(DomainObject):
 
     _load_im: Callable[[], np.ndarray] = field(repr=False, compare=False)
 
-    _load_crop: Callable[[], np.ndarray] = field(repr=False, compare=False)
+    _load_binary_im: Callable[[], np.ndarray | None] = field(repr=False, compare=False)
+
+    _load_crop_im: Callable[[], np.ndarray] = field(repr=False, compare=False)
 
     bbox: BBox = field(default_factory=list)
     spots: list[SubjectSpot] = field(default_factory=list)
-    body: list[SubjectMark] = field(default_factory=list)
 
     @cached_property
     def im(self) -> np.ndarray:
         return self._load_im()
 
     @cached_property
-    def crop(self) -> np.ndarray:
-        return self._load_crop()
+    def binary_im(self) -> np.ndarray | None:
+        return self._load_binary_im()
+
+    @cached_property
+    def crop_im(self) -> np.ndarray:
+        return self._load_crop_im()
 
 
 @dataclass(frozen=True)
@@ -100,6 +100,8 @@ class Subjects(Store, Protocol):
 
     def get_all(self) -> list[Subject]: ...
 
+    def write_body(self, im: np.ndarray, subject_id: str, image_id: int) -> None: ...
+
     def write_subject(self, subject: Subject, source_video_id: str | None = None) -> None: ...
 
     def write_subject_crop(self, subject_id: str, image_id: int, crop: np.ndarray) -> None: ...
@@ -109,10 +111,6 @@ class Subjects(Store, Protocol):
     ) -> None: ...
 
     def write_subject_bbox(self, subject_id: str, image_id: int, bbox: BBox) -> None: ...
-
-    def write_subject_body(
-        self, subject_id: str, image_id: int, body: list[SubjectMark]
-    ) -> None: ...
 
 
 @dataclass(frozen=True)

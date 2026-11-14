@@ -310,7 +310,7 @@ def run() -> None:
         for im in subject.images:
             name = f"{im.subject_id}/{im.image_id}"
 
-            photos.append(prepare_photo(name, im.crop))
+            photos.append(prepare_photo(name, im.crop_im))
 
     for a, b in combinations(range(len(photos)), 2):
         first, second = photos[a], photos[b]
