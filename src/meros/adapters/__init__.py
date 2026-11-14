@@ -1,5 +1,7 @@
-from .fs_storage import (
+from .subject_store import (
     SubjectsAdapter,
+)
+from .video_store import (
     VideosAdapter,
 )
 

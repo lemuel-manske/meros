@@ -109,7 +109,15 @@ def run(project: Project) -> None:
             if bbox is None:
                 continue
 
-            project.subjects.write_subject_bbox(subject._id, image._id, bbox)
+            subject_image = subject.get_image(image._id)
+
+            assert subject_image is not None, (
+                f"Image {image._id} not found for subject {subject._id}"
+            )
+
+            subject_image.bbox = bbox
+
+            project.subjects.write(subject)
 
             print(f"Saved bbox for {title}: {bbox}")
 

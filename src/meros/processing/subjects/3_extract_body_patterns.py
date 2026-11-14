@@ -38,7 +38,7 @@ def clahe(
 
     l = clahe.apply(l)
 
-    enhanced = cv2.merge((l, a, b))
+    enhanced = cv2.merge((l, a, b))  # type: ignore
     enhanced = cv2.cvtColor(enhanced, cv2.COLOR_LAB2RGB)
 
     return Image.fromarray(enhanced)
@@ -87,7 +87,19 @@ def run(project: Project) -> None:
             for _, mask in result.items():
                 arr = mask.astype(np.uint8) * 255
 
-                project.subjects.write_body(arr, subject_id, frame_id)
+                subject = project.subjects.get(subject_id)
+
+                assert subject is not None, f"Subject {subject_id} not found"
+
+                subject_image = subject.get_image(frame_id)
+
+                assert subject_image is not None, (
+                    f"Image {frame_id} not found for subject {subject_id}"
+                )
+
+                subject_image._load_binary_im = lambda: arr
+
+                project.subjects.write(subject)
 
 
 if __name__ == "__main__":

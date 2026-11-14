@@ -97,7 +97,13 @@ def run(project: Project) -> None:
             if selected is None:
                 continue
 
-            project.subjects.write_subject_spots(subject._id, im._id, selected)
+            subject_image = subject.get_image(im._id)
+
+            assert subject_image is not None, f"Image {im._id} not found for subject {subject._id}"
+
+            subject_image.spots = selected
+
+            project.subjects.write(subject)
 
             print(f"Saved {len(selected)} spot centers for {subject._id}/{im._id}")
 

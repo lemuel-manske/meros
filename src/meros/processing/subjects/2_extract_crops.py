@@ -59,7 +59,13 @@ def run(project: Project) -> None:
                 crop = cv.cvtColor(photo.im[y1:y2, x1:x2], cv.COLOR_BGR2BGRA)
                 crop[~crop_mask] = 0
 
-                project.subjects.write_subject_crop(subject._id, photo._id, crop)
+                image = subject.get_image(photo._id)
+
+                assert image is not None, f"{name}: image not found"
+
+                image._load_crop_im = lambda: crop
+
+                project.subjects.write(subject)
 
                 print(f"Saved crop for {name}", flush=True)
 

@@ -45,7 +45,7 @@ class Store(Protocol):
     ...
 
 
-@dataclass(frozen=True)
+@dataclass
 class SubjectImage(DomainObject):
     """
     A subject image is a single image of a subject, along with its associated metadata.
@@ -78,7 +78,7 @@ class SubjectImage(DomainObject):
         return self._load_crop_im()
 
 
-@dataclass(frozen=True)
+@dataclass
 class Subject(DomainObject):
     """
     A subject is a single Goliath Grouper, along with its associated images.
@@ -87,6 +87,13 @@ class Subject(DomainObject):
     _id: str
 
     images: list[SubjectImage] = field(default_factory=list)
+
+    def get_image(self, image_id: int) -> SubjectImage | None:
+        for image in self.images:
+            if image._id == image_id:
+                return image
+
+        return None
 
 
 class Subjects(Store, Protocol):
@@ -98,17 +105,7 @@ class Subjects(Store, Protocol):
 
     def get_all(self) -> list[Subject]: ...
 
-    def write_body(self, im: np.ndarray, subject_id: str, image_id: int) -> None: ...
-
-    def write_subject(self, subject: Subject, source_video_id: str | None = None) -> None: ...
-
-    def write_subject_crop(self, subject_id: str, image_id: int, crop: np.ndarray) -> None: ...
-
-    def write_subject_spots(
-        self, subject_id: str, image_id: int, spots: list[SubjectSpot]
-    ) -> None: ...
-
-    def write_subject_bbox(self, subject_id: str, image_id: int, bbox: BBox) -> None: ...
+    def write(self, subject: Subject) -> None: ...
 
 
 @dataclass(frozen=True)

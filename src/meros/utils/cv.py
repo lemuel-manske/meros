@@ -4,6 +4,7 @@ import cv2 as cv
 import numpy as np
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".webm"}
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff"}
 
 
 def display_image(image: np.ndarray, title: str = "Image") -> None:
@@ -14,6 +15,10 @@ def display_image(image: np.ndarray, title: str = "Image") -> None:
 
 def is_video_file(path: Path) -> bool:
     return path.is_file() and path.suffix.lower() in VIDEO_EXTENSIONS
+
+
+def is_image_file(path: Path) -> bool:
+    return path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
 
 
 def is_valid_image(
