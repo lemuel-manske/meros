@@ -16,6 +16,11 @@ A spot is a tiny, rounded, dark dot on the Goliath Grouper head.
 """
 type SubjectSpot = list[int]
 
+"""
+A polygon marking a visible feature on a subject's body crop.
+"""
+type SubjectMark = dict[str, list[list[int]]]
+
 
 class DomainObject:
     """
@@ -64,6 +69,7 @@ class SubjectImage(DomainObject):
 
     bbox: BBox = field(default_factory=list)
     spots: list[SubjectSpot] = field(default_factory=list)
+    body: list[SubjectMark] = field(default_factory=list)
 
     @cached_property
     def im(self) -> np.ndarray:
@@ -100,6 +106,12 @@ class Subjects(Store, Protocol):
 
     def write_subject_spots(
         self, subject_id: str, image_id: int, spots: list[SubjectSpot]
+    ) -> None: ...
+
+    def write_subject_bbox(self, subject_id: str, image_id: int, bbox: BBox) -> None: ...
+
+    def write_subject_body(
+        self, subject_id: str, image_id: int, body: list[SubjectMark]
     ) -> None: ...
 
 

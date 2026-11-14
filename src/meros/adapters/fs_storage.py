@@ -13,6 +13,7 @@ from meros.domain.storage import (
     FrameDetection,
     Subject,
     SubjectImage,
+    SubjectMark,
     Subjects,
     SubjectSpot,
     Video,
@@ -84,6 +85,9 @@ class MetadataPaths:
 
     def subject_spots(self, subject_id: str, image_id: int) -> Path:
         return METADATA_SUBJECTS_ROOT / subject_id / "spots" / f"{image_id}.json"
+
+    def subject_body(self, subject_id: str) -> Path:
+        return METADATA_SUBJECTS_ROOT / subject_id / "body.json"
 
 
 media_paths = MediaPaths()
@@ -210,6 +214,11 @@ def read_subject_spots(subject_id: str, image_id: int) -> list[SubjectSpot]:
     return data["points"]
 
 
+def read_subject_body(subject_id: str, image_id: int) -> list[SubjectMark]:
+    data = read_json(metadata_paths.subject_body(subject_id), default={})
+    return data.get("images", {}).get(str(image_id), [])
+
+
 def read_subject_crop(subject_id: str, image_id: int) -> np.ndarray:
     return read_image(media_paths.subject_crop(subject_id, image_id), cv.IMREAD_UNCHANGED)
 
@@ -241,6 +250,7 @@ def read_subject_images(subject_id: str) -> list[SubjectImage]:
             _load_crop=partial(read_subject_crop, subject_id, int(path.stem)),
             bbox=read_subject_bbox(subject_id, int(path.stem)),
             spots=read_subject_spots(subject_id, int(path.stem)),
+            body=read_subject_body(subject_id, int(path.stem)),
         )
         for path in directory.iterdir()
         if is_image_file(path)
@@ -319,6 +329,20 @@ class SubjectsAdapter(Subjects):
         path.parent.mkdir(parents=True, exist_ok=True)
 
         write_json(path, {"points": spots})
+
+    def write_subject_bbox(self, subject_id: str, image_id: int, bbox: BBox) -> None:
+        path = metadata_paths.subject_segmentation(subject_id)
+        data = read_json(path, default={})
+        data.setdefault("bboxes", {})[str(image_id)] = bbox
+        write_json(path, data)
+
+    def write_subject_body(
+        self, subject_id: str, image_id: int, body: list[SubjectMark]
+    ) -> None:
+        path = metadata_paths.subject_body(subject_id)
+        data = read_json(path, default={})
+        data.setdefault("images", {})[str(image_id)] = body
+        write_json(path, data)
 
     def write_subject_crop(self, subject_id: str, image_id: int, crop: np.ndarray) -> None:
         write_image(media_paths.subject_crop(subject_id, image_id), crop)

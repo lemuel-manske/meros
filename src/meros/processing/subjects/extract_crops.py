@@ -9,6 +9,9 @@ from meros.external import build_sam2_predictor
 from meros.project import Project
 from meros.utils import configure_torch
 
+SUBJECT_ID = "sandra"
+FRAME_ID = None
+
 
 def run(project: Project) -> None:
     configure_torch()
@@ -17,7 +20,13 @@ def run(project: Project) -> None:
 
     with torch.inference_mode():
         for subject in project.subjects.get_all():
+            if SUBJECT_ID is not None and subject.subject_id != SUBJECT_ID:
+                continue
+
             for photo in subject.images:
+                if FRAME_ID is not None and photo.image_id != FRAME_ID:
+                    continue
+
                 name = f"{subject.subject_id}/{photo.image_id}"
 
                 assert len(photo.bbox) == 4, f"{name}: missing bbox"
