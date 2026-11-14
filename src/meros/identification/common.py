@@ -1,6 +1,9 @@
 import csv
+from datetime import datetime
 from pathlib import Path
+from typing import Generator
 
+from meros.domain.storage import Subject, SubjectImage
 from meros.project import Project
 
 
@@ -79,30 +82,33 @@ def save_matches(
         writer.writerow(row) # pyright: ignore
 
 
-def all_pairs(project: Project):
-    from itertools import combinations, product
+def pairs(
+    project: Project,
+    a_filter: str | None = None,
+    b_filter: str | None = None,
+    bin_filter: bool = True,
+) -> Generator[tuple[Subject, Subject, SubjectImage, SubjectImage], None, None]:
+    from itertools import combinations
 
-    subjects = list(project.subjects.get_all())
+    images = [
+        (subject, image)
+        for subject in project.subjects.get_all()
+        for image in subject.images
+        if (not bin_filter or image.binary_im is None)
+    ]
 
-    for subject in subjects:
-        images = [
-            img for img in subject.images
-            if img.binary_im is not None
-        ]
+    for (subject_a, a), (subject_b, b) in combinations(images, 2):
+        forward = (
+            (a_filter is None or subject_a.subject_id == a_filter)
+            and (b_filter is None or subject_b.subject_id == b_filter)
+        )
 
-        for a, b in combinations(images, 2):
-            yield subject, subject, a, b
+        reverse = (
+            (a_filter is None or subject_b.subject_id == a_filter)
+            and (b_filter is None or subject_a.subject_id == b_filter)
+        )
 
-    for subject_a, subject_b in combinations(subjects, 2):
-        images_a = [
-            img for img in subject_a.images
-            if img.binary_im is not None
-        ]
-
-        images_b = [
-            img for img in subject_b.images
-            if img.binary_im is not None
-        ]
-
-        for a, b in product(images_a, images_b):
+        if forward:
             yield subject_a, subject_b, a, b
+        elif reverse:
+            yield subject_b, subject_a, b, a

@@ -5,7 +5,7 @@ import cv2 as cv
 import matplotlib.pyplot as plt
 import numpy as np
 
-from meros.identification.common import all_pairs, save_matches
+from meros.identification.common import pairs, save_matches
 from meros.identification.sift_ransac_adalam import (
     ComparisonResult,
     Features,
@@ -398,7 +398,7 @@ def run(project: Project) -> None:
 
     configure_torch()
 
-    for subject_a, subject_b, a, b in all_pairs(project):
+    for subject_a, subject_b, a, b in pairs(project, a_filter="rogerio", b_filter="rogerio", bin_filter=False):
         image_a = a.crop_im
         image_b = b.crop_im
 

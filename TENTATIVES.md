@@ -91,13 +91,23 @@ models. Feature extraction, matching, and geometric verification are separate
 choices. A more flexible model still needs reliable correspondences and may
 also make incorrect matches easier to fit.
 
+## Fish detection across videos
+
+YOLO fishial, fine tuned to recognize meros, showed a very high detection
+rate on the available video frames. The model was trained on a small dataset of
+annotated frames, and the results were promising. We tested it against some very
+long videos and it was able to detect fish in a variety of poses and lighting conditions.
+
+With a sharpness filter applied, it was able to detect most of the fishes that appear
+close to the camera or have at least one side of the body visible. We can't point
+out the numbers yet, though.
+
 ## Open directions
 
 - Tune SIFT extraction and matching thresholds. SIFT has configurable parameters;
   it is not a learned model to fine-tune. Improvements on these repeatedly used
   photographs would still need independent evaluation.
 - Explore HOG descriptors and backprojection-based approaches for identification.
-- Explore YOLO for fish detection, a separate task from individual identification.
 - Further investigate task-specific learned descriptors. CNN-based features and
   a learned spot detector have already been tried, so CNNs as a whole are not an
   untested direction.

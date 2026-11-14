@@ -8,7 +8,7 @@ from kornia.feature.adalam.utils import dist_matrix
 import numpy as np
 import torch
 
-from meros.identification.common import all_pairs, save_matches
+from meros.identification.common import pairs, save_matches
 from meros.project import Project
 from meros.utils import configure_torch
 
@@ -255,11 +255,10 @@ def save_pair(first: Features, second: Features, result: ComparisonResult) -> No
 
 def run(project: Project) -> None:
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT.unlink(missing_ok=True)
 
     configure_torch()
 
-    for subject_a, subject_b, a, b in all_pairs(project):
+    for subject_a, subject_b, a, b in pairs(project, a_filter="rogerio", b_filter="rogerio", bin_filter=False):
         first = prepare_photo(f"{subject_a.subject_id}/{a.image_id}", a.crop_im)
         second = prepare_photo(f"{subject_b.subject_id}/{b.image_id}", b.crop_im)
 
