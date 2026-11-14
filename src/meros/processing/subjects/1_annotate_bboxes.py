@@ -9,7 +9,7 @@ from meros.domain.storage import BBox
 from meros.project import Project
 
 SUBJECT_ID = "sandra"
-FRAME_ID =  None
+FRAME_ID = None
 
 
 def select_bbox(image: np.ndarray, initial: BBox, title: str) -> BBox | None:
