@@ -1,3 +1,6 @@
 [submodule "external/sam2"]
 	path = external/sam2
 	url = https://github.com/facebookresearch/sam2.git
+[submodule "external/gloper"]
+	path = external/gloper
+	url = https://github.com/Bob-blip-boop/GloPER
