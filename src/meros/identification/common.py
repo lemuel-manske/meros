@@ -84,6 +84,15 @@ def all_pairs(project: Project):
 
     subjects = list(project.subjects.get_all())
 
+    for subject in subjects:
+        images = [
+            img for img in subject.images
+            if img.binary_im is not None
+        ]
+
+        for a, b in combinations(images, 2):
+            yield subject, subject, a, b
+
     for subject_a, subject_b in combinations(subjects, 2):
         images_a = [
             img for img in subject_a.images

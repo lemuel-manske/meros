@@ -249,12 +249,13 @@ def save_pair(first: Features, second: Features, result: ComparisonResult) -> No
 
 def run(project: Project) -> None:
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+    OUTPUT.unlink(missing_ok=True)
 
     configure_torch()
 
     for subject_a, subject_b, a, b in all_pairs(project):
-        first = prepare_photo(f"{subject_a.subject_id}/{a.subject_id}", a.crop_im)
-        second = prepare_photo(f"{subject_b.subject_id}/{b.subject_id}", b.crop_im)
+        first = prepare_photo(f"{subject_a.subject_id}/{a.image_id}", a.crop_im)
+        second = prepare_photo(f"{subject_b.subject_id}/{b.image_id}", b.crop_im)
 
         result = compare(first, second)
 

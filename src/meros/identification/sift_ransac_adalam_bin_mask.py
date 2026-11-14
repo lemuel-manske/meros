@@ -41,7 +41,7 @@ class AlignmentResult:
 
     @property
     def median_error(self) -> float:
-        return float(np.median(self.errors[self.inliers]))
+        return float(np.median(self.errors[self.inliers])) if self.num_inliers else float("nan")
 
 
 def to_bgr(image: np.ndarray) -> np.ndarray:
@@ -216,23 +216,7 @@ def estimate_alignment(
 
         return None
 
-    if not is_valid_homography(
-        matrix,
-        image_b.shape[:2],
-    ):
-        print("Estimated homography is invalid")
-
-        return None
-
-
     inliers = inliers.ravel().astype(bool)
-
-    if np.count_nonzero(inliers) < MIN_INLIERS:
-        print(
-            f"Not enough inliers found: {np.count_nonzero(inliers)} (need at least {MIN_INLIERS})"
-        )
-
-        return None
 
     projected = cv.perspectiveTransform(src, matrix)
 
@@ -450,6 +434,7 @@ def visualize_alignment(
 
 def run(project: Project) -> None:
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+    OUTPUT.unlink(missing_ok=True)
 
     for subject_a, subject_b, a, b in all_pairs(project):
         image_a = a.crop_im
@@ -489,6 +474,29 @@ def run(project: Project) -> None:
                 image_b=b.image_id,
                 status="rejected",
             )
+            continue
+
+        if result.num_inliers < MIN_INLIERS:
+            status = "insufficient_inliers"
+        elif not is_valid_homography(result.matrix, image_b.shape[:2]):
+            status = "invalid_homography"
+        else:
+            status = "ok"
+
+        if status != "ok":
+            save_matches(
+                OUTPUT,
+                method="sift_ransac",
+                subject_a=subject_a.subject_id,
+                image_a=a.image_id,
+                subject_b=subject_b.subject_id,
+                image_b=b.image_id,
+                status=status,
+                matches=result.num_matches,
+                global_inliers=result.num_inliers,
+                median_error=result.median_error if result.num_inliers else None,
+            )
+
             continue
 
         if SHOW_PLOTS:
