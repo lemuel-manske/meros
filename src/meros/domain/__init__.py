@@ -6,6 +6,7 @@ from .prediction import (
 )
 from .storage import (
     BBox,
+    BBoxPrediction,
     Subject,
     SubjectImage,
     Subjects,
@@ -16,6 +17,7 @@ from .storage import (
 
 __all__ = [
     "BBox",
+    "BBoxPrediction",
     "BinaryMask",
     "Prediction",
     "SeedBox",

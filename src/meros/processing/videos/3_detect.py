@@ -1,10 +1,10 @@
-from dataclasses import dataclass
 import math
 
 import cv2 as cv
 import numpy as np
 from ultralytics.engine.results import Results
 
+from meros.domain.storage import BBoxPrediction
 from meros.models.yolo import YOLO
 from meros.project import Project
 from meros.utils import configure_torch
@@ -19,12 +19,6 @@ MIN_SHARPNESS = 30.0
 SHARPNESS_SIZE = 256
 WINDOW_SECONDS = 2
 PROGRESS_INTERVAL = 100
-
-
-@dataclass
-class FrameDetection:
-    bbox: list[int]
-    confidence: float
 
 
 def measure_sharpness(crop: np.ndarray) -> float:
@@ -47,11 +41,10 @@ def run(project: Project) -> None:
     configure_torch()
 
     video = project.videos.get(VIDEO_ID)
+    assert video.frames
     model = YOLO(project.mero_detector)
 
     assert model.names == {0: "mero"}
-
-    detections = {}
 
     results = model.predict(
         source=video.path,
@@ -65,6 +58,8 @@ def run(project: Project) -> None:
         verbose=False,
     )
 
+    last_index = -1
+
     for index, result in enumerate(results):
         assert isinstance(result, Results) and result.boxes is not None
 
@@ -73,7 +68,7 @@ def run(project: Project) -> None:
 
         for x1, y1, x2, y2, confidence, _ in result.boxes.cpu().data.tolist():
             items.append(
-                FrameDetection(
+                BBoxPrediction(
                     bbox=[
                         max(0, math.floor(x1)),
                         max(0, math.floor(y1)),
@@ -84,12 +79,17 @@ def run(project: Project) -> None:
                 )
             )
 
-        detections[index] = items
+        if not video.frames[index].selected:
+            video.frames[index].bboxes = items
 
         if (index + 1) % PROGRESS_INTERVAL == 0:
             print(f"{video._id}: {index + 1}/{len(video.frames)} frames", flush=True)
 
-    assert len(detections) == len(video.frames), "Video was not fully decoded"
+        last_index = index
+
+    assert last_index + 1 == len(video.frames), "Video was not fully decoded"
+
+    project.videos.write(video)
 
 
 if __name__ == "__main__":

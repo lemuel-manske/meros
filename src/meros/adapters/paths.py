@@ -9,8 +9,7 @@ METADATA_ROOT = Path("data/metadata")
 METADATA_SUBJECTS_ROOT = METADATA_ROOT / "subjects"
 VIDEOS_METADATA_ROOT = METADATA_ROOT / "videos"
 
-VIDEO_DETECTIONS_ROOT = VIDEOS_METADATA_ROOT / "detections"
-VIDEO_PREDICTIONS_ROOT = VIDEOS_METADATA_ROOT / "predictions"
+VIDEO_FRAMES_ROOT = VIDEOS_METADATA_ROOT / "frames"
 
 
 MEDIA_ROOT = Path("data/media")
@@ -47,11 +46,8 @@ class MediaPaths:
 
 
 class MetadataPaths:
-    def video_predictions(self, video_id: str) -> Path:
-        return VIDEO_PREDICTIONS_ROOT / f"{video_id}.json"
-
-    def video_detections(self, video_id: str) -> Path:
-        return VIDEO_DETECTIONS_ROOT / f"{video_id}.json"
+    def video_frames(self, video_id: str) -> Path:
+        return VIDEO_FRAMES_ROOT / f"{video_id}.json"
 
     def video_annotations(self) -> Path:
         return VIDEOS_METADATA_ROOT / "annotations.csv"

@@ -63,7 +63,7 @@ def run(project: Project) -> None:
 
                 assert image is not None, f"{name}: image not found"
 
-                image._load_crop_im = lambda: crop
+                image.crop_override = crop
 
                 project.subjects.write(subject)
 

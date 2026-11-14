@@ -396,7 +396,7 @@ def run(project: Project) -> None:
     configure_torch()
 
     for subject_a, subject_b, a, b in pairs(
-        project, a_filter="rogerio", b_filter="rogerio", bin_filter=False
+        project, a_filter="rogerio", b_filter="rogerio", bin_filter=True
     ):
         image_a = a.crop_im
         image_b = b.crop_im

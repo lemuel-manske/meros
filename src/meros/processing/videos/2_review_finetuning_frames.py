@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import RectangleSelector
 import numpy as np
 
-from meros.domain.storage import BBox
+from meros.domain.storage import BBox, BBoxPrediction
 from meros.project import Project
 
 VIDEO_IDS = set()
@@ -118,24 +118,30 @@ def select_bboxes(image: np.ndarray, initial: list[BBox]) -> tuple[list[BBox], b
 
 def run(project: Project) -> None:
     for video in project.videos.get_all():
-        if video._id in VIDEO_IDS:
+        if VIDEO_IDS and video._id not in VIDEO_IDS:
             continue
 
-        frames = [frame for frame in video.frames if (not ONLY_PENDING or not frame.reviewed)]
+        frames = [
+            frame
+            for frame in video.frames
+            if frame.selected and (not ONLY_PENDING or not frame.reviewed)
+        ]
 
         print(f"{len(frames)} frames to review")
 
         for frame in frames:
-            initial = frame.bboxes
+            initial = [box.bbox for box in frame.bboxes]
 
             selected = select_bboxes(frame.im, initial)
 
             if selected is None:
-                break
+                return
 
             bboxes, excluded = selected
 
-            video.frames[frame._id].bboxes = bboxes
+            frame.bboxes = [BBoxPrediction(bbox=bbox) for bbox in bboxes]
+            frame.reviewed = True
+            frame.excluded = excluded
 
             project.videos.write(video)
 

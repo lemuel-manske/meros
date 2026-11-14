@@ -12,8 +12,8 @@ MODEL = Path("external/yolo/fishial-detector.pt")
 
 OUTPUT_ROOT = Path("data/ml/detection")
 
-TRAIN_RECORDINGS = {"0001", "0002", "0349"}
-VAL_RECORDINGS = {"0350", "0351", "0352"}
+TRAIN_RECORDINGS = {"GX10001", "GX10002", "GX10349"}
+VAL_RECORDINGS = {"GX10350", "GX10351", "GX10352"}
 
 IMAGE_SIZE = 640
 DEVICE = 0
@@ -34,6 +34,9 @@ def prepare_dataset(
 
     for video in project.videos.get_all():
         for frame in video.frames:
+            if not frame.selected:
+                continue
+
             if not frame.reviewed:
                 pending += 1
                 continue
@@ -41,7 +44,13 @@ def prepare_dataset(
             if frame.excluded:
                 continue
 
-            split = "train"
+            if video._id in TRAIN_RECORDINGS:
+                split = "train"
+            elif video._id in VAL_RECORDINGS:
+                split = "val"
+            else:
+                continue
+
             splits[split].append((video._id, frame))
 
     print(f"Ignoring {pending} unreviewed frames", flush=True)
@@ -49,7 +58,7 @@ def prepare_dataset(
     validation = []
 
     for split, frames in splits.items():
-        positives = sum(bool(frame.annotation.bboxes) for frame in frames)
+        positives = sum(bool(frame.bboxes) for _, frame in frames)
 
         assert positives > 0, f"No positive frames in {split}"
 
@@ -64,9 +73,6 @@ def prepare_dataset(
         labels.mkdir(parents=True)
 
         for video_id, frame in frames:
-            annotation = frame.annotation
-            assert annotation is not None
-
             image = frame.im
             height, width = image.shape[:2]
             name = f"{video_id}_{frame._id:08d}"
@@ -78,7 +84,8 @@ def prepare_dataset(
 
             lines = []
 
-            for x1, y1, x2, y2 in annotation.bboxes:
+            for bbox in frame.bboxes:
+                x1, y1, x2, y2 = bbox.bbox
                 assert 0 <= x1 < x2 <= width and 0 <= y1 < y2 <= height
 
                 values = (
@@ -139,7 +146,10 @@ def evaluate(
         counter.process_batch(
             {"bboxes": boxes.xyxy, "cls": boxes.cls, "conf": boxes.conf},
             {
-                "bboxes": torch.tensor(frame.bboxes, dtype=torch.float32).reshape(-1, 4),
+                "bboxes": torch.tensor(
+                    [bbox.bbox for bbox in frame.bboxes],
+                    dtype=torch.float32,
+                ).reshape(-1, 4),
                 "cls": torch.zeros(len(frame.bboxes)),
             },
             conf=CONFIDENCE,
@@ -176,7 +186,7 @@ def output_dir() -> Path:
 def run(project: Project) -> None:
     from ultralytics.models.yolo.detect import DetectionTrainer
 
-    from src.meros.models.yolo import YOLO
+    from meros.models.yolo import YOLO
 
     configure_torch()
 

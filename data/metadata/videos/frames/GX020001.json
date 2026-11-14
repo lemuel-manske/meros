@@ -1,0 +1,665 @@
+{
+  "0": {
+    "bboxes": [
+      {
+        "bbox": [
+          2660,
+          842,
+          3840,
+          1448
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "2947": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "5895": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "8843": {
+    "bboxes": [
+      {
+        "bbox": [
+          1574,
+          655,
+          2733,
+          1126
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "11791": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "14739": {
+    "bboxes": [
+      {
+        "bbox": [
+          1677,
+          983,
+          3163,
+          1603
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "17687": {
+    "bboxes": [
+      {
+        "bbox": [
+          0,
+          0,
+          2848,
+          1750
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "20634": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "24319": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "27267": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "30215": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "33163": {
+    "bboxes": [
+      {
+        "bbox": [
+          0,
+          623,
+          2397,
+          1396
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "36111": {
+    "bboxes": [
+      {
+        "bbox": [
+          1963,
+          485,
+          2748,
+          1261
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "39058": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "42006": {
+    "bboxes": [
+      {
+        "bbox": [
+          2196,
+          407,
+          3690,
+          1101
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "44954": {
+    "bboxes": [
+      {
+        "bbox": [
+          55,
+          84,
+          2417,
+          942
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "48639": {
+    "bboxes": [
+      {
+        "bbox": [
+          570,
+          190,
+          2522,
+          845
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "51587": {
+    "bboxes": [
+      {
+        "bbox": [
+          2379,
+          289,
+          3840,
+          1056
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "54535": {
+    "bboxes": [
+      {
+        "bbox": [
+          869,
+          211,
+          2151,
+          808
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "57482": {
+    "bboxes": [
+      {
+        "bbox": [
+          2183,
+          204,
+          3840,
+          1138
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "60430": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "63378": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "66326": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "69274": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "72959": {
+    "bboxes": [
+      {
+        "bbox": [
+          190,
+          40,
+          1399,
+          468
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "36847": {
+    "bboxes": [
+      {
+        "bbox": [
+          53,
+          0,
+          3840,
+          1594
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "47902": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "22108": {
+    "bboxes": [
+      {
+        "bbox": [
+          1437,
+          0,
+          3840,
+          1495
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "33900": {
+    "bboxes": [
+      {
+        "bbox": [
+          0,
+          181,
+          2104,
+          1733
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "34637": {
+    "bboxes": [
+      {
+        "bbox": [
+          0,
+          550,
+          2839,
+          1598
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "58219": {
+    "bboxes": [
+      {
+        "bbox": [
+          1363,
+          105,
+          3840,
+          1404
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "21371": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "46428": {
+    "bboxes": [
+      {
+        "bbox": [
+          2436,
+          0,
+          3839,
+          1749
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "39795": {
+    "bboxes": [
+      {
+        "bbox": [
+          8,
+          61,
+          2165,
+          1163
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          2649,
+          757,
+          3839,
+          1530
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          1931,
+          838,
+          2574,
+          1148
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "72222": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "67800": {
+    "bboxes": [
+      {
+        "bbox": [
+          203,
+          0,
+          2423,
+          950
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          2463,
+          107,
+          3840,
+          1573
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "58956": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "71485": {
+    "bboxes": [
+      {
+        "bbox": [
+          3254,
+          1542,
+          3825,
+          1849
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          3588,
+          962,
+          3839,
+          1155
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          0,
+          0,
+          3289,
+          1079
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          962,
+          0,
+          3242,
+          1058
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "64852": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "70748": {
+    "bboxes": [
+      {
+        "bbox": [
+          1855,
+          368,
+          3840,
+          1132
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "67063": {
+    "bboxes": [
+      {
+        "bbox": [
+          869,
+          0,
+          3032,
+          936
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "45691": {
+    "bboxes": [
+      {
+        "bbox": [
+          1773,
+          280,
+          3840,
+          1182
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "31689": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "19897": {
+    "bboxes": [
+      {
+        "bbox": [
+          1120,
+          541,
+          3386,
+          1416
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "30952": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "56008": {
+    "bboxes": [
+      {
+        "bbox": [
+          0,
+          0,
+          1261,
+          1179
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "13265": {
+    "bboxes": [
+      {
+        "bbox": [
+          434,
+          468,
+          1804,
+          1375
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          2079,
+          597,
+          3839,
+          1289
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "50850": {
+    "bboxes": [
+      {
+        "bbox": [
+          2408,
+          512,
+          3840,
+          1012
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "44217": {
+    "bboxes": [
+      {
+        "bbox": [
+          852,
+          351,
+          2472,
+          1072
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "43480": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  }
+}

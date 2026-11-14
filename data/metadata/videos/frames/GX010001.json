@@ -1,0 +1,756 @@
+{
+  "0": {
+    "bboxes": [
+      {
+        "bbox": [
+          431,
+          1119,
+          1170,
+          1541
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          823,
+          992,
+          2132,
+          1720
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "2850": {
+    "bboxes": [
+      {
+        "bbox": [
+          11,
+          453,
+          3840,
+          2160
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "5700": {
+    "bboxes": [
+      {
+        "bbox": [
+          2230,
+          702,
+          3064,
+          1472
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          3272,
+          439,
+          3840,
+          1592
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "8550": {
+    "bboxes": [
+      {
+        "bbox": [
+          1726,
+          681,
+          2979,
+          1255
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          1615,
+          1144,
+          3840,
+          2160
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "11401": {
+    "bboxes": [
+      {
+        "bbox": [
+          1027,
+          1539,
+          3020,
+          2160
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "14251": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "17101": {
+    "bboxes": [
+      {
+        "bbox": [
+          763,
+          1156,
+          3840,
+          2160
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "19951": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "22802": {
+    "bboxes": [
+      {
+        "bbox": [
+          0,
+          671,
+          1664,
+          1746
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "25652": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "28502": {
+    "bboxes": [
+      {
+        "bbox": [
+          0,
+          80,
+          3059,
+          2160
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "31352": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "34203": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "37053": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "39903": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "42754": {
+    "bboxes": [
+      {
+        "bbox": [
+          1805,
+          1677,
+          3125,
+          2160
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "45604": {
+    "bboxes": [
+      {
+        "bbox": [
+          294,
+          1599,
+          2196,
+          2160
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "48454": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "51304": {
+    "bboxes": [
+      {
+        "bbox": [
+          1404,
+          1472,
+          1640,
+          1579
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          1550,
+          1243,
+          1782,
+          1344
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          1581,
+          1111,
+          1806,
+          1188
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          3419,
+          1770,
+          3840,
+          1952
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          471,
+          502,
+          752,
+          692
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          2977,
+          2027,
+          3545,
+          2160
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          2409,
+          1554,
+          2824,
+          1706
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          996,
+          630,
+          1040,
+          737
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          827,
+          1485,
+          1068,
+          1556
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          1129,
+          1281,
+          1376,
+          1351
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          3702,
+          90,
+          3840,
+          269
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          142,
+          1791,
+          295,
+          1870
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          1972,
+          1762,
+          2167,
+          1865
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "54155": {
+    "bboxes": [
+      {
+        "bbox": [
+          0,
+          1155,
+          3290,
+          2160
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "57005": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "59855": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "62705": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "65556": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "69119": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "27790": {
+    "bboxes": [
+      {
+        "bbox": [
+          20,
+          0,
+          3474,
+          2160
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "29215": {
+    "bboxes": [
+      {
+        "bbox": [
+          3,
+          0,
+          3827,
+          2160
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "26364": {
+    "bboxes": [
+      {
+        "bbox": [
+          20,
+          163,
+          3840,
+          2160
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "49879": {
+    "bboxes": [
+      {
+        "bbox": [
+          32,
+          0,
+          3834,
+          2160
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "40616": {
+    "bboxes": [
+      {
+        "bbox": [
+          0,
+          0,
+          2910,
+          2160
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "30640": {
+    "bboxes": [
+      {
+        "bbox": [
+          497,
+          0,
+          3835,
+          1888
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          2596,
+          1120,
+          3840,
+          2160
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "23514": {
+    "bboxes": [
+      {
+        "bbox": [
+          709,
+          0,
+          3836,
+          1905
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "7838": {
+    "bboxes": [
+      {
+        "bbox": [
+          1043,
+          0,
+          3834,
+          2160
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "9975": {
+    "bboxes": [
+      {
+        "bbox": [
+          0,
+          994,
+          3676,
+          2160
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "24939": {
+    "bboxes": [
+      {
+        "bbox": [
+          3,
+          123,
+          2503,
+          2160
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "7125": {
+    "bboxes": [
+      {
+        "bbox": [
+          1588,
+          461,
+          3836,
+          2037
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "39191": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "19239": {
+    "bboxes": [
+      {
+        "bbox": [
+          85,
+          1454,
+          3831,
+          2160
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "2137": {
+    "bboxes": [
+      {
+        "bbox": [
+          1832,
+          980,
+          2385,
+          1548
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          0,
+          960,
+          1366,
+          1545
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          1126,
+          1173,
+          1794,
+          1788
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "12113": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "42041": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "47029": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "20664": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "17814": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "64843": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "53442": {
+    "bboxes": [
+      {
+        "bbox": [
+          2467,
+          1314,
+          3840,
+          2160
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "44179": {
+    "bboxes": [],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "4987": {
+    "bboxes": [
+      {
+        "bbox": [
+          1867,
+          845,
+          2906,
+          1524
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          1284,
+          804,
+          1835,
+          1536
+        ],
+        "confidence": null
+      },
+      {
+        "bbox": [
+          386,
+          1109,
+          1036,
+          1577
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  },
+  "60568": {
+    "bboxes": [
+      {
+        "bbox": [
+          1850,
+          1542,
+          3293,
+          2106
+        ],
+        "confidence": null
+      }
+    ],
+    "selected": true,
+    "reviewed": true,
+    "excluded": false
+  }
+}

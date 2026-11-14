@@ -90,7 +90,7 @@ def pairs(
         (subject, image)
         for subject in project.subjects.get_all()
         for image in subject.images
-        if (not bin_filter or image.binary_im is None)
+        if (not bin_filter or image.binary_im is not None)
     ]
 
     for (subject_a, a), (subject_b, b) in combinations(images, 2):

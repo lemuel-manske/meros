@@ -64,17 +64,42 @@ class SubjectImage(DomainObject):
     bbox: BBox = field(default_factory=list)
 
     spots: list[SubjectSpot] = field(default_factory=list)
+    source_video_id: str | None = None
+    im_override: np.ndarray | None = field(default=None, repr=False, compare=False)
+    crop_override: np.ndarray | None = field(default=None, repr=False, compare=False)
+    binary_override: np.ndarray | None = field(default=None, repr=False, compare=False)
+
+    @property
+    def im(self) -> np.ndarray:
+        if self.im_override is not None:
+            return self.im_override
+
+        return self._read_im
 
     @cached_property
-    def im(self) -> np.ndarray:
+    def _read_im(self) -> np.ndarray:
         return self._load_im()
 
-    @cached_property
+    @property
     def binary_im(self) -> np.ndarray | None:
-        return self._load_binary_im()
+        if self.binary_override is not None:
+            return self.binary_override
+
+        return self._read_binary_im
 
     @cached_property
+    def _read_binary_im(self) -> np.ndarray | None:
+        return self._load_binary_im()
+
+    @property
     def crop_im(self) -> np.ndarray:
+        if self.crop_override is not None:
+            return self.crop_override
+
+        return self._read_crop_im
+
+    @cached_property
+    def _read_crop_im(self) -> np.ndarray:
         return self._load_crop_im()
 
 
@@ -109,6 +134,12 @@ class Subjects(Store, Protocol):
 
 
 @dataclass
+class BBoxPrediction(DomainObject):
+    bbox: BBox
+    confidence: float | None = None
+
+
+@dataclass
 class VideoFrame(DomainObject):
     """
     A video frame is a single frame of a video, along with its associated metadata.
@@ -122,7 +153,8 @@ class VideoFrame(DomainObject):
 
     capture_date: date
 
-    bboxes: list[BBox] = field(default_factory=list)
+    bboxes: list[BBoxPrediction] = field(default_factory=list)
+    selected: bool = False
     reviewed: bool = False
     excluded: bool = False
 

@@ -97,7 +97,7 @@ def run(project: Project) -> None:
                     f"Image {frame_id} not found for subject {subject_id}"
                 )
 
-                subject_image._load_binary_im = lambda: arr
+                subject_image.binary_override = arr
 
                 project.subjects.write(subject)
 

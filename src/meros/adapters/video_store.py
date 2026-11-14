@@ -1,4 +1,5 @@
 import csv
+from dataclasses import asdict
 from datetime import date
 from functools import partial
 from pathlib import Path
@@ -7,12 +8,8 @@ import cv2 as cv
 import numpy as np
 
 from meros.adapters.paths import media_paths, metadata_paths
-from meros.domain.storage import (
-    Video,
-    VideoFrame,
-    Videos,
-)
-from meros.utils import is_video_file
+from meros.domain.storage import BBoxPrediction, Video, VideoFrame, Videos
+from meros.utils import is_video_file, read_json, write_json
 
 
 def read_videos() -> list[Path]:
@@ -52,12 +49,21 @@ def read_video_frames(path: Path) -> list[VideoFrame]:
     finally:
         capture.release()
 
+    metadata = read_json(metadata_paths.video_frames(path.stem), default={})
+    capture_date = read_video_capture_date(path.stem)
+
     return [
         VideoFrame(
-            capture_date=read_video_capture_date(path.stem),
-            path=str(path),
             _id=index,
+            path=str(path),
+            capture_date=capture_date,
             _load_im=partial(read_video_frame, path, index),
+            bboxes=[
+                BBoxPrediction(**item) for item in metadata.get(str(index), {}).get("bboxes", [])
+            ],
+            selected=metadata.get(str(index), {}).get("selected", False),
+            reviewed=metadata.get(str(index), {}).get("reviewed", False),
+            excluded=metadata.get(str(index), {}).get("excluded", False),
         )
         for index in range(frame_count)
     ]
@@ -90,4 +96,19 @@ class VideosAdapter(Videos):
 
         raise ValueError(f"Video {video_id} not found")
 
-    def write(self, video: Video) -> None: ...
+    def write(self, video: Video) -> None:
+        path = metadata_paths.video_frames(video._id)
+
+        frames = {
+            str(frame._id): {
+                "bboxes": [asdict(box) for box in frame.bboxes],
+                "selected": frame.selected,
+                "reviewed": frame.reviewed,
+                "excluded": frame.excluded,
+            }
+            for frame in video.frames
+            if frame.bboxes or frame.selected or frame.reviewed or frame.excluded
+        }
+
+        if frames != read_json(path, default={}):
+            write_json(path, frames)
