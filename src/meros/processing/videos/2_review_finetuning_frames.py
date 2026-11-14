@@ -122,7 +122,7 @@ def run(project: Project) -> None:
     frames = [
         frame
         for video in project.videos.get_all()
-        if not VIDEO_IDS or video.video_id in VIDEO_IDS
+        if not VIDEO_IDS or video._id in VIDEO_IDS
         for frame in video.frames
         if frame.annotations is not None and (not ONLY_PENDING or not frame.annotations.reviewed)
     ]

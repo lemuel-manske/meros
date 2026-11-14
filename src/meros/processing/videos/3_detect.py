@@ -81,7 +81,7 @@ def run(project: Project) -> None:
         detections[index] = items
 
         if (index + 1) % PROGRESS_INTERVAL == 0:
-            print(f"{video.video_id}: {index + 1}/{len(video.frames)} frames", flush=True)
+            print(f"{video._id}: {index + 1}/{len(video.frames)} frames", flush=True)
 
     assert len(detections) == len(video.frames), "Video was not fully decoded"
 

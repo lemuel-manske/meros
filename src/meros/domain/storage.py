@@ -178,7 +178,8 @@ class Video(DomainObject):
     A video is a single video, along with its associated frames.
     """
 
-    video_id: str
+    _id: str
+
     path: str
 
     """

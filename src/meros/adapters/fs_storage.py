@@ -104,7 +104,7 @@ def read_videos() -> list[Path]:
 
 def read_video(path: Path) -> Video:
     return Video(
-        video_id=path.stem,
+        _id=path.stem,
         path=str(path),
         selected_frames=read_selected_frames(path),
         frames=read_video_frames(path),
@@ -377,7 +377,7 @@ class VideosAdapter(Videos):
     def write_video_detections(
         self, video: Video, detections: dict[int, list[FrameDetection]]
     ) -> None:
-        path = metadata_paths.video_predictions(video.video_id)
+        path = metadata_paths.video_predictions(video._id)
 
         write_json(
             path,
@@ -387,7 +387,7 @@ class VideosAdapter(Videos):
     def write_frame_neighbors(
         self, video: Video, pivot: VideoFrame, frames: list[VideoFrame]
     ) -> None:
-        directory = media_paths.frame_neighbors(video.video_id, pivot.frame_index)
+        directory = media_paths.frame_neighbors(video._id, pivot.frame_index)
         pending = {
             frame.frame_index: directory / f"{frame.frame_index:08d}.jpg"
             for frame in frames

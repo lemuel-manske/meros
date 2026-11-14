@@ -50,7 +50,7 @@ def prepare_video(project: Project, model, video: Video, count: int) -> None:
     existing = sum(frame.annotations is not None for frame in video.frames)
 
     if existing >= count:
-        print(f"{video.video_id}: {existing} frames already prepared", flush=True)
+        print(f"{video._id}: {existing} frames already prepared", flush=True)
 
         return
 
@@ -64,7 +64,7 @@ def prepare_video(project: Project, model, video: Video, count: int) -> None:
 
     ranked: list[tuple[float, VideoFrame, FrameAnnotation]] = []
 
-    recording_id = video.video_id[4:] if video.video_id.startswith("GX") else video.video_id
+    recording_id = video._id[4:] if video._id.startswith("GX") else video._id
 
     for step, index in enumerate(indexes):
         frame = video.frames[int(index)]
@@ -111,7 +111,7 @@ def prepare_video(project: Project, model, video: Video, count: int) -> None:
             ranked.append((priority, frame, annotation))
 
         if step % 10 == 0:
-            print(f"{video.video_id}: scanned {step + 1}/{pool_size}", flush=True)
+            print(f"{video._id}: scanned {step + 1}/{pool_size}", flush=True)
 
     for _, frame, annotation in sorted(ranked, key=lambda item: item[0], reverse=True):
         if existing >= count:
@@ -120,7 +120,7 @@ def prepare_video(project: Project, model, video: Video, count: int) -> None:
         project.videos.write_frame_annotation(frame, annotation)
         existing += 1
 
-    print(f"{video.video_id}: prepared {existing} frames for review", flush=True)
+    print(f"{video._id}: prepared {existing} frames for review", flush=True)
 
 
 def run(project: Project) -> None:

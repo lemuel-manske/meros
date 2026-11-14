@@ -19,7 +19,7 @@ def run(project: Project) -> None:
             project.videos.write_frame_neighbors(video, pivot, frames)
 
             print(
-                f"{video.video_id}/{pivot.frame_index}: {len(frames)} frames including pivot",
+                f"{video._id}/{pivot.frame_index}: {len(frames)} frames including pivot",
                 flush=True,
             )
 
