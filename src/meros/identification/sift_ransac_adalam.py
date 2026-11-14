@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from itertools import combinations
 from pathlib import Path
 
 import cv2 as cv
@@ -9,10 +8,11 @@ from kornia.feature.adalam.utils import dist_matrix
 import numpy as np
 import torch
 
+from meros.identification.common import save_matches, all_pairs
 from meros.project import Project
-from meros.utils import write_image
+from meros.utils import configure_torch
 
-OUTPUT = Path("data/media/sandbox/sift")
+OUTPUT = Path("data/media/sandbox/sift_ransac_adalam/results.csv")
 
 MAX_SIZE = 1600
 CLAHE_CLIP_LIMIT = 2.0
@@ -222,109 +222,46 @@ def compare(first: Features, second: Features) -> ComparisonResult:
     )
 
 
-def save_pair(
-    first: Features,
-    second: Features,
-    result: ComparisonResult,
-) -> None:
-    thumbnails = []
+def save_pair(first: Features, second: Features, result: ComparisonResult) -> None:
+    subject_a, image_a = first.name.split("/")
+    subject_b, image_b = second.name.split("/")
 
-    for photo in (first, second):
-        scale = min(1.0, 640 / max(photo.gray.shape))
-        thumbnails.append(
-            cv.resize(photo.gray, None, fx=scale, fy=scale, interpolation=cv.INTER_AREA)
-        )
-
-    left, right = thumbnails
-
-    canvas = np.zeros(
-        (max(left.shape[0], right.shape[0]) + 90, left.shape[1] + right.shape[1], 3), dtype=np.uint8
+    global_inliers = int(result.global_inliers.sum())
+    local_inliers = int(result.local_inliers.sum())
+    both_inliers = int(
+        (result.global_inliers & result.local_inliers).sum()
     )
 
-    canvas[90 : 90 + left.shape[0], : left.shape[1]] = cv.cvtColor(left, cv.COLOR_GRAY2BGR)
-    canvas[90 : 90 + right.shape[0], left.shape[1] :] = cv.cvtColor(right, cv.COLOR_GRAY2BGR)
-
-    # Highlight local-only correspondences last so the newly retained matches remain visible.
-    categories = [
-        (~result.global_inliers & ~result.local_inliers, (65, 65, 150), "Neither"),
-        (result.global_inliers & ~result.local_inliers, (0, 165, 255), "Global only"),
-        (result.global_inliers & result.local_inliers, (50, 220, 50), "Both"),
-        (~result.global_inliers & result.local_inliers, (255, 230, 0), "Local only"),
-    ]
-
-    for selection, color, _ in categories:
-        for match, selected in zip(result.matches, selection, strict=True):
-            if not selected:
-                continue
-
-            x, y = first.keypoints[match.queryIdx].pt
-            u, v = second.keypoints[match.trainIdx].pt
-            source = (
-                round(x * left.shape[1] / first.gray.shape[1]),
-                round(y * left.shape[0] / first.gray.shape[0]) + 90,
-            )
-            target = (
-                round(u * right.shape[1] / second.gray.shape[1]) + left.shape[1],
-                round(v * right.shape[0] / second.gray.shape[0]) + 90,
-            )
-            cv.line(canvas, source, target, color, 1, cv.LINE_AA)
-            cv.circle(canvas, source, 2, color, -1, cv.LINE_AA)
-            cv.circle(canvas, target, 2, color, -1, cv.LINE_AA)
-
-    count = int(result.global_inliers.sum())
-    title = (
-        f"{first.name} ({len(first.keypoints)} kp) vs {second.name} ({len(second.keypoints)} kp)"
-    )
-    detail = (
-        f"{len(result.matches)} candidates | Global homography: {count} | "
-        f"AdaLAM local affine: {int(result.local_inliers.sum())}"
-    )
-    cv.putText(
-        canvas, title, (10, 24), cv.FONT_HERSHEY_SIMPLEX, 0.6, (240, 240, 240), 1, cv.LINE_AA
-    )
-    cv.putText(
-        canvas, detail, (10, 50), cv.FONT_HERSHEY_SIMPLEX, 0.55, (240, 240, 240), 1, cv.LINE_AA
+    save_matches(
+        OUTPUT,
+        method="sift",
+        subject_a=subject_a,
+        image_a=image_a,
+        subject_b=subject_b,
+        image_b=image_b,
+        status="ok",
+        matches=len(result.matches),
+        global_inliers=global_inliers,
+        local_inliers=local_inliers,
+        both_inliers=both_inliers,
     )
 
-    x = 10
 
-    for selection, color, label in categories:
-        text = f"{label}: {int(selection.sum())}"
-        cv.putText(canvas, text, (x, 76), cv.FONT_HERSHEY_SIMPLEX, 0.5, color, 1, cv.LINE_AA)
-        x += cv.getTextSize(text, cv.FONT_HERSHEY_SIMPLEX, 0.5, 1)[0][0] + 25
-    filename = f"{first.name.replace('/', '_')}_vs_{second.name.replace('/', '_')}.png"
-    write_image(OUTPUT / filename, canvas)
+def run(project: Project) -> None:
+    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
 
+    configure_torch()
 
-def run() -> None:
-    OUTPUT.mkdir(parents=True, exist_ok=True)
-
-    torch.set_num_threads(2)
-    cv.setNumThreads(2)
-
-    project = Project.open()
-
-    photos = []
-
-    for subject in project.subjects.get_all():
-        for im in subject.images:
-            name = f"{im.subject_id}/{im.image_id}"
-
-            photos.append(prepare_photo(name, im.crop_im))
-
-    for a, b in combinations(range(len(photos)), 2):
-        first, second = photos[a], photos[b]
+    for subject_a, subject_b, a, b in all_pairs(project):
+        first = prepare_photo(f"{subject_a.subject_id}/{a.subject_id}", a.crop_im)
+        second = prepare_photo(f"{subject_b.subject_id}/{b.subject_id}", b.crop_im)
 
         result = compare(first, second)
 
         save_pair(first, second, result)
 
-        print(
-            f"{first.name} vs {second.name}: global {int(result.global_inliers.sum())}, "
-            f"local {int(result.local_inliers.sum())} / {len(result.matches)} candidates",
-            flush=True,
-        )
+        print(f"\nAligning {subject_a.subject_id}/{a.image_id} with {subject_b.subject_id}/{b.image_id}")
 
 
 if __name__ == "__main__":
-    run()
+    run(Project.open())

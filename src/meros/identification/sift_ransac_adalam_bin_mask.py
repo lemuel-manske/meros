@@ -1,15 +1,21 @@
 from dataclasses import dataclass
+from pathlib import Path
 
 import cv2 as cv
 import matplotlib.pyplot as plt
 import numpy as np
 
+from meros.identification.common import save_matches, all_pairs
 from meros.project import Project
 
-HOMOGRAPHY = True
-RATIO_THRESHOLD = 0.80
-RANSAC_THRESHOLD = 4.0
+OUTPUT = Path("data/media/sandbox/sift_ransac_adalam_bin_mask/results.csv")
+
 MIN_INLIERS = 20
+MIN_MATCHES = 4
+RANSAC_THRESHOLD = 4.0
+RATIO_THRESHOLD = 0.80
+
+SHOW_PLOTS = False
 
 
 @dataclass
@@ -158,8 +164,6 @@ def estimate_alignment(
     image_b: np.ndarray,
     silhouette_a: np.ndarray,
     silhouette_b: np.ndarray,
-    *,
-    homography: bool = False,
 ) -> AlignmentResult | None:
     sift = cv.SIFT.create(nfeatures=4000)
 
@@ -189,8 +193,8 @@ def estimate_alignment(
         if m.distance < RATIO_THRESHOLD * n.distance
     ]
 
-    if len(matches) < (4 if homography else 3):
-        print(f"Not enough matches found: {len(matches)} (need at least {4 if homography else 3})")
+    if len(matches) < MIN_MATCHES:
+        print(f"Not enough matches found: {len(matches)} (need at least {MIN_MATCHES})")
 
         return None
 
@@ -198,26 +202,21 @@ def estimate_alignment(
 
     dst = np.array([kp_a[m.trainIdx].pt for m in matches], dtype=np.float32).reshape(-1, 1, 2)
 
-    if homography:
-        matrix, inliers = cv.findHomography(
-            src,
-            dst,
-            cv.RANSAC,
-            RANSAC_THRESHOLD,
-            maxIters=5000,
-            confidence=0.995,
-        )
-    else:
-        matrix, inliers = cv.estimateAffinePartial2D(
-            src,
-            dst,
-            method=cv.RANSAC,
-            ransacReprojThreshold=RANSAC_THRESHOLD,
-            maxIters=5000,
-            confidence=0.995,
-        )
+    matrix, inliers = cv.findHomography(
+        src,
+        dst,
+        cv.RANSAC,
+        RANSAC_THRESHOLD,
+        maxIters=5000,
+        confidence=0.995,
+    )
 
-    if homography and not is_valid_homography(
+    if matrix is None or inliers is None:
+        print("Failed to estimate transformation")
+
+        return None
+
+    if not is_valid_homography(
         matrix,
         image_b.shape[:2],
     ):
@@ -225,9 +224,6 @@ def estimate_alignment(
 
         return None
 
-    if matrix is None or inliers is None:
-        print("Failed to estimate transformation")
-        return None
 
     inliers = inliers.ravel().astype(bool)
 
@@ -238,10 +234,7 @@ def estimate_alignment(
 
         return None
 
-    if homography:
-        projected = cv.perspectiveTransform(src, matrix)
-    else:
-        projected = cv.transform(src, matrix)
+    projected = cv.perspectiveTransform(src, matrix)
 
     errors = np.linalg.norm(
         projected.reshape(-1, 2) - dst.reshape(-1, 2),
@@ -333,7 +326,7 @@ def visualize_alignment(
     silhouette_a: np.ndarray,
     silhouette_b: np.ndarray,
     result: AlignmentResult,
-) -> None:
+) -> tuple[float, float, float, float]:
     height, width = image_a.shape[:2]
     shape = (height, width)
 
@@ -410,103 +403,63 @@ def visualize_alignment(
     overlap_visualization = rgb_a.copy()
     overlap_visualization[~overlap] = (overlap_visualization[~overlap] * 0.2).astype(np.uint8)
 
-    # fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+    if SHOW_PLOTS:
+        fig, axes = plt.subplots(2, 3, figsize=(18, 12))
 
-    # axes[0, 0].imshow(rgb_a)
-    # axes[0, 0].set_title("Image A (reference)")
+        axes[0, 0].imshow(rgb_a)
+        axes[0, 0].set_title("Image A (reference)")
 
-    # axes[0, 1].imshow(rgb_b)
-    # axes[0, 1].set_title("Image B (aligned)")
+        axes[0, 1].imshow(rgb_b)
+        axes[0, 1].set_title("Image B (aligned)")
 
-    # axes[0, 2].imshow(overlay)
-    # axes[0, 2].set_title("RGB overlay (shared region)")
+        axes[0, 2].imshow(overlay)
+        axes[0, 2].set_title("RGB overlay (shared region)")
 
-    # axes[1, 0].imshow(overlap_visualization)
-    # axes[1, 0].set_title("Shared animal region")
+        axes[1, 0].imshow(overlap_visualization)
+        axes[1, 0].set_title("Shared animal region")
 
-    # axes[1, 1].imshow(pattern_overlay)
-    # axes[1, 1].set_title("Patterns: red=A, green=B, yellow=both")
+        axes[1, 1].imshow(pattern_overlay)
+        axes[1, 1].set_title("Patterns: red=A, green=B, yellow=both")
 
-    # axes[1, 2].imshow(pattern_overlay)
-    # axes[1, 2].imshow(
-    #     overlap.astype(np.uint8),
-    #     cmap="gray",
-    #     alpha=0.18,
-    #     vmin=0,
-    #     vmax=1,
-    # )
-    # axes[1, 2].set_title(f"Pattern IoU: {iou:.3f}")
+        axes[1, 2].imshow(pattern_overlay)
+        axes[1, 2].imshow(
+            overlap.astype(np.uint8),
+            cmap="gray",
+            alpha=0.18,
+            vmin=0,
+            vmax=1,
+        )
+        axes[1, 2].set_title(f"Pattern IoU: {iou:.3f}")
 
-    # for ax in axes.flat:
-    #     ax.axis("off")
+        for ax in axes.flat:
+            ax.axis("off")
 
-    # fig.suptitle(
-    #     f"Matches: {result.num_matches} | "
-    #     f"Inliers: {result.num_inliers} | "
-    #     f"Ratio: {result.inlier_ratio:.1%} | "
-    #     f"Median error: {result.median_error:.2f}px",
-    #     fontsize=14,
-    # )
+        fig.suptitle(
+            f"Matches: {result.num_matches} | "
+            f"Inliers: {result.num_inliers} | "
+            f"Ratio: {result.inlier_ratio:.1%} | "
+            f"Median error: {result.median_error:.2f}px",
+            fontsize=14,
+        )
 
-    # plt.tight_layout()
-    # plt.show()
+        plt.tight_layout()
+        plt.show()
 
-    print("\nAlignment metrics")
-    print("-----------------")
-    print(f"Matches:          {result.num_matches}")
-    print(f"Inliers:          {result.num_inliers}")
-    print(f"Inlier ratio:     {result.inlier_ratio:.2%}")
-    print(f"Median error:     {result.median_error:.2f} px")
-    print(f"Coverage of A:    {coverage_a:.2%}")
-    print(f"Coverage of B:    {coverage_b:.2%}")
-    print(f"Pattern IoU:      {iou:.4f}")
-    print(f"Inlier coverage:  {inlier_cov:.2%}")
-    print(f"\nTransformation B -> A:\n{result.matrix}")
-
-
-def diff_individuals(project: Project):
-    from itertools import combinations, product
-
-    subjects = list(project.subjects.get_all())
-
-    for subject_a, subject_b in combinations(subjects, 2):
-        images_a = [
-            img for img in subject_a.images
-            if img.binary_im is not None
-        ]
-
-        images_b = [
-            img for img in subject_b.images
-            if img.binary_im is not None
-        ]
-
-        for a, b in product(images_a, images_b):
-            yield subject_a, subject_b, a, b
-
-
-def same_individual(project: Project):
-    from itertools import combinations
-
-    for subject in project.subjects.get_all():
-        images = [
-            img for img in subject.images
-            if img.binary_im is not None
-        ]
-
-        for a, b in combinations(images, 2):
-            yield subject, a, b
+    return coverage_a, coverage_b, iou, inlier_cov
 
 
 def run(project: Project) -> None:
-    for subject, a, b in same_individual(project):
-        subject_a = subject
-        subject_b = subject
+    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
 
+    for subject_a, subject_b, a, b in all_pairs(project):
         image_a = a.crop_im
         image_b = b.crop_im
 
         mask_a = a.binary_im
         mask_b = b.binary_im
+
+        assert image_a is not None
+        assert image_b is not None
 
         assert mask_a is not None
         assert mask_b is not None
@@ -524,24 +477,49 @@ def run(project: Project) -> None:
             image_b,
             silhouette_a,
             silhouette_b,
-            homography=HOMOGRAPHY,
         )
 
         if result is None:
+            save_matches(
+                OUTPUT,
+                method="sift_ransac",
+                subject_a=subject_a.subject_id,
+                image_a=a.image_id,
+                subject_b=subject_b.subject_id,
+                image_b=b.image_id,
+                status="rejected",
+            )
             continue
 
-        # visualize_matches(image_a, image_b, result)
+        if SHOW_PLOTS:
+            visualize_matches(image_a, image_b, result)
 
-        visualize_alignment(
+        coverage_a, coverage_b, iou, inlier_cov = visualize_alignment(
             image_a,
             image_b,
             pattern_a,
             pattern_b,
             silhouette_a,
             silhouette_b,
-            result,
+            result
         )
 
+        save_matches(
+            OUTPUT,
+            method="sift_ransac",
+            subject_a=subject_a.subject_id,
+            image_a=a.image_id,
+            subject_b=subject_b.subject_id,
+            image_b=b.image_id,
+            status="ok",
+            matches=result.num_matches,
+            global_inliers=result.num_inliers,
+            median_error=result.median_error,
+            coverage_a=coverage_a,
+            coverage_b=coverage_b,
+            pattern_iou=iou,
+            inlier_coverage=inlier_cov,
+        )
 
 if __name__ == "__main__":
     run(Project.open())
