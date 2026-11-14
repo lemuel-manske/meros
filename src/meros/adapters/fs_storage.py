@@ -132,7 +132,6 @@ def read_selected_frames(path: Path) -> list[VideoFrame]:
 
     return [
         VideoFrame(
-            video_id=path.stem,
             capture_date=read_video_capture_date(path.stem),
             path=str(frame_path),
             frame_index=int(frame_path.stem),
@@ -165,7 +164,6 @@ def read_video_frames(path: Path) -> list[VideoFrame]:
 
     return [
         VideoFrame(
-            video_id=path.stem,
             capture_date=read_video_capture_date(path.stem),
             path=str(path),
             frame_index=index,
@@ -366,8 +364,10 @@ class VideosAdapter(Videos):
 
         raise ValueError(f"Video {video_id} not found")
 
-    def write_frame_annotation(self, frame: VideoFrame, annotation: FrameAnnotation) -> None:
-        path = metadata_paths.video_detections(frame.video_id)
+    def write_frame_annotation(
+        self, video_id: str, frame: VideoFrame, annotation: FrameAnnotation
+    ) -> None:
+        path = metadata_paths.video_detections(video_id)
 
         annotations = read_json(path, default={})
         annotations[str(frame.frame_index)] = asdict(annotation)

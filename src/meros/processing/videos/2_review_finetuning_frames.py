@@ -119,36 +119,39 @@ def select_bboxes(image: np.ndarray, initial: list[BBox]) -> tuple[list[BBox], b
 
 
 def run(project: Project) -> None:
-    frames = [
-        frame
-        for video in project.videos.get_all()
-        if not VIDEO_IDS or video._id in VIDEO_IDS
-        for frame in video.frames
-        if frame.annotations is not None and (not ONLY_PENDING or not frame.annotations.reviewed)
-    ]
+    for video in project.videos.get_all():
+        if video._id in VIDEO_IDS:
+            continue
 
-    print(f"{len(frames)} frames to review")
+        frames = [
+            frame
+            for frame in video.frames
+            if frame.annotations is not None
+            and (not ONLY_PENDING or not frame.annotations.reviewed)
+        ]
 
-    for frame in frames:
-        annotation = frame.annotations
+        print(f"{len(frames)} frames to review")
 
-        assert annotation is not None
+        for frame in frames:
+            annotation = frame.annotations
 
-        initial = annotation.bboxes if annotation.reviewed else annotation.suggestions
+            assert annotation is not None
 
-        selected = select_bboxes(frame.im, initial)
+            initial = annotation.bboxes if annotation.reviewed else annotation.suggestions
 
-        if selected is None:
-            break
+            selected = select_bboxes(frame.im, initial)
 
-        boxes, excluded = selected
-        project.videos.write_frame_annotation(
-            frame, replace(annotation, bboxes=boxes, reviewed=True, excluded=excluded)
-        )
+            if selected is None:
+                break
 
-        print(
-            f"Saved {frame.video_id}/{frame.frame_index}: {len(boxes)} meros, excluded={excluded}"
-        )
+            boxes, excluded = selected
+            project.videos.write_frame_annotation(
+                video._id,
+                frame,
+                replace(annotation, bboxes=boxes, reviewed=True, excluded=excluded),
+            )
+
+            print(f"Saved {video._id}/{frame.frame_index}: {len(boxes)} meros, excluded={excluded}")
 
 
 if __name__ == "__main__":

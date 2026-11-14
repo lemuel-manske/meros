@@ -49,7 +49,7 @@ def prepare_dataset(
             assert annotation.recording_id in TRAIN_RECORDINGS | VAL_RECORDINGS
 
             split = "train" if annotation.recording_id in TRAIN_RECORDINGS else "val"
-            splits[split].append(frame)
+            splits[split].append((video._id, frame))
 
     print(f"Ignoring {pending} unreviewed frames", flush=True)
 
@@ -70,13 +70,13 @@ def prepare_dataset(
         images.mkdir(parents=True)
         labels.mkdir(parents=True)
 
-        for frame in frames:
+        for video_id, frame in frames:
             annotation = frame.annotation
             assert annotation is not None
 
             image = frame.im
             height, width = image.shape[:2]
-            name = f"{frame.video_id}_{frame.frame_index:08d}"
+            name = f"{video_id}_{frame.frame_index:08d}"
 
             image_path = images / f"{name}.jpg"
             label_path = labels / f"{name}.txt"

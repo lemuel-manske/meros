@@ -85,12 +85,15 @@ def is_valid_homography(
 ) -> bool:
     height, width = shape
 
-    corners = np.array([
-        [0, 0],
-        [width - 1, 0],
-        [width - 1, height - 1],
-        [0, height - 1],
-    ], dtype=np.float32).reshape(-1, 1, 2)
+    corners = np.array(
+        [
+            [0, 0],
+            [width - 1, 0],
+            [width - 1, height - 1],
+            [0, height - 1],
+        ],
+        dtype=np.float32,
+    ).reshape(-1, 1, 2)
 
     transformed = cv.perspectiveTransform(corners, H)
 
@@ -122,11 +125,10 @@ def inlier_coverage(
     inliers: np.ndarray,
     overlap: np.ndarray,
 ) -> float:
-    points = np.array([
-        keypoints[m.trainIdx].pt
-        for m, valid in zip(matches, inliers, strict=True)
-        if valid
-    ], dtype=np.float32)
+    points = np.array(
+        [keypoints[m.trainIdx].pt for m, valid in zip(matches, inliers, strict=True) if valid],
+        dtype=np.float32,
+    )
 
     if len(points) < 3:
         return 0.0
@@ -146,9 +148,7 @@ def inlier_coverage(
 
     overlap = overlap.astype(bool)
 
-    hull_area = np.count_nonzero(
-        hull_mask.astype(bool) & overlap
-    )
+    hull_area = np.count_nonzero(hull_mask.astype(bool) & overlap)
 
     overlap_area = np.count_nonzero(overlap)
 
@@ -156,6 +156,7 @@ def inlier_coverage(
         return 0.0
 
     return hull_area / overlap_area
+
 
 def estimate_alignment(
     first: Features,
@@ -194,6 +195,7 @@ def estimate_alignment(
         kp_b=first.keypoints,
         errors=errors,
     )
+
 
 def warp(
     image: np.ndarray,
@@ -333,12 +335,7 @@ def visualize_alignment(
         dtype=np.uint8,
     )
 
-    inlier_cov = inlier_coverage(
-        result.kp_a,
-        result.matches,
-        result.inliers,
-        overlap
-    )
+    inlier_cov = inlier_coverage(result.kp_a, result.matches, result.inliers, overlap)
 
     pattern_overlay[binary_a, 0] = 255
     pattern_overlay[binary_b, 1] = 255
@@ -398,7 +395,9 @@ def run(project: Project) -> None:
 
     configure_torch()
 
-    for subject_a, subject_b, a, b in pairs(project, a_filter="rogerio", b_filter="rogerio", bin_filter=False):
+    for subject_a, subject_b, a, b in pairs(
+        project, a_filter="rogerio", b_filter="rogerio", bin_filter=False
+    ):
         image_a = a.crop_im
         image_b = b.crop_im
 

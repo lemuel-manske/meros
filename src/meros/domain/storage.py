@@ -152,7 +152,6 @@ class VideoFrame(DomainObject):
     A video frame is a single frame of a video, along with its associated metadata.
     """
 
-    video_id: str
     frame_index: int
 
     capture_date: date
@@ -199,7 +198,9 @@ class Videos(Store, Protocol):
 
     def get_all(self) -> list[Video]: ...
 
-    def write_frame_annotation(self, frame: VideoFrame, annotation: FrameAnnotation) -> None: ...
+    def write_frame_annotation(
+        self, video_id: str, frame: VideoFrame, annotation: FrameAnnotation
+    ) -> None: ...
 
     def write_video_detections(
         self, video: Video, detections: dict[int, list[FrameDetection]]

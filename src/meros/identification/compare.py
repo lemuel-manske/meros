@@ -1,10 +1,9 @@
-import csv
 from collections import Counter
+import csv
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-
 
 LEGACY_CSV = Path("data/media/sandbox/sift_ransac_adalam/results.csv")
 PATTERN_CSV = Path("data/media/sandbox/sift_ransac_adalam_bin_mask/results.csv")

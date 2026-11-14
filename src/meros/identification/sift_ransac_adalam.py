@@ -234,9 +234,7 @@ def save_pair(first: Features, second: Features, result: ComparisonResult) -> No
 
     global_inliers = int(result.global_inliers.sum())
     local_inliers = int(result.local_inliers.sum())
-    both_inliers = int(
-        (result.global_inliers & result.local_inliers).sum()
-    )
+    both_inliers = int((result.global_inliers & result.local_inliers).sum())
 
     save_matches(
         OUTPUT,
@@ -258,7 +256,9 @@ def run(project: Project) -> None:
 
     configure_torch()
 
-    for subject_a, subject_b, a, b in pairs(project, a_filter="rogerio", b_filter="rogerio", bin_filter=False):
+    for subject_a, subject_b, a, b in pairs(
+        project, a_filter="rogerio", b_filter="rogerio", bin_filter=False
+    ):
         first = prepare_photo(f"{subject_a.subject_id}/{a.image_id}", a.crop_im)
         second = prepare_photo(f"{subject_b.subject_id}/{b.image_id}", b.crop_im)
 

@@ -6,7 +6,6 @@ from typing import Generator
 from meros.domain.storage import Subject, SubjectImage
 from meros.project import Project
 
-
 FIELDS = (
     "method",
     "subject_a",
@@ -60,9 +59,7 @@ def save_matches(
         "matches": matches,
         "global_inliers": global_inliers,
         "global_inlier_ratio": (
-            global_inliers / matches
-            if global_inliers is not None and matches
-            else None
+            global_inliers / matches if global_inliers is not None and matches else None
         ),
         "local_inliers": local_inliers,
         "both_inliers": both_inliers,
@@ -79,7 +76,7 @@ def save_matches(
         if file.tell() == 0:
             writer.writeheader()
 
-        writer.writerow(row) # pyright: ignore
+        writer.writerow(row)  # pyright: ignore
 
 
 def pairs(
@@ -98,14 +95,12 @@ def pairs(
     ]
 
     for (subject_a, a), (subject_b, b) in combinations(images, 2):
-        forward = (
-            (a_filter is None or subject_a.subject_id == a_filter)
-            and (b_filter is None or subject_b.subject_id == b_filter)
+        forward = (a_filter is None or subject_a.subject_id == a_filter) and (
+            b_filter is None or subject_b.subject_id == b_filter
         )
 
-        reverse = (
-            (a_filter is None or subject_b.subject_id == a_filter)
-            and (b_filter is None or subject_a.subject_id == b_filter)
+        reverse = (a_filter is None or subject_b.subject_id == a_filter) and (
+            b_filter is None or subject_a.subject_id == b_filter
         )
 
         if forward:

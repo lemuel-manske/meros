@@ -105,7 +105,7 @@ def prepare_video(project: Project, model, video: Video, count: int) -> None:
         )
 
         if step in uniform:
-            project.videos.write_frame_annotation(frame, annotation)
+            project.videos.write_frame_annotation(video._id, frame, annotation)
             existing += 1
         else:
             ranked.append((priority, frame, annotation))
@@ -117,7 +117,7 @@ def prepare_video(project: Project, model, video: Video, count: int) -> None:
         if existing >= count:
             break
 
-        project.videos.write_frame_annotation(frame, annotation)
+        project.videos.write_frame_annotation(video._id, frame, annotation)
         existing += 1
 
     print(f"{video._id}: prepared {existing} frames for review", flush=True)
