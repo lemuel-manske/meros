@@ -6,8 +6,6 @@ from .prediction import (
 )
 from .storage import (
     BBox,
-    FrameAnnotation,
-    FrameDetection,
     Subject,
     SubjectImage,
     Subjects,
@@ -19,8 +17,6 @@ from .storage import (
 __all__ = [
     "BBox",
     "BinaryMask",
-    "FrameAnnotation",
-    "FrameDetection",
     "Prediction",
     "SeedBox",
     "Subject",

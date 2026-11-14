@@ -29,16 +29,16 @@ def clahe(
     rgb = np.asarray(image.convert("RGB"))
 
     lab = cv2.cvtColor(rgb, cv2.COLOR_RGB2LAB)
-    l, a, b = cv2.split(lab)
+    _l, a, b = cv2.split(lab)
 
     clahe = cv2.createCLAHE(
         clipLimit=clip_limit,
         tileGridSize=(tile_size, tile_size),
     )
 
-    l = clahe.apply(l)
+    _l = clahe.apply(_l)
 
-    enhanced = cv2.merge((l, a, b))  # type: ignore
+    enhanced = cv2.merge((_l, a, b))  # type: ignore
     enhanced = cv2.cvtColor(enhanced, cv2.COLOR_LAB2RGB)
 
     return Image.fromarray(enhanced)

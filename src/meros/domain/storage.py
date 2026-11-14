@@ -108,40 +108,7 @@ class Subjects(Store, Protocol):
     def write(self, subject: Subject) -> None: ...
 
 
-@dataclass(frozen=True)
-class FrameAnnotation(DomainObject):
-    """
-    A frame annotation is a single annotation of a video frame, along with its associated metadata.
-
-    It's used to annootate the bounding boxes of Goliath Groupers in a video frame, as well as to indicate whether the frame has been reviewed or excluded from further processing.
-    """
-
-    recording_id: str
-
-    suggestions: list[BBox] = field(default_factory=list)
-    bboxes: list[BBox] = field(default_factory=list)
-
-    """
-    Reviewed indicates whether the frame has been reviewed by a human annotator.
-
-    If True, the bboxes field contains the final bounding boxes for the frame.
-
-    If False, the suggestions field contains the suggested bounding boxes for the frame (might include false positives).
-    """
-    reviewed: bool = False
-
-    excluded: bool = False
-
-
-@dataclass(frozen=True)
-class FrameDetection(DomainObject):
-    """A predicted Goliath Grouper bounding box and its confidence in a video frame."""
-
-    bbox: BBox
-    confidence: float
-
-
-@dataclass(frozen=True)
+@dataclass
 class VideoFrame(DomainObject):
     """
     A video frame is a single frame of a video, along with its associated metadata.
@@ -155,16 +122,16 @@ class VideoFrame(DomainObject):
 
     capture_date: date
 
-    annotations: FrameAnnotation | None = None
-
-    detections: list[FrameDetection] = field(default_factory=list)
+    bboxes: list[BBox] = field(default_factory=list)
+    reviewed: bool = False
+    excluded: bool = False
 
     @property
     def im(self) -> np.ndarray:
         return self._load_im()
 
 
-@dataclass(frozen=True)
+@dataclass
 class Video(DomainObject):
     """
     A video is a single video, along with its associated frames.
@@ -173,11 +140,6 @@ class Video(DomainObject):
     _id: str
 
     path: str
-
-    """
-    The frames selected by the finetuned model for further processing.
-    """
-    selected_frames: list[VideoFrame] = field(default_factory=list)
 
     frames: list[VideoFrame] = field(default_factory=list)
 
@@ -191,14 +153,4 @@ class Videos(Store, Protocol):
 
     def get_all(self) -> list[Video]: ...
 
-    def write_frame_annotation(
-        self, video_id: str, frame: VideoFrame, annotation: FrameAnnotation
-    ) -> None: ...
-
-    def write_video_detections(
-        self, video: Video, detections: dict[int, list[FrameDetection]]
-    ) -> None: ...
-
-    def write_frame_neighbors(
-        self, video: Video, pivot: VideoFrame, frames: list[VideoFrame]
-    ) -> None: ...
+    def write(self, video: Video) -> None: ...

@@ -97,3 +97,5 @@ class SubjectsAdapter(Subjects):
                 return subject
 
         raise ValueError(f"Subject {subject_id} not found")
+
+    def write(self, subject: Subject) -> None: ...

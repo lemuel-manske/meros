@@ -1,5 +1,4 @@
 import csv
-from dataclasses import asdict
 from datetime import date
 from functools import partial
 from pathlib import Path
@@ -9,13 +8,11 @@ import numpy as np
 
 from meros.adapters.paths import media_paths, metadata_paths
 from meros.domain.storage import (
-    FrameAnnotation,
-    FrameDetection,
     Video,
     VideoFrame,
     Videos,
 )
-from meros.utils import is_image_file, is_video_file, read_image, read_json, write_json
+from meros.utils import is_video_file
 
 
 def read_videos() -> list[Path]:
@@ -28,7 +25,6 @@ def read_video(path: Path) -> Video:
     return Video(
         _id=path.stem,
         path=str(path),
-        selected_frames=read_selected_frames(path),
         frames=read_video_frames(path),
     )
 
@@ -44,28 +40,6 @@ def read_video_capture_date(video_id: str) -> date:
     assert False, f"Video {video_id} not found in {path}"
 
 
-def read_selected_frames(path: Path) -> list[VideoFrame]:
-    directory = media_paths.selected_video_frames(path.stem)
-
-    if not directory.exists():
-        return []
-
-    fps = cv.VideoCapture(str(path)).get(cv.CAP_PROP_FPS)
-
-    return [
-        VideoFrame(
-            capture_date=read_video_capture_date(path.stem),
-            path=str(frame_path),
-            _id=int(frame_path.stem),
-            _load_im=partial(read_image, frame_path),
-            annotations=None,
-            detections=[],
-        )
-        for frame_path in sorted(directory.iterdir())
-        if is_image_file(frame_path)
-    ]
-
-
 def read_video_frames(path: Path) -> list[VideoFrame]:
     capture = cv.VideoCapture(str(path), cv.CAP_FFMPEG, [cv.CAP_PROP_N_THREADS, 2])
 
@@ -78,19 +52,12 @@ def read_video_frames(path: Path) -> list[VideoFrame]:
     finally:
         capture.release()
 
-    annotations = read_json(metadata_paths.video_detections(path.stem), default={})
-    predictions = read_json(metadata_paths.video_predictions(path.stem), default={})
-
     return [
         VideoFrame(
             capture_date=read_video_capture_date(path.stem),
             path=str(path),
             _id=index,
             _load_im=partial(read_video_frame, path, index),
-            annotations=(
-                FrameAnnotation(**annotations[str(index)]) if str(index) in annotations else None
-            ),
-            detections=[FrameDetection(**item) for item in predictions.get(str(index), [])],
         )
         for index in range(frame_count)
     ]
@@ -123,22 +90,4 @@ class VideosAdapter(Videos):
 
         raise ValueError(f"Video {video_id} not found")
 
-    def write_frame_annotation(
-        self, video_id: str, frame: VideoFrame, annotation: FrameAnnotation
-    ) -> None:
-        path = metadata_paths.video_detections(video_id)
-
-        annotations = read_json(path, default={})
-        annotations[str(frame._id)] = asdict(annotation)
-
-        write_json(path, annotations)
-
-    def write_video_detections(
-        self, video: Video, detections: dict[int, list[FrameDetection]]
-    ) -> None:
-        path = metadata_paths.video_predictions(video._id)
-
-        write_json(
-            path,
-            {str(index): [asdict(item) for item in items] for index, items in detections.items()},
-        )
+    def write(self, video: Video) -> None: ...

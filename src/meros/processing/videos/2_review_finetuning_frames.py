@@ -1,5 +1,3 @@
-from dataclasses import replace
-
 import cv2 as cv
 from matplotlib.backend_bases import MouseButton
 from matplotlib.patches import Rectangle
@@ -123,35 +121,25 @@ def run(project: Project) -> None:
         if video._id in VIDEO_IDS:
             continue
 
-        frames = [
-            frame
-            for frame in video.frames
-            if frame.annotations is not None
-            and (not ONLY_PENDING or not frame.annotations.reviewed)
-        ]
+        frames = [frame for frame in video.frames if (not ONLY_PENDING or not frame.reviewed)]
 
         print(f"{len(frames)} frames to review")
 
         for frame in frames:
-            annotation = frame.annotations
-
-            assert annotation is not None
-
-            initial = annotation.bboxes if annotation.reviewed else annotation.suggestions
+            initial = frame.bboxes
 
             selected = select_bboxes(frame.im, initial)
 
             if selected is None:
                 break
 
-            boxes, excluded = selected
-            project.videos.write_frame_annotation(
-                video._id,
-                frame,
-                replace(annotation, bboxes=boxes, reviewed=True, excluded=excluded),
-            )
+            bboxes, excluded = selected
 
-            print(f"Saved {video._id}/{frame._id}: {len(boxes)} meros, excluded={excluded}")
+            video.frames[frame._id].bboxes = bboxes
+
+            project.videos.write(video)
+
+            print(f"Saved {video._id}/{frame._id}: {len(bboxes)} meros, excluded={excluded}")
 
 
 if __name__ == "__main__":

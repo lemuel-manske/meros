@@ -95,7 +95,7 @@ def is_valid_homography(
         dtype=np.float32,
     ).reshape(-1, 1, 2)
 
-    transformed = cv.perspectiveTransform(corners, H)
+    transformed = cv.perspectiveTransform(corners, H)  # pyright: ignore
 
     if not np.all(np.isfinite(transformed)):
         return False
@@ -126,7 +126,7 @@ def inlier_coverage(
     overlap: np.ndarray,
 ) -> float:
     points = np.array(
-        [keypoints[m.trainIdx].pt for m, valid in zip(matches, inliers, strict=True) if valid],
+        [keypoints[m.trainIdx].pt for m, valid in zip(matches, inliers, strict=True) if valid],  # pyright: ignore[reportAttributeAccessIssue]
         dtype=np.float32,
     )
 
@@ -141,7 +141,7 @@ def inlier_coverage(
     )
 
     cv.fillConvexPoly(
-        hull_mask,
+        hull_mask,  # pyright: ignore
         np.round(hull.reshape(-1, 2)).astype(np.int32),
         1,
     )
@@ -171,16 +171,16 @@ def estimate_alignment(
     matches = comparison.matches
 
     src = np.asarray(
-        [first.keypoints[m.queryIdx].pt for m in matches],
+        [first.keypoints[m.queryIdx].pt for m in matches],  # pyright: ignore[reportAttributeAccessIssue]
         dtype=np.float32,
     ).reshape(-1, 1, 2)
 
     dst = np.asarray(
-        [second.keypoints[m.trainIdx].pt for m in matches],
+        [second.keypoints[m.trainIdx].pt for m in matches],  # pyright: ignore[reportAttributeAccessIssue]
         dtype=np.float32,
     ).reshape(-1, 1, 2)
 
-    projected = cv.perspectiveTransform(src, matrix)
+    projected = cv.perspectiveTransform(src, matrix)  # pyright: ignore
 
     errors = np.linalg.norm(
         projected.reshape(-1, 2) - dst.reshape(-1, 2),

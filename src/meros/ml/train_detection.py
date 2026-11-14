@@ -34,21 +34,14 @@ def prepare_dataset(
 
     for video in project.videos.get_all():
         for frame in video.frames:
-            annotation = frame.annotations
-
-            if annotation is None:
-                continue
-
-            if not annotation.reviewed:
+            if not frame.reviewed:
                 pending += 1
                 continue
 
-            if annotation.excluded:
+            if frame.excluded:
                 continue
 
-            assert annotation.recording_id in TRAIN_RECORDINGS | VAL_RECORDINGS
-
-            split = "train" if annotation.recording_id in TRAIN_RECORDINGS else "val"
+            split = "train"
             splits[split].append((video._id, frame))
 
     print(f"Ignoring {pending} unreviewed frames", flush=True)
@@ -135,9 +128,6 @@ def evaluate(
     counter = ConfusionMatrix(names={0: "mero"})
 
     for frame, image_path in validation:
-        annotation = frame.annotations
-        assert annotation is not None
-
         boxes = model.predict(
             str(image_path),
             imgsz=IMAGE_SIZE,
@@ -149,8 +139,8 @@ def evaluate(
         counter.process_batch(
             {"bboxes": boxes.xyxy, "cls": boxes.cls, "conf": boxes.conf},
             {
-                "bboxes": torch.tensor(annotation.bboxes, dtype=torch.float32).reshape(-1, 4),
-                "cls": torch.zeros(len(annotation.bboxes)),
+                "bboxes": torch.tensor(frame.bboxes, dtype=torch.float32).reshape(-1, 4),
+                "cls": torch.zeros(len(frame.bboxes)),
             },
             conf=CONFIDENCE,
             iou_thres=IOU_THRESHOLD,

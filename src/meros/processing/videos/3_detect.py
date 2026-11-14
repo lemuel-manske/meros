@@ -1,10 +1,10 @@
+from dataclasses import dataclass
 import math
 
 import cv2 as cv
 import numpy as np
 from ultralytics.engine.results import Results
 
-from meros.domain.storage import FrameDetection
 from meros.models.yolo import YOLO
 from meros.project import Project
 from meros.utils import configure_torch
@@ -19,6 +19,12 @@ MIN_SHARPNESS = 30.0
 SHARPNESS_SIZE = 256
 WINDOW_SECONDS = 2
 PROGRESS_INTERVAL = 100
+
+
+@dataclass
+class FrameDetection:
+    bbox: list[int]
+    confidence: float
 
 
 def measure_sharpness(crop: np.ndarray) -> float:
@@ -45,7 +51,7 @@ def run(project: Project) -> None:
 
     assert model.names == {0: "mero"}
 
-    detections: dict[int, list[FrameDetection]] = {}
+    detections = {}
 
     results = model.predict(
         source=video.path,
@@ -84,8 +90,6 @@ def run(project: Project) -> None:
             print(f"{video._id}: {index + 1}/{len(video.frames)} frames", flush=True)
 
     assert len(detections) == len(video.frames), "Video was not fully decoded"
-
-    project.videos.write_video_detections(video, detections)
 
 
 if __name__ == "__main__":

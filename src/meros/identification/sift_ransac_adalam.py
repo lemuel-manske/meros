@@ -55,7 +55,8 @@ def prepare_photo(name: str, crop: np.ndarray) -> Features:
         cv.cvtColor(crop, cv.COLOR_BGR2GRAY)
     )
 
-    keypoints, descriptors = cv.SIFT.create().detectAndCompute(gray, crop_mask)
+    sift = cv.SIFT_create()
+    keypoints, descriptors = sift.detectAndCompute(gray, crop_mask)
 
     # Do not let silhouette edges or background enter descriptor neighborhoods.
     distance = cv.distanceTransform(
@@ -86,8 +87,8 @@ def global_consistency(
     if len(matches) < 4:
         return None, retained
 
-    source = np.asarray([first.keypoints[m.queryIdx].pt for m in matches], dtype=np.float32)
-    target = np.asarray([second.keypoints[m.trainIdx].pt for m in matches], dtype=np.float32)
+    source = np.asarray([first.keypoints[m.queryIdx].pt for m in matches], dtype=np.float32)  # pyright: ignore[reportAttributeAccessIssue]]
+    target = np.asarray([second.keypoints[m.trainIdx].pt for m in matches], dtype=np.float32)  # pyright: ignore[reportAttributeAccessIssue]]
 
     cv.setRNGSeed(0)
     homography, status = cv.findHomography(
@@ -126,9 +127,8 @@ def local_consistency(
 
     assert first.descriptors is not None and second.descriptors is not None
 
-    # Remap only the candidate endpoints; AdaLAM builds a quadratic spatial distance matrix.
-    source_points = [first.keypoints[m.queryIdx] for m in matches]
-    target_points = [second.keypoints[m.trainIdx] for m in matches]
+    source_points = [first.keypoints[m.queryIdx] for m in matches]  # pyright: ignore[reportAttributeAccessIssue]  # pyright: ignore[reportAttributeAccessIssue]
+    target_points = [second.keypoints[m.trainIdx] for m in matches]  # pyright: ignore[reportAttributeAccessIssue]
     source = torch.tensor([p.pt for p in source_points], dtype=torch.float32)
     target = torch.tensor([p.pt for p in target_points], dtype=torch.float32)
     angles1 = torch.tensor([p.angle for p in source_points], dtype=torch.float32)
@@ -137,11 +137,12 @@ def local_consistency(
     scales2 = torch.tensor([p.size for p in target_points], dtype=torch.float32)
     indices = torch.arange(len(matches))
 
-    reverse = cv.BFMatcher(cv.NORM_L2).match(
-        second.descriptors[[m.trainIdx for m in matches]], first.descriptors
+    reverse = cv.BFMatcher.create(cv.NORM_L2).match(
+        second.descriptors[[m.trainIdx for m in matches]],  # pyright: ignore[reportAttributeAccessIssue]
+        first.descriptors,
     )
     reverse_indices = {m.queryIdx: m.trainIdx for m in reverse}
-    mutual = torch.tensor([reverse_indices[i] == m.queryIdx for i, m in enumerate(matches)])
+    mutual = torch.tensor([reverse_indices[i] == m.queryIdx for i, m in enumerate(matches)])  # pyright: ignore[reportAttributeAccessIssue]
 
     # Kornia falls back to ratio-only matches if no neighborhood survives. Do not verify those.
     distances = dist_matrix(source, source)
@@ -198,7 +199,9 @@ def compare(first: Features, second: Features) -> ComparisonResult:
     neighbors = []
 
     if first.descriptors is not None and second.descriptors is not None:
-        neighbors = cv.BFMatcher(cv.NORM_L2).knnMatch(first.descriptors, second.descriptors, k=2)
+        neighbors = cv.BFMatcher.create(cv.NORM_L2).knnMatch(
+            first.descriptors, second.descriptors, k=2
+        )
 
     matches = [
         pair[0]
