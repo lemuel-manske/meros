@@ -76,7 +76,7 @@ def prepare_dataset(
 
             image = frame.im
             height, width = image.shape[:2]
-            name = f"{video_id}_{frame.frame_index:08d}"
+            name = f"{video_id}_{frame._id:08d}"
 
             image_path = images / f"{name}.jpg"
             label_path = labels / f"{name}.txt"

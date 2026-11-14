@@ -134,7 +134,7 @@ def read_selected_frames(path: Path) -> list[VideoFrame]:
         VideoFrame(
             capture_date=read_video_capture_date(path.stem),
             path=str(frame_path),
-            frame_index=int(frame_path.stem),
+            _id=int(frame_path.stem),
             timestamp=float(frame_path.stem) / fps,
             _load_im=partial(read_image, frame_path),
             annotations=None,
@@ -166,7 +166,7 @@ def read_video_frames(path: Path) -> list[VideoFrame]:
         VideoFrame(
             capture_date=read_video_capture_date(path.stem),
             path=str(path),
-            frame_index=index,
+            _id=index,
             timestamp=index / fps,
             _load_im=partial(read_video_frame, path, index),
             annotations=(
@@ -370,7 +370,7 @@ class VideosAdapter(Videos):
         path = metadata_paths.video_detections(video_id)
 
         annotations = read_json(path, default={})
-        annotations[str(frame.frame_index)] = asdict(annotation)
+        annotations[str(frame._id)] = asdict(annotation)
 
         write_json(path, annotations)
 
@@ -387,11 +387,11 @@ class VideosAdapter(Videos):
     def write_frame_neighbors(
         self, video: Video, pivot: VideoFrame, frames: list[VideoFrame]
     ) -> None:
-        directory = media_paths.frame_neighbors(video._id, pivot.frame_index)
+        directory = media_paths.frame_neighbors(video._id, pivot._id)
         pending = {
-            frame.frame_index: directory / f"{frame.frame_index:08d}.jpg"
+            frame._id: directory / f"{frame._id:08d}.jpg"
             for frame in frames
-            if not (directory / f"{frame.frame_index:08d}.jpg").is_file()
+            if not (directory / f"{frame._id:08d}.jpg").is_file()
         }
 
         if not pending:

@@ -10,8 +10,8 @@ def run(project: Project) -> None:
 
         for pivot in pivots:
             indexes = range(
-                pivot.frame_index - FRAME_STEP * STEPS_EACH_SIDE,
-                pivot.frame_index + FRAME_STEP * STEPS_EACH_SIDE + 1,
+                pivot._id - FRAME_STEP * STEPS_EACH_SIDE,
+                pivot._id + FRAME_STEP * STEPS_EACH_SIDE + 1,
                 FRAME_STEP,
             )
             frames = [video.frames[index] for index in indexes if 0 <= index < len(video.frames)]
@@ -19,7 +19,7 @@ def run(project: Project) -> None:
             project.videos.write_frame_neighbors(video, pivot, frames)
 
             print(
-                f"{video._id}/{pivot.frame_index}: {len(frames)} frames including pivot",
+                f"{video._id}/{pivot._id}: {len(frames)} frames including pivot",
                 flush=True,
             )
 

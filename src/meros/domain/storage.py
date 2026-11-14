@@ -152,7 +152,7 @@ class VideoFrame(DomainObject):
     A video frame is a single frame of a video, along with its associated metadata.
     """
 
-    frame_index: int
+    _id: int
 
     capture_date: date
 

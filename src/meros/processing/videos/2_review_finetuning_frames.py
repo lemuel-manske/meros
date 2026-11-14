@@ -151,7 +151,7 @@ def run(project: Project) -> None:
                 replace(annotation, bboxes=boxes, reviewed=True, excluded=excluded),
             )
 
-            print(f"Saved {video._id}/{frame.frame_index}: {len(boxes)} meros, excluded={excluded}")
+            print(f"Saved {video._id}/{frame._id}: {len(boxes)} meros, excluded={excluded}")
 
 
 if __name__ == "__main__":
