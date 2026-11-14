@@ -50,14 +50,14 @@ def run(project: Project) -> None:
     frames = {}
 
     for subject in project.subjects.get_all():
-        if subject.subject_id not in SCRIPT:
+        if subject._id not in SCRIPT:
             continue
 
         for photo in subject.images:
-            if photo.image_id not in SCRIPT[subject.subject_id]:
+            if photo._id not in SCRIPT[subject._id]:
                 continue
 
-            frames[(subject.subject_id, photo.image_id)] = photo.crop_im
+            frames[(subject._id, photo._id)] = photo.crop_im
 
     for (subject_id, frame_id), frame in frames.items():
         clahed = clahe(Image.fromarray(frame))
@@ -74,7 +74,7 @@ def run(project: Project) -> None:
             if _bin is None:
                 continue
 
-            subject_images.append((image.image_id, _bin))
+            subject_images.append((image._id, _bin))
 
         exists = any(frame_id == image_id for image_id, _ in subject_images)
 

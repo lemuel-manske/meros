@@ -246,8 +246,7 @@ def read_subject_images(subject_id: str) -> list[SubjectImage]:
 
     records = [
         SubjectImage(
-            subject_id=subject_id,
-            image_id=int(path.stem),
+            _id=int(path.stem),
             capture_date=read_subject_capture_date(subject_id, int(path.stem)),
             path=str(path),
             _load_im=partial(read_image, path),
@@ -260,7 +259,7 @@ def read_subject_images(subject_id: str) -> list[SubjectImage]:
         if is_image_file(path)
     ]
 
-    return sorted(records, key=lambda item: item.image_id)
+    return sorted(records, key=lambda item: item._id)
 
 
 class SubjectsAdapter(Subjects):
@@ -272,7 +271,7 @@ class SubjectsAdapter(Subjects):
 
         return [
             Subject(
-                subject_id=directory.name,
+                _id=directory.name,
                 images=read_subject_images(directory.name),
             )
             for directory in sorted(root.iterdir())
@@ -281,7 +280,7 @@ class SubjectsAdapter(Subjects):
 
     def get(self, subject_id: str) -> Subject:
         for subject in self.get_all():
-            if subject.subject_id == subject_id:
+            if subject._id == subject_id:
                 return subject
 
         raise ValueError(f"Subject {subject_id} not found")
@@ -294,26 +293,26 @@ class SubjectsAdapter(Subjects):
         write_image(path, im)
 
     def write_subject(self, subject: Subject, source_video_id: str | None = None) -> None:
-        directory = media_paths.subject(subject.subject_id)
+        directory = media_paths.subject(subject._id)
 
         directory.mkdir(parents=True, exist_ok=True)
 
         for image in subject.images:
-            write_image(media_paths.subject_image(subject.subject_id, image.image_id), image.im)
+            write_image(media_paths.subject_image(subject._id, image._id), image.im)
 
             if image.bbox:
-                path = metadata_paths.subject_segmentation(subject.subject_id)
+                path = metadata_paths.subject_segmentation(subject._id)
                 bboxes = read_json(path, default={})
 
-                bboxes.setdefault("bboxes", {})[str(image.image_id)] = image.bbox
+                bboxes.setdefault("bboxes", {})[str(image._id)] = image.bbox
 
                 write_json(path, bboxes)
 
             if image.spots:
-                self.write_subject_spots(subject.subject_id, image.image_id, image.spots)
+                self.write_subject_spots(subject._id, image._id, image.spots)
 
             if image.capture_date:
-                path = metadata_paths.subject_annotations(subject.subject_id)
+                path = metadata_paths.subject_annotations(subject._id)
 
                 if not path.exists():
                     path.parent.mkdir(parents=True, exist_ok=True)
@@ -330,7 +329,7 @@ class SubjectsAdapter(Subjects):
                     )
                     writer.writerow(
                         {
-                            "id": image.image_id,
+                            "id": image._id,
                             "capture_date": image.capture_date.isoformat(),
                             "source_video_id": source_video_id,
                         }

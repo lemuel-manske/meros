@@ -51,20 +51,18 @@ class SubjectImage(DomainObject):
     A subject image is a single image of a subject, along with its associated metadata.
     """
 
-    subject_id: str
-    image_id: int
+    _load_im: Callable[[], np.ndarray] = field(repr=False, compare=False)
+    _load_binary_im: Callable[[], np.ndarray | None] = field(repr=False, compare=False)
+    _load_crop_im: Callable[[], np.ndarray] = field(repr=False, compare=False)
+
+    _id: int
 
     path: str
 
     capture_date: date
 
-    _load_im: Callable[[], np.ndarray] = field(repr=False, compare=False)
-
-    _load_binary_im: Callable[[], np.ndarray | None] = field(repr=False, compare=False)
-
-    _load_crop_im: Callable[[], np.ndarray] = field(repr=False, compare=False)
-
     bbox: BBox = field(default_factory=list)
+
     spots: list[SubjectSpot] = field(default_factory=list)
 
     @cached_property
@@ -86,7 +84,7 @@ class Subject(DomainObject):
     A subject is a single Goliath Grouper, along with its associated images.
     """
 
-    subject_id: str
+    _id: str
 
     images: list[SubjectImage] = field(default_factory=list)
 

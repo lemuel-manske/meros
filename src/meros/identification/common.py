@@ -95,12 +95,12 @@ def pairs(
     ]
 
     for (subject_a, a), (subject_b, b) in combinations(images, 2):
-        forward = (a_filter is None or subject_a.subject_id == a_filter) and (
-            b_filter is None or subject_b.subject_id == b_filter
+        forward = (a_filter is None or subject_a._id == a_filter) and (
+            b_filter is None or subject_b._id == b_filter
         )
 
-        reverse = (a_filter is None or subject_b.subject_id == a_filter) and (
-            b_filter is None or subject_a.subject_id == b_filter
+        reverse = (a_filter is None or subject_b._id == a_filter) and (
+            b_filter is None or subject_a._id == b_filter
         )
 
         if forward:

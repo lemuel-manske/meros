@@ -74,11 +74,11 @@ def select_spots(image: np.ndarray, initial: list[list[int]], title: str) -> lis
 
 def run(project: Project) -> None:
     for subject in project.subjects.get_all():
-        if SUBJECT_ID is not None and subject.subject_id != SUBJECT_ID:
+        if SUBJECT_ID is not None and subject._id != SUBJECT_ID:
             continue
 
         for im in subject.images:
-            if IMAGE_ID is not None and im.image_id != IMAGE_ID:
+            if IMAGE_ID is not None and im._id != IMAGE_ID:
                 continue
 
             image = im.im
@@ -86,7 +86,7 @@ def run(project: Project) -> None:
             existing = im.spots
 
             title = (
-                f"{subject.subject_id} / image {im.image_id} "
+                f"{subject._id} / image {im._id} "
                 f"({len(existing)} saved)\n"
                 "Left click: add | Right click: remove nearest | "
                 "Backspace: undo | Enter/S: save | Esc/Q: skip"
@@ -97,9 +97,9 @@ def run(project: Project) -> None:
             if selected is None:
                 continue
 
-            project.subjects.write_subject_spots(subject.subject_id, im.image_id, selected)
+            project.subjects.write_subject_spots(subject._id, im._id, selected)
 
-            print(f"Saved {len(selected)} spot centers for {subject.subject_id}/{im.image_id}")
+            print(f"Saved {len(selected)} spot centers for {subject._id}/{im._id}")
 
 
 if __name__ == "__main__":

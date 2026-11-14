@@ -95,21 +95,21 @@ def select_bbox(image: np.ndarray, initial: BBox, title: str) -> BBox | None:
 
 def run(project: Project) -> None:
     for subject in project.subjects.get_all():
-        if SUBJECT_ID is not None and subject.subject_id != SUBJECT_ID:
+        if SUBJECT_ID is not None and subject._id != SUBJECT_ID:
             continue
 
         for image in subject.images:
-            if FRAME_ID is not None and image.image_id != FRAME_ID:
+            if FRAME_ID is not None and image._id != FRAME_ID:
                 continue
 
-            title = f"{subject.subject_id} / image {image.image_id}"
+            title = f"{subject._id} / image {image._id}"
 
             bbox = select_bbox(image.im, image.bbox, title)
 
             if bbox is None:
                 continue
 
-            project.subjects.write_subject_bbox(subject.subject_id, image.image_id, bbox)
+            project.subjects.write_subject_bbox(subject._id, image._id, bbox)
 
             print(f"Saved bbox for {title}: {bbox}")
 

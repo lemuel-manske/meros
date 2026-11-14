@@ -409,8 +409,8 @@ def run(project: Project) -> None:
         assert mask_a is not None
         assert mask_b is not None
 
-        first = prepare_photo(f"{subject_a.subject_id}/{a.image_id}", image_a)
-        second = prepare_photo(f"{subject_b.subject_id}/{b.image_id}", image_b)
+        first = prepare_photo(f"{subject_a._id}/{a._id}", image_a)
+        second = prepare_photo(f"{subject_b._id}/{b._id}", image_b)
 
         comparison = compare(first, second)
         result = estimate_alignment(first, second, comparison)
@@ -484,10 +484,10 @@ def run(project: Project) -> None:
         save_matches(
             OUTPUT,
             method="sift_ransac_adalam_bin_mask",
-            subject_a=subject_a.subject_id,
-            image_a=a.image_id,
-            subject_b=subject_b.subject_id,
-            image_b=b.image_id,
+            subject_a=subject_a._id,
+            image_a=a._id,
+            subject_b=subject_b._id,
+            image_b=b._id,
             status=status,
             matches=matches,
             global_inliers=global_inliers,

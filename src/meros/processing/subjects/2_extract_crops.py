@@ -20,14 +20,14 @@ def run(project: Project) -> None:
 
     with torch.inference_mode():
         for subject in project.subjects.get_all():
-            if SUBJECT_ID is not None and subject.subject_id != SUBJECT_ID:
+            if SUBJECT_ID is not None and subject._id != SUBJECT_ID:
                 continue
 
             for photo in subject.images:
-                if FRAME_ID is not None and photo.image_id != FRAME_ID:
+                if FRAME_ID is not None and photo._id != FRAME_ID:
                     continue
 
-                name = f"{subject.subject_id}/{photo.image_id}"
+                name = f"{subject._id}/{photo._id}"
 
                 assert len(photo.bbox) == 4, f"{name}: missing bbox"
 
@@ -59,7 +59,7 @@ def run(project: Project) -> None:
                 crop = cv.cvtColor(photo.im[y1:y2, x1:x2], cv.COLOR_BGR2BGRA)
                 crop[~crop_mask] = 0
 
-                project.subjects.write_subject_crop(subject.subject_id, photo.image_id, crop)
+                project.subjects.write_subject_crop(subject._id, photo._id, crop)
 
                 print(f"Saved crop for {name}", flush=True)
 

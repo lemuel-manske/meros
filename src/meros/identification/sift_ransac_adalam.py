@@ -259,17 +259,14 @@ def run(project: Project) -> None:
     for subject_a, subject_b, a, b in pairs(
         project, a_filter="rogerio", b_filter="rogerio", bin_filter=False
     ):
-        first = prepare_photo(f"{subject_a.subject_id}/{a.image_id}", a.crop_im)
-        second = prepare_photo(f"{subject_b.subject_id}/{b.image_id}", b.crop_im)
+        first = prepare_photo(f"{subject_a._id}/{a._id}", a.crop_im)
+        second = prepare_photo(f"{subject_b._id}/{b._id}", b.crop_im)
 
         result = compare(first, second)
 
         save_pair(first, second, result)
 
-        print(
-            f"\nAligning {subject_a.subject_id}/{a.image_id} "
-            f"with {subject_b.subject_id}/{b.image_id}"
-        )
+        print(f"\nAligning {subject_a._id}/{a._id} with {subject_b._id}/{b._id}")
 
 
 if __name__ == "__main__":
