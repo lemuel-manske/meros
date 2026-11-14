@@ -4,19 +4,20 @@ from pathlib import Path
 Always extract constants for paths and directories.
 """
 
-MEDIA_ROOT = Path("data/media")
 METADATA_ROOT = Path("data/metadata")
-
-MEDIA_SUBJECTS_ROOT = MEDIA_ROOT / "subjects"
-VIDEOS_ROOT = MEDIA_ROOT / "videos"
-SELECTED_VIDEO_FRAMES_ROOT = VIDEOS_ROOT / "selected"
-VaeDEO_FRAME_NEIGHBORS_ROOT = VIDEOS_ROOT / "neighbors"
 
 METADATA_SUBJECTS_ROOT = METADATA_ROOT / "subjects"
 VIDEOS_METADATA_ROOT = METADATA_ROOT / "videos"
 
 VIDEO_DETECTIONS_ROOT = VIDEOS_METADATA_ROOT / "detections"
 VIDEO_PREDICTIONS_ROOT = VIDEOS_METADATA_ROOT / "predictions"
+
+
+MEDIA_ROOT = Path("data/media")
+MEDIA_SUBJECTS_ROOT = MEDIA_ROOT / "subjects"
+VIDEOS_ROOT = MEDIA_ROOT / "videos"
+
+SELECTED_VIDEO_FRAMES_ROOT = VIDEOS_ROOT / "selected"
 
 
 class MediaPaths:

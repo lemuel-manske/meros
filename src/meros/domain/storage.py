@@ -147,15 +147,13 @@ class VideoFrame(DomainObject):
     A video frame is a single frame of a video, along with its associated metadata.
     """
 
-    _id: int
+    _load_im: Callable[[], np.ndarray] = field(repr=False, compare=False)
 
-    capture_date: date
+    _id: int
 
     path: str
 
-    timestamp: float
-
-    _load_im: Callable[[], np.ndarray] = field(repr=False, compare=False)
+    capture_date: date
 
     annotations: FrameAnnotation | None = None
 

@@ -57,7 +57,6 @@ def read_selected_frames(path: Path) -> list[VideoFrame]:
             capture_date=read_video_capture_date(path.stem),
             path=str(frame_path),
             _id=int(frame_path.stem),
-            timestamp=float(frame_path.stem) / fps,
             _load_im=partial(read_image, frame_path),
             annotations=None,
             detections=[],
@@ -73,11 +72,9 @@ def read_video_frames(path: Path) -> list[VideoFrame]:
     try:
         assert capture.isOpened(), f"Could not open video: {path}"
 
-        fps = capture.get(cv.CAP_PROP_FPS)
-
         frame_count = int(capture.get(cv.CAP_PROP_FRAME_COUNT))
 
-        assert fps > 0 and frame_count >= 0
+        assert frame_count >= 0
     finally:
         capture.release()
 
@@ -89,7 +86,6 @@ def read_video_frames(path: Path) -> list[VideoFrame]:
             capture_date=read_video_capture_date(path.stem),
             path=str(path),
             _id=index,
-            timestamp=index / fps,
             _load_im=partial(read_video_frame, path, index),
             annotations=(
                 FrameAnnotation(**annotations[str(index)]) if str(index) in annotations else None

@@ -6,11 +6,10 @@ from meros.domain.storage import FrameAnnotation, Video, VideoFrame
 from meros.project import Project
 from meros.utils import configure_torch
 
-FRAME_COUNT = 300
-MIN_SEPARATION_SECONDS = 5
-SCAN_MULTIPLIER = 2
-IMAGE_SIZE = 640
 CONFIDENCE = 0.25
+FRAME_COUNT = 300
+IMAGE_SIZE = 640
+SCAN_MULTIPLIER = 2
 
 """
 Prepares the frames for review by running the Fishial model.
@@ -20,9 +19,7 @@ Those extract frames are meant to be used for finetuning a YOLO model later, to 
 
 
 def allocate_frames(videos: list[Video]) -> list[int]:
-    capacities = [
-        max(1, math.ceil(video.frames[-1].timestamp / MIN_SEPARATION_SECONDS)) for video in videos
-    ]
+    capacities = [len(video.frames) for video in videos]
 
     total = min(FRAME_COUNT, sum(capacities))
 
@@ -54,7 +51,7 @@ def prepare_video(project: Project, model, video: Video, count: int) -> None:
 
         return
 
-    capacity = max(1, math.ceil(video.frames[-1].timestamp / MIN_SEPARATION_SECONDS))
+    capacity = len(video.frames)
 
     pool_size = min(SCAN_MULTIPLIER * count, capacity)
 
