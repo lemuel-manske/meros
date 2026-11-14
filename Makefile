@@ -15,7 +15,7 @@ ifneq (,$(wildcard .env))
 endif
 
 
-.PHONY: init install install-sam2 sam2-submodule
+.PHONY: init install install-sam2 sam2-submodule install-gloper gloper-submodule
 .PHONY: data-login data-pull data-save data-push results-save pipeline subjects
 .PHONY: typecheck lint format format-check check serve-media checkpoint
 
@@ -35,6 +35,13 @@ sam2-submodule:
 
 install-sam2: sam2-submodule
 	$(PYTHON) -m pip install -e external/sam2
+
+
+gloper-submodule:
+	git submodule update --init external/gloper
+
+install-gloper: gloper-submodule
+	$(PYTHON) -m pip install -e ".[gloper]"
 
 
 data-login:
